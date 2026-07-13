@@ -1,0 +1,6 @@
+Starting server on port 8080
+Binding to 0.0.0.0:8080
+Database connection established
+Server ready
+Accepted connection from 10.0.0.4
+Accepted connection from 10.0.0.5

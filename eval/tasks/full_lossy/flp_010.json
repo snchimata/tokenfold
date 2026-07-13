@@ -1,0 +1,11 @@
+{
+  "id": "flp_010",
+  "transform_id": "diff_compaction",
+  "task_scope": "change_summary",
+  "content_type": "git_diff",
+  "original": "diff --git a/src/payment_gateway.py b/src/payment_gateway.py\nindex a1b2c3d..e4f5a6b 100644\n--- a/src/payment_gateway.py\n+++ b/src/payment_gateway.py\n@@ -40,8 +40,8 @@ def charge(order):\n def charge(order):\n     client = GatewayClient(timeout=30)\n-    resp = client.post('/charge', order)\n+    resp = client.post('/charge', order, idempotency_key=order.id)\n     log.info('charged', order_id=order.id)\n def refund(order):\n     client = GatewayClient(timeout=30)\n-    resp = client.post('/refund', order)\n+    resp = client.post('/refund', order, idempotency_key=order.id)",
+  "compressed": "diff --git a/src/payment_gateway.py b/src/payment_gateway.py\nindex a1b2c3d..e4f5a6b 100644\n--- a/src/payment_gateway.py\n+++ b/src/payment_gateway.py\n@@ -40,8 +40,8 @@ def charge(order):\n[9 lines dropped]",
+  "critical_tokens": [
+    "payment_gateway.py"
+  ]
+}

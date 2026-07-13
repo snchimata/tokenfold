@@ -1,0 +1,11 @@
+{
+  "id": "task_005",
+  "transform_id": "diff_compaction",
+  "task_scope": "code_review",
+  "original": "diff --git a/config/limits.yaml b/config/limits.yaml\n--- a/config/limits.yaml\n+++ b/config/limits.yaml\n@@ -3,6 +3,6 @@ service: rate-limiter\n service: rate-limiter\n window_seconds: 60\n-max_requests: 100\n+max_requests: 250\n burst_allow: true\n owner: team-platform",
+  "compressed": "diff --git a/config/limits.yaml b/config/limits.yaml [2 redundant header lines dropped]\n@@ -3,6 +3,6 @@ service: rate-limiter\n service: rate-limiter\n window_seconds: 60\n-max_requests: 100\n+max_requests: 250\n burst_allow: true\n owner: team-platform",
+  "critical_tokens": [
+    "limits.yaml",
+    "max_requests"
+  ]
+}

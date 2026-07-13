@@ -1,0 +1,4 @@
+[toolchain]
+# Matches workspace.package.rust-version in Cargo.toml (edition 2024 needs cargo >= 1.85).
+channel = "1.97"
+components = ["rustfmt", "clippy"]

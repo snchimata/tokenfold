@@ -1,0 +1,28 @@
+[package]
+name = "tokenfold-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# Not named "tokenfold" -- that collides with tokenfold-cli's `[[bin]] name = "tokenfold"`
+# in target/debug/deps (both would write e.g. tokenfold.pdb, breaking `cargo test
+# --workspace`). maturin's `module-name` setting (pyproject.toml) maps this artifact to the
+# "tokenfold" Python import name independently of this Cargo-level name.
+name = "tokenfold_py"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tokenfold-core = { path = "../tokenfold-core" }
+serde_json = { workspace = true }
+pyo3 = { version = "0.29.0", features = ["abi3-py39"] }
+
+[features]
+# pyo3's "extension-module" feature must stay OFF for plain `cargo build`/`cargo test
+# --workspace` -- it disables linking against libpython, which is exactly what a normal
+# rlib/cdylib build (outside maturin) needs. maturin enables it itself only for the
+# actual wheel build (see pyproject.toml's `features` list).
+extension-module = ["pyo3/extension-module"]
+

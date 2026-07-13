@@ -1,0 +1,19 @@
+[package]
+name = "tokenfold-proxy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "tokenfold-proxy"
+path = "src/main.rs"
+
+[dependencies]
+tokenfold-core = { path = "../tokenfold-core" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tiny_http = "0.12"
+ureq = { version = "3", default-features = false, features = ["rustls"] }

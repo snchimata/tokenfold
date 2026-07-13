@@ -1,0 +1,12 @@
+{
+  "id": "flp_011",
+  "transform_id": "diff_compaction",
+  "task_scope": "code_review",
+  "content_type": "command_output",
+  "original": "diff --git a/infra/rate_limiter.tf b/infra/rate_limiter.tf\n@@ -10,10 +10,10 @@ resource \"aws_lambda_function\" \"rate_limiter\" {\n   function_name = \"rate-limiter\"\n   handler       = \"main.handler\"\n   runtime       = \"python3.12\"\n   timeout       = 30\n-  memory_size = 256\n+  memory_size = 512\n   environment {\n     TABLE_NAME = \"rate_limits\"\n-    RATE_LIMIT = \"100\"\n+    RATE_LIMIT = \"250\"\n   }\n }",
+  "compressed": "diff --git a/infra/rate_limiter.tf b/infra/rate_limiter.tf\n@@ -10,10 +10,10 @@ resource \"aws_lambda_function\" \"rate_limiter\" {\n[4 context lines dropped]\n-  memory_size = 256\n+  memory_size = 512\n[2 context lines dropped]\n-    RATE_LIMIT = \"100\"\n+    RATE_LIMIT = \"250\"\n[2 context lines dropped]",
+  "critical_tokens": [
+    "rate_limiter.tf",
+    "RATE_LIMIT"
+  ]
+}

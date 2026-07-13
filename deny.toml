@@ -1,0 +1,39 @@
+[licenses]
+# ISC/BSD-3-Clause/CDLA-Permissive-2.0 added for tokenfold-proxy's rustls-based TLS stack
+# (ring, rustls-webpki, untrusted, webpki-roots) — all OSI-approved/FSF-free permissive
+# licenses from the standard Rust TLS ecosystem (briansmith/rustls maintainers, Mozilla CA
+# bundle), reviewed 2026-07-11 alongside the tokenfold-proxy dependency addition.
+# "Apache-2.0 WITH LLVM-exception" added for target-lexicon, pulled in transitively by
+# pyo3-build-config (pyo3 0.29's Cargo-audit-driven upgrade, Phase 5 integration pass) —
+# the standard LLVM Project permissive license, OSI-approved, reviewed 2026-07-12.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "ISC",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+]
+
+[bans]
+multiple-versions = "warn"
+
+[[bans.deny]]
+name = "fancy-regex"
+reason = "Redaction must use Rust regex's linear-time engine; backtracking regex crates are forbidden in the redaction path."
+# ponytail: tiktoken-rs pulls fancy-regex in transitively for its own tokenizer split
+# regex (unrelated to redaction); allow only through that known wrapper.
+wrappers = ["tiktoken-rs"]
+
+[[bans.deny]]
+name = "pcre2"
+reason = "PCRE/backtracking regex is forbidden in token/redaction paths."
+
+[[bans.deny]]
+name = "native-tls"
+reason = "tokenfold-proxy uses ureq's rustls backend so upstream TLS never depends on system OpenSSL — required for the static/musl binary story (R-009). Do not reintroduce native-tls."
+
+[[bans.deny]]
+name = "openssl-sys"
+reason = "Same as native-tls: keep TLS statically linked via rustls, no system OpenSSL dependency."

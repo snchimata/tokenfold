@@ -1,0 +1,6 @@
+Starting server on port 8080
+Connecting to database...
+[repeated 5x]
+Connecting to database...
+Database connection established
+Server ready

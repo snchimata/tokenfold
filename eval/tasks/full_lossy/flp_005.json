@@ -1,0 +1,12 @@
+{
+  "id": "flp_005",
+  "transform_id": "log_compaction",
+  "task_scope": "change_summary",
+  "content_type": "prose",
+  "original": "Order ORD-9004 received successfully.\nInventory check still slow.\nInventory check still slow.\nInventory check still slow.\nInventory check failed with error code INV_STALE; order rolled back.",
+  "compressed": "Order ORD-9004 received successfully.\nInventory check still slow.\n[repeated 3x]\nInventory check still slow.\nInventory check failed with error code INV_STALE; order rolled back.",
+  "critical_tokens": [
+    "ORD-9004",
+    "INV_STALE"
+  ]
+}

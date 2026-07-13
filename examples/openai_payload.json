@@ -1,0 +1,52 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a careful senior software engineer. You write correct, minimal code and explain your reasoning briefly."
+    },
+    {
+      "role": "user",
+      "content": "Can you show me an example of a tool call schema for a weather lookup function?"
+    },
+    {
+      "role": "assistant",
+      "content": "Sure — here is a `get_weather` tool with a `location` and `unit` parameter."
+    },
+    {
+      "role": "user",
+      "content": "Great, now compress the schema and tell me what changed."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Look up the current weather for a given location.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state, e.g. San Francisco, CA",
+              "examples": [
+                "San Francisco, CA",
+                "New York, NY",
+                "Austin, TX",
+                "Seattle, WA"
+              ]
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "The unit to return the temperature in.",
+              "examples": ["celsius", "fahrenheit"]
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  ]
+}

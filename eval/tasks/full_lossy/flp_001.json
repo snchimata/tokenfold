@@ -1,0 +1,12 @@
+{
+  "id": "flp_001",
+  "transform_id": "log_compaction",
+  "task_scope": "general",
+  "content_type": "command_output",
+  "original": "Fetching package graph...\nResolving dependencies...\nDownloading foo-crate v1.4.2...\nwarn: registry request timed out, retrying pkg=foo-crate\nwarn: registry request timed out, retrying pkg=foo-crate\nwarn: registry request timed out, retrying pkg=foo-crate\nerror: failed to download foo-crate v1.4.2: connection reset (code=ETIMEDOUT)\nbuild failed: 1 error",
+  "compressed": "Fetching package graph...\nResolving dependencies...\nDownloading foo-crate v1.4.2...\nwarn: registry request timed out, retrying pkg=foo-crate\n[repeated 3x]\nwarn: registry request timed out, retrying pkg=foo-crate\nerror: failed to download foo-crate v1.4.2: connection reset (code=ETIMEDOUT)\nbuild failed: 1 error",
+  "critical_tokens": [
+    "foo-crate",
+    "ETIMEDOUT"
+  ]
+}

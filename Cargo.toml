@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tokenfold-core",
+    "crates/tokenfold-cli",
+    "crates/tokenfold-proxy",
+    "crates/tokenfold-py",
+    "crates/tokenfold-image",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+repository = "https://github.com/snchimata/tokenfold"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "1"
+regex = "1"
+clap = { version = "4", features = ["derive"] }
+
+tiktoken-rs = "0.7"
+sha2 = "0.10"
+
+proptest = "1"
+toml = "0.8"

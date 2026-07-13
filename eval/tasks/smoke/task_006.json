@@ -1,0 +1,11 @@
+{
+  "id": "task_006",
+  "transform_id": "diff_compaction",
+  "task_scope": "code_review",
+  "original": "diff --git a/src/routes/orders.js b/src/routes/orders.js\n--- a/src/routes/orders.js\n+++ b/src/routes/orders.js\n@@ -22,7 +22,7 @@ router.get('/orders/:id', handler)\n router.get('/orders/:id', handler)\n router.use(authMiddleware)\n-router.post('/orders', createOrder)\n+router.post('/orders', validateBody, createOrder)\n router.delete('/orders/:id', cancelOrder)\n module.exports = router",
+  "compressed": "diff --git a/src/routes/orders.js b/src/routes/orders.js [2 redundant header lines dropped]\n@@ -22,7 +22,7 @@ router.get('/orders/:id', handler)\n router.get('/orders/:id', handler)\n router.use(authMiddleware)\n-router.post('/orders', createOrder)\n+router.post('/orders', validateBody, createOrder)\n router.delete('/orders/:id', cancelOrder)\n module.exports = router",
+  "critical_tokens": [
+    "orders.js",
+    "validateBody"
+  ]
+}

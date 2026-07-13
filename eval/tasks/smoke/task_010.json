@@ -1,0 +1,11 @@
+{
+  "id": "task_010",
+  "transform_id": "schema_compaction",
+  "task_scope": "tool_schema",
+  "original": "{\n  \"name\": \"create_ticket\",\n  \"description\": \"Create a new support ticket and assign it to the appropriate queue.\",\n  \"parameters\": {\n    \"customer_id\": {\"type\": \"string\", \"required\": true, \"example\": \"cust_50213\"},\n    \"priority\": {\"type\": \"string\", \"enum\": [\"low\", \"normal\", \"high\", \"urgent\"], \"default\": \"normal\"},\n    \"notes\": {\"type\": \"string\", \"required\": false, \"example\": \"Duplicate charge on invoice INV-7742, please refund.\"}\n  }\n}",
+  "compressed": "{\n  \"name\": \"create_ticket\",\n  \"description\": \"Create a new support ticket and assign it to the appropriate queue.\",\n  \"parameters\": {\n    \"customer_id\": {\"type\": \"string\", \"required\": true, \"example\": \"cust_50213\"},\n    \"priority\": {\"type\": \"string\", \"enum\": [\"low\", \"normal\", \"high\", \"urgent\"], \"default\": \"normal\"},\n    \"notes\": {\"type\": \"string\", \"required\": false, \"example\": \"Duplicate charge on INV-7742.\"}\n  }\n}",
+  "critical_tokens": [
+    "create_ticket",
+    "INV-7742"
+  ]
+}

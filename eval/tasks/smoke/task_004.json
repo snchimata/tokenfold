@@ -1,0 +1,11 @@
+{
+  "id": "task_004",
+  "transform_id": "diff_compaction",
+  "task_scope": "code_review",
+  "original": "diff --git a/src/payment_gateway.py b/src/payment_gateway.py\n--- a/src/payment_gateway.py\n+++ b/src/payment_gateway.py\n@@ -40,6 +40,6 @@ def charge(order):\n def charge(order):\n     client = GatewayClient(timeout=30)\n-    resp = client.post('/charge', order)\n+    resp = client.post('/charge', order, idempotency_key=order.id)\n     log.info('charged', order_id=order.id)\n def refund(order):",
+  "compressed": "diff --git a/src/payment_gateway.py b/src/payment_gateway.py [2 redundant header lines dropped]\n@@ -40,6 +40,6 @@ def charge(order):\n def charge(order):\n     client = GatewayClient(timeout=30)\n-    resp = client.post('/charge', order)\n+    resp = client.post('/charge', order, idempotency_key=order.id)\n     log.info('charged', order_id=order.id)\n def refund(order):",
+  "critical_tokens": [
+    "payment_gateway.py",
+    "idempotency_key"
+  ]
+}

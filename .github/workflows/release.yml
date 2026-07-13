@@ -1,0 +1,166 @@
+name: Release
+
+# ROADMAP.md Phase 4 / ENGINEERING.md Part 2 "cross-compile" + "sbom" + "publish" jobs, reconciled
+# to GitHub Releases (ROADMAP.md's own Phase 0 note: the plan's "internal Artifactory" references
+# need reconciling to GitHub Releases/crates.io for a solo/open-source project — this is that
+# reconciliation). Does NOT run `cargo publish` to crates.io: publishing a crate is a one-way
+# door, so it stays a manual step until explicitly wanted.
+#
+# ponytail: no signing key exists yet (D-007 is unresolved), so this produces SHA-256 checksums
+# only, not detached signatures. Add a signing step (e.g. `cosign` / `minisign`) once D-007 picks
+# a key management approach; until then the release notes must say "checksummed, not signed."
+#
+# NOTE: this workflow has not been run. It triggers on pushing a `v*.*.*` tag — don't push one
+# without deciding that's actually wanted.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --locked
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-audit
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo audit
+      - run: cargo deny check advisories bans licenses sources
+
+  golden-cross-platform:
+    name: golden-cross-platform
+    strategy:
+      matrix:
+        os: [macos-14, macos-13, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --locked -- golden
+
+  # ENGINEERING.md's "dedicated benchmark runner with consistent hardware" (R-014) doesn't exist
+  # for a solo project; this runs on a shared GitHub-hosted runner instead, which the same risk
+  # note (R-014) already flags as a source of latency-threshold variance. Treat a failure here as
+  # a signal to investigate, not an automatic release blocker, until a dedicated runner exists.
+  bench-regression:
+    name: bench-regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo bench --workspace --locked
+
+  fidelity-smoke:
+    name: fidelity-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python eval/run_fidelity.py --gate --profile smoke-first-consumer
+
+  cross-compile:
+    name: cross-compile (${{ matrix.target }})
+    needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-13
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            cross: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: matrix.cross
+        run: cargo install cross --locked
+      - if: matrix.cross
+        run: cross build --release --locked --target ${{ matrix.target }} -p tokenfold-cli
+      - if: ${{ !matrix.cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }} -p tokenfold-cli
+      - name: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=tokenfold
+          ext=""
+          if [[ "${{ matrix.target }}" == *windows* ]]; then ext=".exe"; fi
+          out="tokenfold-${{ matrix.target }}${ext}"
+          cp "target/${{ matrix.target }}/release/${bin}${ext}" "$out"
+          sha256sum "$out" > "$out.sha256" 2>/dev/null || shasum -a 256 "$out" > "$out.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenfold-${{ matrix.target }}
+          path: |
+            tokenfold-${{ matrix.target }}*
+            !*.d
+
+  sbom:
+    name: sbom
+    needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-cyclonedx --locked
+      - run: cargo cyclonedx --format json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: "*.cdx.json"
+
+  publish-github-release:
+    name: publish-github-release
+    needs: [cross-compile, sbom]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f -exec cp {} release/ \;
+          ls -la release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

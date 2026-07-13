@@ -1,0 +1,11 @@
+{
+  "id": "task_001",
+  "transform_id": "log_compaction",
+  "task_scope": "general",
+  "original": "2026-07-01T10:00:00Z INFO connection established req-id=req-77a1\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n2026-07-01T10:00:02Z ERROR giving up req-id=req-77a1",
+  "compressed": "2026-07-01T10:00:00Z INFO connection established req-id=req-77a1\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n[repeated 4x]\n2026-07-01T10:00:01Z WARN retry attempt req-id=req-77a1\n2026-07-01T10:00:02Z ERROR giving up req-id=req-77a1",
+  "critical_tokens": [
+    "req-77a1",
+    "ERROR"
+  ]
+}

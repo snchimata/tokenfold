@@ -1,0 +1,11 @@
+{
+  "id": "task_002",
+  "transform_id": "log_compaction",
+  "task_scope": "general",
+  "original": "INFO health check ok svc=payments-api\nINFO health check ok svc=payments-api\nINFO health check ok svc=payments-api\nINFO health check ok svc=payments-api\nFATAL health check failed svc=payments-api code=E-5041",
+  "compressed": "INFO health check ok svc=payments-api\n[repeated 4x]\nINFO health check ok svc=payments-api\nFATAL health check failed svc=payments-api code=E-5041",
+  "critical_tokens": [
+    "E-5041",
+    "payments-api"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "flp_015",
+  "transform_id": "diff_compaction",
+  "task_scope": "code_review",
+  "content_type": "prose",
+  "original": "This change updates the retry policy in src/http_client.py.\nThis is a routine internal change with no external API impact.\nPreviously the client retried failed requests up to 3 times with a fixed 1 second delay.\nNow it retries up to 5 times using exponential backoff starting at 200ms.\nIt stops retrying immediately if the response carries error code AUTH_EXPIRED, forwarding that error unchanged.\nReviewers should double check this matches src/auth/session.py.",
+  "compressed": "[6 context lines dropped]",
+  "critical_tokens": [
+    "http_client.py",
+    "AUTH_EXPIRED"
+  ]
+}

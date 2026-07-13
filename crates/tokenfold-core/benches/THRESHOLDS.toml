@@ -1,0 +1,16 @@
+[thresholds]
+# Measured 2026-07-11 on AMD Ryzen 7 9800X3D (8c/16t), 31GB RAM, Windows, rustc 1.97.0,
+# `cargo bench -p tokenfold-core` release profile. See CHANGELOG.md for the full reproducibility
+# record. Thresholds carry ~1.3-1.5x headroom over the measured baseline for runner variance;
+# tighten once `bench-regression` has run on a dedicated CI runner (R-014).
+#
+# p95 latency — dominated by TiktokenEstimator::o200k_base() reloading BPE ranks on every
+# `compress()` call (the public API doesn't cache the estimator across calls) plus tiktoken-rs's
+# reference BPE merge implementation; not a benchmark artifact. Worth revisiting if p95 becomes
+# release-blocking in practice.
+command_output_under_1mb_p95_ms = 800.0   # measured 528.163
+structured_json_under_2mb_p95_ms = 2500.0 # measured 1693.855
+# Allocation (total bytes passed to GlobalAlloc::alloc during one compress() call, not peak RSS)
+max_bytes_allocated_per_call = 2300000000 # measured 1787517707
+# Token savings (structured_json fixture: pretty-printed OpenAI tool schema, Balanced mode, exact tiktoken backend)
+min_exact_token_savings_ratio = 0.40 # measured 0.4563

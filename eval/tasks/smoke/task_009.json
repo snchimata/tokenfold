@@ -1,0 +1,11 @@
+{
+  "id": "task_009",
+  "transform_id": "schema_compaction",
+  "task_scope": "tool_schema",
+  "original": "{\n  \"name\": \"search_flights\",\n  \"description\": \"Search available flights between two airports on a given date.\",\n  \"parameters\": {\n    \"origin\": {\"type\": \"string\", \"required\": true, \"example\": \"SFO\"},\n    \"date\": {\"type\": \"string\", \"required\": true, \"example\": \"2026-08-01\"},\n    \"cabin_class\": {\"type\": \"string\", \"enum\": [\"economy\", \"business\"], \"default\": \"economy\"}\n  }\n}",
+  "compressed": "{\n  \"name\": \"search_flights\",\n  \"description\": \"Search available flights between two airports on a given date.\",\n  \"parameters\": {\n    \"origin\": {\"type\": \"string\", \"required\": true, \"example\": \"SFO\"},\n    \"date\": {\"type\": \"string\", \"required\": true},\n    \"cabin_class\": {\"type\": \"string\", \"enum\": [\"economy\", \"business\"], \"default\": \"economy\"}\n  }\n}",
+  "critical_tokens": [
+    "search_flights",
+    "cabin_class"
+  ]
+}

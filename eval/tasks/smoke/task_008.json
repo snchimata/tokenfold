@@ -1,0 +1,11 @@
+{
+  "id": "task_008",
+  "transform_id": "json_minify",
+  "task_scope": "general",
+  "original": "{\n  \"order_id\": \"ORD-88231\",\n  \"customer_id\": \"cus_1029\",\n  \"total\": 42.50\n}",
+  "compressed": "{ \"order_id\": \"ORD-88231\", \"customer_id\": \"cus_1029\", \"total\": 42.50 }",
+  "critical_tokens": [
+    "ORD-88231",
+    "cus_1029"
+  ]
+}

@@ -1,0 +1,18 @@
+[project]
+name = "tokenfold-eval"
+version = "0.1.0"
+description = "Fidelity gate harness (smoke-first-consumer + full-lossy-promotion profiles) for the tokenfold token-compression engine."
+requires-python = ">=3.9"
+# run_fidelity.py uses only the Python standard library (json, argparse,
+# hashlib, pathlib, sys, statistics) so the gate itself has zero required
+# runtime dependencies. See run_fidelity.py's module docstring for why.
+dependencies = []
+
+[project.optional-dependencies]
+# Not required to run `python eval/run_fidelity.py --gate ...`.
+# Reserved for future test suites around the harness itself.
+dev = ["pytest>=7"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

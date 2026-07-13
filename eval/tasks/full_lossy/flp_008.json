@@ -1,0 +1,12 @@
+{
+  "id": "flp_008",
+  "transform_id": "log_compaction",
+  "task_scope": "change_summary",
+  "content_type": "git_diff",
+  "original": "scanning packages for version drift...\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\npkg unchanged: no diff\ndiff --git a/CHANGELOG.md b/CHANGELOG.md\n@@ -1,0 +2 @@\n+release REL-4471: bump bundled version to 1.4.2",
+  "compressed": "scanning packages for version drift...\npkg unchanged: no diff\n[repeated 10x]\npkg unchanged: no diff\ndiff --git a/CHANGELOG.md b/CHANGELOG.md\n@@ -1,0 +2 @@\n+release REL-4471: bump bundled version to 1.4.2",
+  "critical_tokens": [
+    "REL-4471",
+    "1.4.2"
+  ]
+}

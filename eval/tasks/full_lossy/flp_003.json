@@ -1,0 +1,12 @@
+{
+  "id": "flp_003",
+  "transform_id": "log_compaction",
+  "task_scope": "general",
+  "content_type": "json",
+  "original": "{\"ts\": \"10:00:00Z\", \"level\": \"info\", \"msg\": \"order received\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:01Z\", \"level\": \"warn\", \"msg\": \"inventory check slow\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:01Z\", \"level\": \"warn\", \"msg\": \"inventory check slow\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:01Z\", \"level\": \"warn\", \"msg\": \"inventory check slow\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:04Z\", \"level\": \"error\", \"msg\": \"inventory check failed\", \"order_id\": \"ORD-5521\", \"code\": \"INV_TIMEOUT\"}",
+  "compressed": "{\"ts\": \"10:00:00Z\", \"level\": \"info\", \"msg\": \"order received\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:01Z\", \"level\": \"warn\", \"msg\": \"inventory check slow\", \"order_id\": \"ORD-5521\"}\n[repeated 3x]\n{\"ts\": \"10:00:01Z\", \"level\": \"warn\", \"msg\": \"inventory check slow\", \"order_id\": \"ORD-5521\"}\n{\"ts\": \"10:00:04Z\", \"level\": \"error\", \"msg\": \"inventory check failed\", \"order_id\": \"ORD-5521\", \"code\": \"INV_TIMEOUT\"}",
+  "critical_tokens": [
+    "ORD-5521",
+    "INV_TIMEOUT"
+  ]
+}

@@ -1,0 +1,69 @@
+# Golden fixture manifest (ENGINEERING.md "Golden Tests (Byte-Exact)"). Each entry records
+# the transform id/version, the input/expected fixture paths, a human description, and the
+# SHA-256 of the expected output. The Rust golden test runner
+# (crates/tokenfold-core/tests/golden.rs) is the actual byte-equality check; this manifest is
+# the human-readable ledger of what's covered and a change-detection record for the expected
+# bytes (regenerate the `sha256` field, deliberately, whenever a fixture is intentionally
+# updated — see the "Updating golden fixtures" note at the bottom of this file).
+
+[[golden]]
+transform_id = "json_minify"
+version = "1.0.0"
+input = "tests/golden/json_minify/simple_object.in.json"
+expected = "tests/golden/json_minify/simple_object.out.json"
+description = "Simple object with keys out of alphabetical order and extra whitespace: whitespace stripped, key order preserved"
+sha256 = "a1d46c3cdb4e5795c8d637f80daeb578ebb1a9a65dc1ed5f11f51794c3c89f3a"
+
+[[golden]]
+transform_id = "json_minify"
+version = "1.0.0"
+input = "tests/golden/json_minify/nested_array.in.json"
+expected = "tests/golden/json_minify/nested_array.out.json"
+description = "Nested array of objects with mixed whitespace/indentation: no key reordering"
+sha256 = "8adcc8bab6105516418160b00511824e84ed977db3701ee8924a6ef92f08b853"
+
+[[golden]]
+transform_id = "json_minify"
+version = "1.0.0"
+input = "tests/golden/json_minify/string_escapes.in.json"
+expected = "tests/golden/json_minify/string_escapes.out.json"
+description = "String value containing \\n, \\\", \\\\, and a unicode escape: preserved verbatim"
+sha256 = "8fa36b145b06ffba204001aafec4f2b641812e4720bd7341fe4263046efbc5c0"
+
+[[golden]]
+transform_id = "log_compaction"
+version = "1.0.0"
+input = "tests/golden/log_compaction/adjacent_duplicates.in.txt"
+expected = "tests/golden/log_compaction/adjacent_duplicates.out.txt"
+description = "A run of 5 adjacent identical lines among other distinct lines collapses with an evidence marker"
+sha256 = "941b6060821c3bed130dedc767aa3bdcfa924e234849aa6ac4eb14cefb4b0745"
+
+[[golden]]
+transform_id = "log_compaction"
+version = "1.0.0"
+input = "tests/golden/log_compaction/no_duplicates.in.txt"
+expected = "tests/golden/log_compaction/no_duplicates.out.txt"
+description = "Log with no adjacent duplicate lines: output identical to input (no-op)"
+sha256 = "f231b5f81511c85d59e49c48ae12b2a7bf42eb0e4d170e824573551093db930f"
+
+[[golden]]
+transform_id = "schema_compaction"
+version = "1.0.0"
+input = "tests/golden/schema_compaction/openai_tool_schema.in.json"
+expected = "tests/golden/schema_compaction/openai_tool_schema.out.json"
+description = "OpenAI-style tool schema with a 5-element examples array: shortened to 1, description/required/enum/type/name untouched"
+sha256 = "beadc10c186b885094992efbb910c8075b5a0c9cb28ebf6a5405943205fb6ee8"
+
+[[golden]]
+transform_id = "diff_compaction"
+version = "1.0.0"
+input = "tests/golden/diff_compaction/small_diff.in.txt"
+expected = "tests/golden/diff_compaction/small_diff.out.txt"
+description = "Small unified diff for one file: headers and changed +/- bodies kept, two runs of context lines each collapse to an evidence marker"
+sha256 = "ae66968a39d5bf54ad7ceac9d6bd7c40aa325684ef668828cc9429bb0f86664b"
+
+# Updating golden fixtures: per ENGINEERING.md, golden files are versioned and immutable.
+# Regenerating an expected output requires `REGENERATE_GOLDENS=1 cargo test` (not yet wired —
+# tracked as a Phase 3+ CLI/tooling nicety) and an explanation in the commit message. Until
+# that exists, update `.out` fixtures and this manifest's `sha256` field by hand in the same
+# commit, and explain why in the commit message.

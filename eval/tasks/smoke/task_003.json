@@ -1,0 +1,10 @@
+{
+  "id": "task_003",
+  "transform_id": "log_compaction",
+  "task_scope": "general",
+  "original": "DEBUG cache miss key=user:9931\nDEBUG cache miss key=user:9931\nDEBUG cache miss key=user:9931\nDEBUG cache miss key=user:9931\nDEBUG cache miss key=user:9931\nINFO cache rebuilt key=user:9931 duration_ms=42",
+  "compressed": "DEBUG cache miss key=user:9931\n[repeated 5x]\nDEBUG cache miss key=user:9931\nINFO cache rebuilt key=user:9931 duration_ms=42",
+  "critical_tokens": [
+    "user:9931"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "task_007",
+  "transform_id": "json_minify",
+  "task_scope": "general",
+  "original": "{\n  \"request_id\": \"req-4471\",\n  \"status\": \"ok\",\n  \"items\": [\"a\", \"b\"]\n}",
+  "compressed": "{ \"request_id\": \"req-4471\", \"status\": \"ok\", \"items\": [\"a\", \"b\"] }",
+  "critical_tokens": [
+    "req-4471"
+  ]
+}

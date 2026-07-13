@@ -1,0 +1,12 @@
+{
+  "id": "flp_014",
+  "transform_id": "diff_compaction",
+  "task_scope": "change_summary",
+  "content_type": "json",
+  "original": "{\n  \"file\": \"src/rate_limiter.py\",\n  \"generated_at\": \"2026-07-10T22:00:00Z\",\n  \"tool\": \"diff-compactor-preview\",\n  \"hunks\": [\n    {\n      \"file\": \"src/rate_limiter.py\",\n      \"line\": 12,\n      \"removed\": \"limit = 100\",\n      \"added\": \"limit = 250\"\n    },\n    {\n      \"file\": \"src/rate_limiter.py\",\n      \"line\": 30,\n      \"removed\": \"window_seconds = 60\",\n      \"added\": \"window_seconds = 30\"\n    },\n    {\n      \"file\": \"src/rate_limiter.py\",\n      \"line\": 45,\n      \"removed\": \"raise RateLimitError()\",\n      \"added\": \"raise RateLimitError(code='RL_429')\"\n    }\n  ]\n}",
+  "compressed": "[25 lines dropped]",
+  "critical_tokens": [
+    "rate_limiter.py",
+    "RL_429"
+  ]
+}

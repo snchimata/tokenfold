@@ -1,0 +1,66 @@
+# Mirror of crates/tokenfold-core/src/modes.rs ALL_ENTRIES.
+# CLI, proxy, and Python-binding tests assert against this file (INTERFACES.md Part 2).
+#
+# secret_redaction is not listed here: it runs unconditionally before the pipeline and
+# cannot be disabled (see crates/tokenfold-core/src/budget.rs CompressionPolicyBuilder::build).
+#
+# table_compaction is intentionally omitted: the First Consumer worksheet (plan.md) doesn't
+# name tables as a dominant payload type, so F-019 stays out of scope for now.
+
+[[transforms]]
+id = "json_minify"
+version = "1.0.0"
+conservative_enabled = true
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
+max_ratio_conservative = 1.0
+max_ratio_balanced = 1.0
+max_ratio_aggressive = 1.0
+task_scopes = ["all"]
+applicable_formats = ["openai_json", "anthropic_json"]
+
+[[transforms]]
+id = "schema_compaction"
+version = "1.0.0"
+conservative_enabled = true
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
+max_ratio_conservative = 0.15
+max_ratio_balanced = 0.30
+max_ratio_aggressive = 0.50
+task_scopes = ["all"]
+applicable_formats = ["openai_json", "anthropic_json"]
+
+[[transforms]]
+id = "log_compaction"
+version = "1.0.0"
+# Promoted out of --experimental 2026-07-12: full-lossy-promotion gate clears every
+# D-005 draft threshold cleanly (quality_retention=1.0, contrastive_failure_rate=0.0,
+# critical_token_survival_rate=1.0).
+conservative_enabled = false
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
+max_ratio_conservative = 0.0
+max_ratio_balanced = 0.65    # draft; updated after Phase 2 accuracy@ratio data
+max_ratio_aggressive = 0.75
+task_scopes = ["general", "change_summary"]
+applicable_formats = ["plain_text", "command_output"]
+
+[[transforms]]
+id = "diff_compaction"
+version = "1.0.0"
+# Stays --experimental 2026-07-12: per_variant gate breakdown shows BOTH the default
+# (body-preserving) and header-only (change_summary) forms miss the D-005 draft
+# thresholds on their own — see eval/tasks/FIXTURES.md "Scorer status".
+conservative_enabled = false
+balanced_enabled = false
+aggressive_enabled = false
+experimental = true
+max_ratio_conservative = 0.0
+max_ratio_balanced = 0.60
+max_ratio_aggressive = 0.70
+task_scopes = ["code_review", "change_summary"]
+applicable_formats = ["plain_text", "command_output", "git_diff"]

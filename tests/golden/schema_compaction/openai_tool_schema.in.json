@@ -1,0 +1,34 @@
+{
+  "name": "search_flights",
+  "description": "Searches available commercial flights between two airports on a given travel date.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "origin": {
+        "type": "string",
+        "description": "IATA airport code for the departure airport."
+      },
+      "destination": {
+        "type": "string",
+        "description": "IATA airport code for the arrival airport."
+      },
+      "cabin_class": {
+        "type": "string",
+        "enum": ["economy", "premium_economy", "business", "first"],
+        "description": "Desired cabin class for the itinerary."
+      },
+      "departure_date": {
+        "type": "string",
+        "description": "Departure date in YYYY-MM-DD format."
+      }
+    },
+    "examples": [
+      { "origin": "JFK", "destination": "LAX", "departure_date": "2026-08-01" },
+      { "origin": "SFO", "destination": "ORD", "departure_date": "2026-09-15" },
+      { "origin": "LHR", "destination": "CDG", "departure_date": "2026-10-03" },
+      { "origin": "NRT", "destination": "SIN", "departure_date": "2026-11-20" },
+      { "origin": "SYD", "destination": "AKL", "departure_date": "2026-12-05" }
+    ]
+  },
+  "required": ["origin", "destination", "departure_date"]
+}
