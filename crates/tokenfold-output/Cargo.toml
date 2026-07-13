@@ -1,0 +1,10 @@
+[package]
+name = "tokenfold-output"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokenfold-core = { path = "../tokenfold-core" }

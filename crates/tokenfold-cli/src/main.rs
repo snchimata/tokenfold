@@ -174,6 +174,22 @@ enum Command {
         #[command(subcommand)]
         action: FiltersAction,
     },
+    /// Phase 6: output-token-shaping report -- measured (give SHAPED) or estimated (give
+    /// --ratio, projected from a known input compression ratio).
+    OutputSavings {
+        baseline: Input,
+        shaped: Option<Input>,
+        #[arg(long)]
+        ratio: Option<f64>,
+    },
+    /// Phase 6: mine the local ledger for policy-change proposals. Never silently changes
+    /// tokenfold.toml -- prints proposals only, unless --apply is passed.
+    #[command(visible_alias = "discover")]
+    Learn {
+        /// Write the first proposed change into tokenfold.toml instead of only printing it.
+        #[arg(long)]
+        apply: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -289,6 +305,12 @@ fn main() {
         Command::Gain { scope, since, csv } => cmd_gain(&global, scope, since, csv),
         Command::Session { recent } => cmd_session(&global, recent),
         Command::Filters { action } => cmd_filters(&global, action),
+        Command::OutputSavings {
+            baseline,
+            shaped,
+            ratio,
+        } => cmd_output_savings(&global, baseline, shaped, ratio),
+        Command::Learn { apply } => cmd_learn(&global, apply),
     };
     match result {
         Ok(code) => std::process::exit(code),
@@ -568,6 +590,157 @@ fn cmd_diff(global: &GlobalFlags, raw: Input, compressed: Input) -> Result<i32, 
         print!("{}", diff::render_body(&lines, &colors));
     }
     Ok(0)
+}
+
+fn cmd_output_savings(
+    global: &GlobalFlags,
+    baseline: Input,
+    shaped: Option<Input>,
+    ratio: Option<f64>,
+) -> Result<i32, TokenFoldError> {
+    let baseline_bytes = read_input(&baseline, "baseline output")?;
+    let estimator = default_estimator();
+
+    let report = if let Some(shaped_input) = shaped {
+        let shaped_bytes = read_input(&shaped_input, "shaped output")?;
+        tokenfold_output::measure_output_savings(&baseline_bytes, &shaped_bytes, &*estimator)
+    } else if let Some(ratio) = ratio {
+        let hint = estimator.count_bytes(&baseline_bytes);
+        tokenfold_output::estimate_output_savings(ratio, hint)
+    } else {
+        return Err(TokenFoldError::InvalidInput(
+            "output-savings requires either a SHAPED file argument or --ratio <f64>".to_string(),
+        ));
+    };
+
+    if global.json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+    } else {
+        println!("profile: {}", report.profile);
+        if let Some(n) = report.measured_output_tokens_saved {
+            println!("measured_output_tokens_saved: {n}");
+        }
+        if let Some(n) = report.estimated_output_tokens_saved {
+            println!("estimated_output_tokens_saved: {n}");
+        }
+        println!("provenance: {}", report.provenance);
+    }
+    Ok(0)
+}
+
+fn cmd_learn(global: &GlobalFlags, apply: bool) -> Result<i32, TokenFoldError> {
+    let overrides = overrides_for(global, None, None, None, Vec::new(), false, None);
+    let resolved = config::resolve(&overrides, global.config.as_deref())?;
+
+    let records = if resolved.effective.analytics_enabled {
+        let store =
+            tokenfold_core::stats::LedgerStore::new(resolved.effective.analytics_ledger_path);
+        store.read_all()?
+    } else {
+        Vec::new()
+    };
+
+    let proposals = tokenfold_learn::propose_policy_changes(&records);
+
+    if global.json {
+        let payload: Vec<_> = proposals
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "scope": p.scope,
+                    "observation": p.observation,
+                    "suggestion": p.suggestion,
+                    "confidence": p.confidence,
+                    "sample_size": p.sample_size,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+    } else if proposals.is_empty() {
+        println!(
+            "No policy changes proposed (not enough ledger history yet, or current settings already perform well)."
+        );
+    } else {
+        for p in &proposals {
+            println!("[{}] {}", p.scope, p.observation);
+            println!(
+                "  suggestion: {} (confidence {:.0}%, n={})",
+                p.suggestion,
+                p.confidence * 100.0,
+                p.sample_size
+            );
+        }
+        if !apply {
+            println!(
+                "\nNo changes written. Re-run with --apply to write the first proposal into tokenfold.toml."
+            );
+        }
+    }
+
+    if apply {
+        match proposals.first() {
+            Some(proposal) if proposal.scope == "conservative" => {
+                apply_mode_change(global, resolved.config_path.as_deref(), "balanced")?;
+                if !global.json {
+                    println!(
+                        "Applied: [compression] mode = \"balanced\" written to tokenfold.toml"
+                    );
+                }
+            }
+            _ => {
+                if !global.json {
+                    println!("Nothing to apply.");
+                }
+            }
+        }
+    }
+
+    Ok(0)
+}
+
+/// Writes `[compression].mode = mode` into the resolved config file (or a new `tokenfold.toml`
+/// in the current directory if none exists yet), preserving every other key already there.
+/// Round-trips through `toml::Value` rather than a comment-preserving editor -- this is a
+/// single local config file, not a shared document, so losing comments on a `--apply` write is
+/// an acceptable trade for not adding a TOML-editing dependency.
+fn apply_mode_change(
+    global: &GlobalFlags,
+    config_path: Option<&Path>,
+    mode: &str,
+) -> Result<(), TokenFoldError> {
+    let target = config_path
+        .map(Path::to_path_buf)
+        .or_else(|| global.config.clone())
+        .unwrap_or_else(|| PathBuf::from("tokenfold.toml"));
+
+    let mut doc: toml::Value = if target.exists() {
+        let text = std::fs::read_to_string(&target)?;
+        text.parse().map_err(|e| {
+            TokenFoldError::ConfigError(format!("{} is not valid TOML: {e}", target.display()))
+        })?
+    } else {
+        toml::Value::Table(toml::map::Map::new())
+    };
+
+    let table = doc.as_table_mut().ok_or_else(|| {
+        TokenFoldError::ConfigError(format!(
+            "{} is not a TOML table at its root",
+            target.display()
+        ))
+    })?;
+    let compression = table
+        .entry("compression")
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+    let compression_table = compression
+        .as_table_mut()
+        .ok_or_else(|| TokenFoldError::ConfigError("[compression] is not a table".to_string()))?;
+    compression_table.insert("mode".to_string(), toml::Value::String(mode.to_string()));
+
+    let rendered = toml::to_string_pretty(&doc).map_err(|e| {
+        TokenFoldError::InternalError(format!("failed to serialize tokenfold.toml: {e}"))
+    })?;
+    std::fs::write(&target, rendered)?;
+    Ok(())
 }
 
 fn cmd_wrap(

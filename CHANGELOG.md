@@ -2,6 +2,34 @@
 
 ## Unreleased (v0.2 / Phase 5 complete, pending publish)
 
+### Phase 6 (v0.3+) complete (2026-07-13): 6 new optional extension crates
+
+Added six new workspace crates under `crates/`, one per Phase 6 exit criterion, each an
+independent optional extension package per D-014 Option A rather than code baked into
+`tokenfold-core`: `tokenfold-adapters` (OpenAI/Anthropic/LiteLLM/Vercel AI SDK
+provider-shape parity), `tokenfold-rag` (deterministic Okapi BM25 retrieval with
+citation-grounding guarantees, zero dependencies, vector runtime explicitly deferred),
+`tokenfold-output` (populates the previously-always-`None` `OutputSavingsReport`,
+distinguishing measured vs. estimated output-token savings), `tokenfold-image` (hand-rolled
+JPEG/PNG metadata stripping, zero dependencies, lossy OCR/summarization left as an explicit
+`Err` stub), `tokenfold-learn` (pure `&[LedgerRecord] -> Vec<PolicyProposal>` policy mining,
+no file I/O, so "never silently applies" is structural), and `tokenfold-admin` (real
+ed25519-dalek signature verification, SHA-256 checksum verification, and install/rollback
+primitives against a local release manifest -- no live update server exists yet, D-007 is
+still unresolved). New CLI subcommands: `tokenfold output-savings` and `tokenfold learn`
+(alias `discover`, `--apply` writes `tokenfold.toml`, otherwise prints proposals only).
+`cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo
+test --workspace --locked` (all 12 crates green), `cargo audit` (0 vulnerabilities, 158
+crates), and `cargo deny check advisories bans licenses sources` (`advisories ok, bans ok,
+licenses ok, sources ok`) all pass against the full workspace. See `ROADMAP.md` Phase 6 for
+the per-criterion detail and every honestly-scoped deferral (vector retrieval, OCR/
+summarization, live `update` release server, CLI wiring for `tokenfold-admin`).
+
+Also: this pass committed the entire Phase 1-5 implementation to git for the first time --
+it had been built out over `2026-07-11` through `2026-07-12` but only ever existed as
+uncommitted working-tree state (2 commits total pre-existed, both just Phase 0 planning
+docs). No code changed as part of that commit; see `git log` for the checkpoint commit.
+
 ### Task 11 gate-review pass (2026-07-12): Phase 5 exit criteria now 10/10
 
 Ran every gate named in `PLAN.md`'s Task 11 Step 2 (core, all blocking) and Step 3

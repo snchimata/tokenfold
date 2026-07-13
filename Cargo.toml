@@ -6,6 +6,11 @@ members = [
     "crates/tokenfold-proxy",
     "crates/tokenfold-py",
     "crates/tokenfold-image",
+    "crates/tokenfold-adapters",
+    "crates/tokenfold-rag",
+    "crates/tokenfold-output",
+    "crates/tokenfold-admin",
+    "crates/tokenfold-learn",
 ]
 
 [workspace.package]

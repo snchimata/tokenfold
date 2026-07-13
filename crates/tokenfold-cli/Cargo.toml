@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 tokenfold-core = { path = "../tokenfold-core" }
+tokenfold-output = { path = "../tokenfold-output" }
+tokenfold-learn = { path = "../tokenfold-learn" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
