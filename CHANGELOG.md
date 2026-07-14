@@ -2,6 +2,29 @@
 
 ## Unreleased (v0.2 / Phase 5 complete, pending publish)
 
+### Content-aware JSON-data compression (2026-07-14): generic `json` format + `json_field_fold`
+
+Closes the one real gap vs. content-aware compressors (e.g. Headroom's "60–95% for JSON
+data"): tokenfold previously treated arbitrary data-JSON as `plain_text` and saved **0%**
+on it — no transform ran. Two additions fix that, both lossless:
+
+- **New `InputFormat::Json`** (CLI `--format json`, auto-detected: valid JSON object/array
+  that isn't an OpenAI/Anthropic message payload). Wires `json_minify` to generic JSON.
+- **New `json_field_fold` transform** (id `json_field_fold`, v1.0.0): a *reversible*
+  columnar fold — an array of N objects sharing the same keys becomes
+  `{"__tf_cols__":[...],"__tf_rows__":[[...]]}`, emitting each key once instead of N times.
+  Recurses into nested arrays. Its safety invariant is **exact round-trip reversibility**
+  (`unfold(fold(x)) == x`), gated in the pipeline, so any fold that would lose data is
+  rolled back. Verified by a proptest over arbitrary JSON. On by default in Balanced and
+  Aggressive; out of Conservative (like `log_compaction`); never applied to OpenAI/Anthropic
+  bodies (whose API shape must not change).
+
+Measured (lossless, exact tiktoken accounting): a verbose 50-record data blob **0% → 48.2%**
+(json_minify 2511 + json_field_fold 1213 tokens); a realistic 30-record API response
+**61.3%**. No change to OpenAI/Anthropic payload results. Remaining path to 60–95% on
+value-heavy data (repeated nested objects/values): value-dictionary + null/default pruning,
+tracked for v0.3.
+
 ### Phase 6 (v0.3+) complete (2026-07-13): 6 new optional extension crates
 
 Added six new workspace crates under `crates/`, one per Phase 6 exit criterion, each an

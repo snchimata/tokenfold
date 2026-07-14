@@ -12,6 +12,7 @@ use crate::input::InputFormat;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TransformId {
     JsonMinify,
+    JsonFieldFold,
     SchemaCompaction,
     LogCompaction,
     DiffCompaction,
@@ -21,6 +22,7 @@ impl TransformId {
     pub fn as_str(&self) -> &'static str {
         match self {
             TransformId::JsonMinify => "json_minify",
+            TransformId::JsonFieldFold => "json_field_fold",
             TransformId::SchemaCompaction => "schema_compaction",
             TransformId::LogCompaction => "log_compaction",
             TransformId::DiffCompaction => "diff_compaction",
@@ -83,7 +85,29 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
         max_ratio_balanced: 1.0,
         max_ratio_aggressive: 1.0,
         task_scopes: &[TaskScope::All],
-        applicable_formats: &[InputFormat::OpenAiJson, InputFormat::AnthropicJson],
+        applicable_formats: &[
+            InputFormat::OpenAiJson,
+            InputFormat::AnthropicJson,
+            InputFormat::Json,
+        ],
+    },
+    // json_field_fold (v0.2): reversible columnar fold of arrays of homogeneous objects.
+    // Lossless (round-trip gated in the pipeline), so max_ratio is unrestricted (1.0), but
+    // it restructures what the model sees, so it stays out of Conservative (same convention
+    // as log_compaction) and only runs on generic Json data, never on OpenAI/Anthropic
+    // message bodies (whose API shape must not change).
+    ModeEntry {
+        transform_id: TransformId::JsonFieldFold,
+        version: "1.0.0",
+        conservative_enabled: false,
+        balanced_enabled: true,
+        aggressive_enabled: true,
+        experimental: false,
+        max_ratio_conservative: 0.0,
+        max_ratio_balanced: 1.0,
+        max_ratio_aggressive: 1.0,
+        task_scopes: &[TaskScope::All],
+        applicable_formats: &[InputFormat::Json],
     },
     ModeEntry {
         transform_id: TransformId::SchemaCompaction,

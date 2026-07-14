@@ -4,6 +4,7 @@
 
 pub mod diff;
 pub mod json;
+pub mod json_fold;
 pub mod logs;
 pub mod redaction;
 pub mod schema;

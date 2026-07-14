@@ -111,6 +111,8 @@ pub enum PyInputFormat {
     OpenaiJson,
     #[pyo3(name = "ANTHROPIC_JSON")]
     AnthropicJson,
+    #[pyo3(name = "JSON")]
+    Json,
     #[pyo3(name = "PLAIN_TEXT")]
     PlainText,
     #[pyo3(name = "COMMAND_OUTPUT")]
@@ -125,6 +127,7 @@ impl From<PyInputFormat> for CoreFormat {
             PyInputFormat::Auto => CoreFormat::Auto,
             PyInputFormat::OpenaiJson => CoreFormat::OpenAiJson,
             PyInputFormat::AnthropicJson => CoreFormat::AnthropicJson,
+            PyInputFormat::Json => CoreFormat::Json,
             PyInputFormat::PlainText => CoreFormat::PlainText,
             PyInputFormat::CommandOutput => CoreFormat::CommandOutput,
             PyInputFormat::GitDiff => CoreFormat::GitDiff,
@@ -137,6 +140,7 @@ fn parse_format_str(s: &str) -> PyResult<CoreFormat> {
         "AUTO" => Ok(CoreFormat::Auto),
         "OPENAI_JSON" => Ok(CoreFormat::OpenAiJson),
         "ANTHROPIC_JSON" => Ok(CoreFormat::AnthropicJson),
+        "JSON" => Ok(CoreFormat::Json),
         "PLAIN_TEXT" => Ok(CoreFormat::PlainText),
         "COMMAND_OUTPUT" => Ok(CoreFormat::CommandOutput),
         "GIT_DIFF" => Ok(CoreFormat::GitDiff),

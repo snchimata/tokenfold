@@ -18,7 +18,23 @@ max_ratio_conservative = 1.0
 max_ratio_balanced = 1.0
 max_ratio_aggressive = 1.0
 task_scopes = ["all"]
-applicable_formats = ["openai_json", "anthropic_json"]
+applicable_formats = ["openai_json", "anthropic_json", "json"]
+
+[[transforms]]
+id = "json_field_fold"
+version = "1.0.0"
+# v0.2: reversible columnar fold of arrays of homogeneous objects. Lossless (round-trip
+# gated in the pipeline), so max_ratio is unrestricted; out of Conservative like
+# log_compaction; runs only on generic `json` data, never on OpenAI/Anthropic bodies.
+conservative_enabled = false
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
+max_ratio_conservative = 0.0
+max_ratio_balanced = 1.0
+max_ratio_aggressive = 1.0
+task_scopes = ["all"]
+applicable_formats = ["json"]
 
 [[transforms]]
 id = "schema_compaction"

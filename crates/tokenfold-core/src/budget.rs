@@ -220,7 +220,12 @@ pub fn protected_segments(input: &CompressionInput, policy: &CompressionPolicy) 
         InputFormat::GitDiff => extract_diff_protected(&input.bytes),
         // ponytail: no transform touches plain text/command output structure yet beyond
         // log/diff compaction (task-scope gated), so nothing is unconditionally protected.
-        InputFormat::PlainText | InputFormat::CommandOutput | InputFormat::Auto => Vec::new(),
+        // Generic Json has no "protected" sub-segment either — json_field_fold's own
+        // round-trip safety gate is what guarantees its data is preserved.
+        InputFormat::PlainText
+        | InputFormat::CommandOutput
+        | InputFormat::Json
+        | InputFormat::Auto => Vec::new(),
     }
 }
 

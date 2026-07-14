@@ -268,6 +268,7 @@ fn format_label(format: InputFormat) -> &'static str {
         InputFormat::Auto => "auto",
         InputFormat::OpenAiJson => "openai_json",
         InputFormat::AnthropicJson => "anthropic_json",
+        InputFormat::Json => "json",
         InputFormat::PlainText => "plain_text",
         InputFormat::CommandOutput => "command_output",
         InputFormat::GitDiff => "git_diff",

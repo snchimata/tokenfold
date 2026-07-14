@@ -258,6 +258,7 @@ fn mode_matrix_fixture_mirrors_the_rust_source_of_truth() {
         let format_from_str = |s: &str| match s {
             "openai_json" => InputFormat::OpenAiJson,
             "anthropic_json" => InputFormat::AnthropicJson,
+            "json" => InputFormat::Json,
             "plain_text" => InputFormat::PlainText,
             "command_output" => InputFormat::CommandOutput,
             "git_diff" => InputFormat::GitDiff,

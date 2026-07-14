@@ -8,6 +8,9 @@ pub enum InputFormat {
     Auto,
     OpenAiJson,
     AnthropicJson,
+    /// Generic JSON data (API responses, records, logs) that isn't an LLM message payload.
+    /// Unlocks the JSON-data transforms (`json_minify`, `json_field_fold`).
+    Json,
     PlainText,
     CommandOutput,
     GitDiff,

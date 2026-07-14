@@ -354,6 +354,9 @@ fn apply_single_transform(
 ) -> Result<Vec<u8>, String> {
     match transform_id {
         TransformId::JsonMinify => transforms::json::minify_json(bytes).map_err(|e| e.to_string()),
+        TransformId::JsonFieldFold => {
+            transforms::json_fold::fold_json(bytes).map_err(|e| e.to_string())
+        }
         TransformId::SchemaCompaction => {
             // ponytail: a fixed example cap for now; per-mode example counts are a future
             // config knob (F-011 acceptance criteria only requires the count be configurable,
@@ -379,18 +382,35 @@ fn validate_safety(
     after: &[u8],
     protected: &[Vec<u8>],
 ) -> bool {
-    let is_json_format = matches!(format, InputFormat::OpenAiJson | InputFormat::AnthropicJson);
-    let is_json_transform = matches!(
-        transform_id,
-        TransformId::JsonMinify | TransformId::SchemaCompaction
-    );
-    if is_json_format && is_json_transform {
-        if !safety::json_still_valid(after) {
-            return false;
+    match transform_id {
+        // json_field_fold intentionally restructures JSON (arrays of objects -> columnar
+        // form), so key-order preservation does NOT apply. Its safety invariant is instead
+        // exact reversibility: unfolding the output must reproduce the input's data.
+        TransformId::JsonFieldFold => {
+            if !safety::json_still_valid(after) {
+                return false;
+            }
+            if !transforms::json_fold::round_trips(before, after) {
+                return false;
+            }
         }
-        if !safety::json_key_order_preserved(before, after) {
-            return false;
+        // json_minify / schema_compaction on any JSON-family format: output must stay valid
+        // JSON with byte-for-byte key order preserved.
+        TransformId::JsonMinify | TransformId::SchemaCompaction => {
+            let is_json_format = matches!(
+                format,
+                InputFormat::OpenAiJson | InputFormat::AnthropicJson | InputFormat::Json
+            );
+            if is_json_format {
+                if !safety::json_still_valid(after) {
+                    return false;
+                }
+                if !safety::json_key_order_preserved(before, after) {
+                    return false;
+                }
+            }
         }
+        TransformId::LogCompaction | TransformId::DiffCompaction => {}
     }
     safety::protected_segments_present(protected, after)
 }
@@ -470,6 +490,7 @@ fn format_label(format: InputFormat) -> &'static str {
         InputFormat::Auto => "auto",
         InputFormat::OpenAiJson => "openai_json",
         InputFormat::AnthropicJson => "anthropic_json",
+        InputFormat::Json => "json",
         InputFormat::PlainText => "plain_text",
         InputFormat::CommandOutput => "command_output",
         InputFormat::GitDiff => "git_diff",
