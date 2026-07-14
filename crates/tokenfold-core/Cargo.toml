@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Token-aware compression for LLM payloads: shrink JSON tool-call bodies, command output, and diffs with exact tiktoken accounting and a typed safety report."
+keywords = ["llm", "tokenizer", "compression", "tiktoken", "openai"]
+categories = ["compression", "text-processing"]
 
 [dependencies]
 serde = { workspace = true }
