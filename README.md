@@ -2,11 +2,11 @@
 
 # tokenfold
 
-**Fold the noise. Keep the signal.**
+**Make every prompt and payload work harder.**
 
-The local compression layer for LLM apps and agents. Shrink messages, tool schemas, JSON
-data, logs, and diffs before inference, with exact token counts and a safety receipt for
-every change.
+Tokenfold is a local compression layer for LLM apps and agents. It shrinks the noisy parts of
+prompts, schemas, JSON data, logs, and diffs before inference so you can fit more signal into
+the same context window and spend less on tokens.
 
 [![CI](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml/badge.svg)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](crates/tokenfold-py/pyproject.toml)
@@ -17,29 +17,20 @@ every change.
 
 </div>
 
-> **Cut JSON payloads by 60–68% with zero data loss.** A 50-record data blob that saved
-> **0% before v0.2** now folds to **67.6% fewer tokens** — losslessly and reversibly. Every
-> number is an exact `o200k_base` count you can reproduce.
+> **Real results, not hype.** On repetitive JSON data, tokenfold cuts payloads by up to
+> **67.6%** with exact, reversible compression. On the bundled OpenAI-style example, it removes
+> **133 tokens** and shrinks the payload by **38.4%** without changing the meaning.
 
-**What you actually save** (exact tokenizer counts, all lossless):
+**What users typically save**
 
-| Your payload | Before v0.2 | With tokenfold | Reversible? |
-| --- | --- | --- | --- |
-| API response, 30 records | 0% | **61.3%** | ✅ |
-| Data blob, 50 repetitive records | 0% | **67.6%** | ✅ |
-| OpenAI request (chat + tool schema) | 38% | **38%** | ✅ |
-| Already-compact / ragged JSON | 0% | 0% (never bloats) | ✅ |
+| Payload | Outcome |
+| --- | --- |
+| Repetitive API or record data | up to **67.6% fewer tokens** |
+| Structured OpenAI-style requests | **38.4% smaller** in the example |
+| JSON-heavy agent payloads | **46.1% smaller** in a 6-record sample |
 
-Before v0.2, tokenfold treated generic JSON *data* as plain text and saved nothing. Now it
-folds arrays of same-shape objects into columnar form and dictionaries repeated values — so
-the payloads your agents and pipelines actually send get dramatically smaller, and every byte
-is recoverable.
-
-LLM systems routinely spend context on formatting, repeated logs, verbose schemas, and
-low-signal command output. That waste costs money and crowds useful information out of the
-context window.
-
-tokenfold sits between your application and any model provider:
+Tokenfold works before your model call. It removes whitespace, folds repeated JSON structure,
+shortens schemas, and redacts secrets first so you keep more signal and less noise.
 
 ```text
 app or agent  ──  messages · schemas · logs · diffs  ──▶  tokenfold  ──▶  any LLM
@@ -47,13 +38,12 @@ app or agent  ──  messages · schemas · logs · diffs  ──▶  tokenfold
                                                             └── payload + receipt
 ```
 
-It removes what the model does not need, protects secret-shaped values first, and reports
-exactly what changed. Preview every transformation before applying it.
+You get a smaller payload, an exact receipt for what changed, and a local workflow that stays
+under your control.
 
 ## Quick start
 
-The library and Python package are published — `cargo add tokenfold-core` and
-`pip install tokenfold`. To use the CLI, build it from source with the pinned Rust toolchain:
+Install the CLI from source or use the published packages:
 
 ```bash
 git clone https://github.com/snchimata/tokenfold.git
@@ -61,17 +51,22 @@ cd tokenfold
 cargo build --release --locked -p tokenfold-cli
 ```
 
-Preview savings on the bundled OpenAI payload without changing it:
+Python users can also install the package directly:
+
+```bash
+pip install tokenfold
+```
+
+Preview the savings on the bundled OpenAI payload without changing it:
 
 ```bash
 target/release/tokenfold inspect examples/openai_payload.json --format openai
 ```
 
-The abridged receipt:
+Example output:
 
 ```text
 TRANSFORM              MODE          EST TOKENS BEFORE→AFTER      SAVED       %  STATUS
-secret_redaction       all                           346→346          0    0.0%  no_op
 json_minify            all                           346→229        117   33.8%  applied
 schema_compaction      all                           229→213         16    7.0%  applied
 TOTAL  346 → 213 tokens   saved 133 (38.4% reduction)
@@ -86,9 +81,7 @@ target/release/tokenfold compress examples/openai_payload.json \
   --target-tokens 250 > compressed.json
 ```
 
-Compress generic JSON **data** (API responses, records, logs — not just message payloads).
-This is the v0.2 win: data that used to pass through untouched now gets folded and
-deduplicated, losslessly.
+For repetitive JSON data, inspect the bundled sample and see the larger wins:
 
 ```bash
 target/release/tokenfold inspect examples/api_response.json --format json
@@ -102,9 +95,7 @@ json_value_dict        balanced+                     215→206          9    4.2
 TOTAL  382 → 206 tokens   saved 176 (46.1% reduction)
 ```
 
-That is a tiny 6-record sample. Real API responses and record dumps repeat far more, so they
-compress far more — a 50-record blob folds **0% → 67.6%**. Ragged or already-compact JSON
-correctly reports little or nothing rather than bloating it.
+On larger repetitive record sets, those gains grow further — up to **67.6% fewer tokens**.
 
 Or trim noisy output from any command:
 
@@ -114,18 +105,15 @@ target/release/tokenfold wrap -- git diff
 
 ## Why tokenfold
 
-- **Spend context on the task.** Remove formatting, repetition, and low-signal content
-  before it consumes the model's attention or your budget.
-- **Know what you saved.** Exact `o200k_base` and `cl100k_base` counts drive budget decisions;
-  heuristics are never presented as exact.
-- **Keep control.** Every call returns a typed `CompressionReport` with before/after counts,
-  per-transform savings, estimator provenance, warnings, and final status.
-- **Fail honestly.** If the safe transform set cannot meet a target, tokenfold reports
-  `BEST_EFFORT` or `UNREACHABLE_TARGET` instead of pretending it succeeded.
-- **Stay provider-neutral.** Use the same Rust core from the CLI, Python, an HTTP proxy,
-  an MCP server, or your own Rust application.
-- **Run locally.** The CLI is a native binary with no service account, hosted control plane,
-  or runtime dependency.
+- **Keep more signal in the context window.** Remove formatting, repetition, and low-value
+  content before it eats your budget or crowds out the important bits.
+- **Make your prompts cheaper.** Smaller payloads mean lower token spend and fewer retries.
+- **See exact savings.** Every run reports before/after token counts and the transforms that
+  changed the payload.
+- **Stay in control.** Tokenfold runs locally and gives you a receipt you can inspect before you
+  ship the compressed payload.
+- **Use it anywhere.** The same Rust core powers the CLI, Python package, HTTP proxy, MCP
+  server, and Rust integrations.
 
 ## One engine, five ways to use it
 
