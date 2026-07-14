@@ -12,12 +12,21 @@
 
 use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, compress};
 
-// The payload ships with the repo (examples/openai_payload.json). Embedding it with
-// include_str! keeps this example runnable from any working directory.
+// The payloads ship with the repo. Embedding them with include_str! keeps this example
+// runnable from any working directory.
 const PAYLOAD: &str = include_str!("../../../examples/openai_payload.json");
+const API_RESPONSE: &str = include_str!("../../../examples/api_response.json");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Wrap the raw request bytes, telling tokenfold it's an OpenAI-style JSON body.
+    compress_openai_body()?;
+    println!("\n{}\n", "-".repeat(72));
+    compress_json_data()?;
+    Ok(())
+}
+
+// --- 1. An LLM request body (chat messages + a verbose tool schema) -----------------------
+fn compress_openai_body() -> Result<(), Box<dyn std::error::Error>> {
+    // Wrap the raw request bytes, telling tokenfold it's an OpenAI-style JSON body.
     let input = CompressionInput::openai_json(PAYLOAD.as_bytes().to_vec());
 
     // 2. Pick a policy. Balanced is the safe default; JSON minification and schema
@@ -30,6 +39,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out = compress(input, &policy)?;
     let report = &out.report;
 
+    println!("== OpenAI request body ==");
+    print_report(report);
+    Ok(())
+}
+
+// --- 2. Generic JSON data (API response, records, logs) -----------------------------------
+// This is the v0.2 path: data-JSON that isn't an LLM message payload. tokenfold minifies it,
+// folds arrays of same-shape objects into columnar form (each key once, not once per row),
+// and dictionaries repeated values — all losslessly (every stage is round-trip gated).
+fn compress_json_data() -> Result<(), Box<dyn std::error::Error>> {
+    let input = CompressionInput::json(API_RESPONSE.as_bytes().to_vec());
+    let policy = CompressionPolicy::builder()
+        .mode(CompressionMode::Balanced)
+        .build()?;
+    let out = compress(input, &policy)?;
+
+    println!("== Generic JSON data ==");
+    print_report(&out.report);
+    println!("\ncompressed payload ({} bytes):", out.bytes.len());
+    println!("{}", String::from_utf8_lossy(&out.bytes));
+    Ok(())
+}
+
+fn print_report(report: &tokenfold_core::report::CompressionReport) {
     println!("status:    {:?}", report.status);
     println!(
         "tokens:    {} -> {}  ({} saved, {:.1}%)",
@@ -39,23 +72,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "estimator: {} (exact: {})",
         report.estimator.backend, report.estimator.is_exact,
     );
-
-    // 4. The report itemizes what each transform did — receipts, not guesses.
-    println!("\ntransforms:");
+    // The report itemizes what each transform did — receipts, not guesses.
+    println!("transforms:");
     for t in &report.transforms {
         println!(
             "  - {:<24} {:<10?} (saved {} tokens)",
             t.id, t.status, t.saved_tokens,
         );
     }
-
-    for w in &report.warnings {
-        println!("  warning: {}", w.message);
-    }
-
-    // 5. out.bytes is the compressed payload, ready to send to any provider.
-    println!("\ncompressed payload ({} bytes):", out.bytes.len());
-    println!("{}", String::from_utf8_lossy(&out.bytes));
-
-    Ok(())
 }

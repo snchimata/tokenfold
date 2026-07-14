@@ -13,6 +13,7 @@ use crate::input::InputFormat;
 pub enum TransformId {
     JsonMinify,
     JsonFieldFold,
+    JsonValueDict,
     SchemaCompaction,
     LogCompaction,
     DiffCompaction,
@@ -23,6 +24,7 @@ impl TransformId {
         match self {
             TransformId::JsonMinify => "json_minify",
             TransformId::JsonFieldFold => "json_field_fold",
+            TransformId::JsonValueDict => "json_value_dict",
             TransformId::SchemaCompaction => "schema_compaction",
             TransformId::LogCompaction => "log_compaction",
             TransformId::DiffCompaction => "diff_compaction",
@@ -98,6 +100,22 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
     // message bodies (whose API shape must not change).
     ModeEntry {
         transform_id: TransformId::JsonFieldFold,
+        version: "1.0.0",
+        conservative_enabled: false,
+        balanced_enabled: true,
+        aggressive_enabled: true,
+        experimental: false,
+        max_ratio_conservative: 0.0,
+        max_ratio_balanced: 1.0,
+        max_ratio_aggressive: 1.0,
+        task_scopes: &[TaskScope::All],
+        applicable_formats: &[InputFormat::Json],
+    },
+    // json_value_dict (v0.2): reversible value deduplication. Runs AFTER json_field_fold so it
+    // also collapses the repeated nested values folding surfaces across rows. Lossless
+    // (round-trip gated), unrestricted ratio, out of Conservative, generic Json only.
+    ModeEntry {
+        transform_id: TransformId::JsonValueDict,
         version: "1.0.0",
         conservative_enabled: false,
         balanced_enabled: true,

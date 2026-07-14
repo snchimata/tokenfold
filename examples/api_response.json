@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "page": 1,
+  "total": 6,
+  "results": [
+    { "id": 1001, "name": "Ada Lovelace",   "role": "admin",  "active": true,  "plan": { "tier": "pro",  "seats": 5, "region": "us-east-1" } },
+    { "id": 1002, "name": "Alan Turing",     "role": "member", "active": true,  "plan": { "tier": "pro",  "seats": 5, "region": "us-east-1" } },
+    { "id": 1003, "name": "Grace Hopper",    "role": "member", "active": false, "plan": { "tier": "pro",  "seats": 5, "region": "us-east-1" } },
+    { "id": 1004, "name": "Katherine Johnson","role": "member","active": true,  "plan": { "tier": "free", "seats": 1, "region": "us-east-1" } },
+    { "id": 1005, "name": "Edsger Dijkstra", "role": "member", "active": true,  "plan": { "tier": "free", "seats": 1, "region": "us-east-1" } },
+    { "id": 1006, "name": "Barbara Liskov",  "role": "admin",  "active": true,  "plan": { "tier": "pro",  "seats": 5, "region": "us-east-1" } }
+  ]
+}

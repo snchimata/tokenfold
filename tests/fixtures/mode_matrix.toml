@@ -37,6 +37,21 @@ task_scopes = ["all"]
 applicable_formats = ["json"]
 
 [[transforms]]
+id = "json_value_dict"
+version = "1.0.0"
+# v0.2: reversible value deduplication, runs after json_field_fold. Lossless (round-trip
+# gated), out of Conservative, generic `json` only.
+conservative_enabled = false
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
+max_ratio_conservative = 0.0
+max_ratio_balanced = 1.0
+max_ratio_aggressive = 1.0
+task_scopes = ["all"]
+applicable_formats = ["json"]
+
+[[transforms]]
 id = "schema_compaction"
 version = "1.0.0"
 conservative_enabled = true

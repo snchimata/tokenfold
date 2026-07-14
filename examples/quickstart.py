@@ -10,6 +10,8 @@ It shows the two things you'll actually do in an app:
   1. compress_messages(...) — hand it your OpenAI-style chat list, get a compressed
      list back plus exact token accounting, ready to send to a model.
   2. compress(...) — compress a raw request body (bytes/str) for any supported format.
+  3. compress(..., format="JSON") — v0.2: compress generic JSON *data* (API responses,
+     records, logs), not just message payloads. Losslessly folds repeated keys and values.
 
 Every call returns a typed report: before/after tokens, which transforms ran, and any
 safety warnings. tokenfold never silently drops content — you get receipts.
@@ -63,6 +65,23 @@ def compress_a_raw_body() -> None:
     print(f"payload:    {len(result.payload)} bytes\n")
 
 
+def compress_generic_json_data() -> None:
+    """v0.2: compress a JSON API response (not a message payload) — the 60–95% case."""
+    data = (Path(__file__).parent / "api_response.json").read_text()
+    result = tokenfold.compress(data, format="JSON", mode="BALANCED")
+    report = result.report
+
+    print("== compress (generic JSON data) ==")
+    print(f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
+          f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)")
+    applied = [t["id"] for t in report.raw["transforms"] if t["status"] == "applied"]
+    print(f"transforms: {', '.join(applied)}")
+    # result.payload is the compressed JSON (columnar + value dictionary), losslessly
+    # reversible — every stage is round-trip gated before it's applied.
+    print(f"payload:    {len(result.payload)} bytes\n")
+
+
 if __name__ == "__main__":
     compress_a_message_list()
     compress_a_raw_body()
+    compress_generic_json_data()

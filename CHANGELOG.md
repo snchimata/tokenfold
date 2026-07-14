@@ -2,28 +2,37 @@
 
 ## Unreleased (v0.2 / Phase 5 complete, pending publish)
 
-### Content-aware JSON-data compression (2026-07-14): generic `json` format + `json_field_fold`
+### Content-aware JSON-data compression (2026-07-14): generic `json` format + two reversible transforms
 
 Closes the one real gap vs. content-aware compressors (e.g. Headroom's "60–95% for JSON
 data"): tokenfold previously treated arbitrary data-JSON as `plain_text` and saved **0%**
-on it — no transform ran. Two additions fix that, both lossless:
+on it — no transform ran. Three additions fix that, all lossless:
 
 - **New `InputFormat::Json`** (CLI `--format json`, auto-detected: valid JSON object/array
   that isn't an OpenAI/Anthropic message payload). Wires `json_minify` to generic JSON.
-- **New `json_field_fold` transform** (id `json_field_fold`, v1.0.0): a *reversible*
-  columnar fold — an array of N objects sharing the same keys becomes
-  `{"__tf_cols__":[...],"__tf_rows__":[[...]]}`, emitting each key once instead of N times.
-  Recurses into nested arrays. Its safety invariant is **exact round-trip reversibility**
-  (`unfold(fold(x)) == x`), gated in the pipeline, so any fold that would lose data is
-  rolled back. Verified by a proptest over arbitrary JSON. On by default in Balanced and
-  Aggressive; out of Conservative (like `log_compaction`); never applied to OpenAI/Anthropic
-  bodies (whose API shape must not change).
+- **New `json_field_fold` transform** (v1.0.0): a *reversible* columnar fold — an array of N
+  objects sharing the same keys becomes `{"__tf_cols__":[...],"__tf_rows__":[[...]]}`,
+  emitting each key once instead of N times. Recurses into nested arrays.
+- **New `json_value_dict` transform** (v1.0.0): reversible value deduplication — repeated
+  large values (constant nested objects, repeated timestamps/blobs) are stored once in
+  `__tf_dict__` and every occurrence becomes `{"__tf_ref__":i}`. Runs after the fold, so it
+  also collapses the repeated values folding surfaces across rows. Selective (only values a
+  reference actually shrinks) so it never bloats.
 
-Measured (lossless, exact tiktoken accounting): a verbose 50-record data blob **0% → 48.2%**
-(json_minify 2511 + json_field_fold 1213 tokens); a realistic 30-record API response
-**61.3%**. No change to OpenAI/Anthropic payload results. Remaining path to 60–95% on
-value-heavy data (repeated nested objects/values): value-dictionary + null/default pruning,
-tracked for v0.3.
+Both new transforms are gated on **exact round-trip reversibility** (`unfold(fold(x)) == x`)
+*and* the pipeline's exact-token check, so a payload can never come out larger or altered —
+the "multi-candidate exact-token chooser" property the research flagged: each encoding stage
+is kept only if it provably wins (verified by `json_data_transforms_never_regress_token_count`).
+Both verified by proptests over arbitrary JSON. On by default in Balanced/Aggressive, out of
+Conservative, never applied to OpenAI/Anthropic bodies (whose API shape must not change).
+
+Measured (lossless, exact `o200k_base` accounting): a verbose 50-record blob **0% → 67.6%**
+(minify 2511 + fold 1213 + dict 1494 tokens); a 30-record API response **61.3%**. Ragged or
+already-compact JSON correctly reports single-digit / no savings instead of regressing. No
+change to OpenAI/Anthropic payload results. Deferred to v0.3 (reversible-lossy, via the
+in-tree CCR store): TSV-row candidate encoding, code-whitespace minification, CCR
+handle-substitution, AST signature-mode. See `memory/compression_research.md` for the
+verified technique survey behind this ordering.
 
 ### Phase 6 (v0.3+) complete (2026-07-13): 6 new optional extension crates
 

@@ -36,7 +36,8 @@ exactly what changed. Preview every transformation before applying it.
 
 ## Quick start
 
-tokenfold is currently source-only. Build the CLI with the pinned Rust toolchain:
+The library and Python package are published — `cargo add tokenfold-core` and
+`pip install tokenfold`. To use the CLI, build it from source with the pinned Rust toolchain:
 
 ```bash
 git clone https://github.com/snchimata/tokenfold.git
@@ -67,6 +68,15 @@ result is safe to pipe:
 target/release/tokenfold compress examples/openai_payload.json \
   --format openai \
   --target-tokens 250 > compressed.json
+```
+
+Compress generic JSON **data** (API responses, records, logs — not just message payloads).
+tokenfold folds arrays of same-shape objects into columnar form and dictionaries repeated
+values, all losslessly:
+
+```bash
+target/release/tokenfold inspect examples/api_response.json --format json
+# larger, more repetitive data compresses further — a 50-record blob folds 0% → ~68%
 ```
 
 Or trim noisy output from any command:
@@ -102,8 +112,14 @@ target/release/tokenfold wrap -- git diff
 
 ### Python
 
-The Python package is a native `pyo3` binding for CPython 3.9+. Until wheels are published,
-install it locally with [maturin](https://www.maturin.rs/):
+The Python package is a native `pyo3` binding for CPython 3.9+:
+
+```bash
+pip install tokenfold
+```
+
+A Windows wheel is published; on Linux/macOS pip builds the sdist from source (needs a Rust
+toolchain). To build from a checkout instead, use [maturin](https://www.maturin.rs/):
 
 ```bash
 python -m venv .venv
@@ -165,18 +181,25 @@ input  ──▶  redact secrets  ──▶  compact  ──▶  recount  ──
 | `secret_redaction` | Always on | Redacts secret-shaped values before reporting, logging, or persistence |
 | `json_minify` | Default | Removes insignificant JSON whitespace |
 | `schema_compaction` | Default | Shortens examples while preserving descriptions and required fields |
+| `json_field_fold` | Balanced / aggressive | Folds arrays of same-shape objects into columnar `{cols, rows}` — each key once, not once per row (generic JSON data) |
+| `json_value_dict` | Balanced / aggressive | Replaces repeated large values with dictionary references (generic JSON data) |
 | `log_compaction` | Balanced / aggressive | Collapses repeated, low-signal log lines |
 | `diff_compaction` | Experimental | Reduces low-signal diff context |
 
-Lossy transforms must clear a downstream fidelity gate before promotion. Originals can be
-stored by SHA-256 hash when reversibility is requested; secret-shaped content is never
-persisted.
+`json_field_fold` and `json_value_dict` are **lossless and reversible**: each is applied only
+if it passes an exact round-trip check (`unfold(fold(x)) == x`) *and* lowers the exact token
+count, so a payload can never come out larger or altered. Lossy transforms must clear a
+downstream fidelity gate before promotion. Originals can also be stored by SHA-256 hash when
+reversibility is requested; secret-shaped content is never persisted.
 
 ## Measured, not marketed
 
 The structured-JSON benchmark measures **45.63% exact token savings** in balanced mode on a
-deterministic, pretty-printed OpenAI tool-schema fixture. It is a reproducible benchmark,
-not a promise for every workload.
+deterministic, pretty-printed OpenAI tool-schema fixture. On generic JSON **data**, the v0.2
+columnar fold + value dictionary reach **~61–68% exact savings** on repetitive records
+(30–50 rows), losslessly. All numbers are quoted against exact `o200k_base` counts and are
+reproducible benchmarks, not a promise for every workload — ragged or already-compact JSON
+correctly reports single-digit or no savings rather than pretending.
 
 ```bash
 cargo bench -p tokenfold-core

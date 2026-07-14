@@ -37,6 +37,15 @@ impl CompressionInput {
         }
     }
 
+    /// Generic JSON data (not an LLM message payload). Enables `json_minify`,
+    /// `json_field_fold`, and `json_value_dict`.
+    pub fn json(bytes: impl Into<Vec<u8>>) -> Self {
+        Self {
+            format: InputFormat::Json,
+            bytes: bytes.into(),
+        }
+    }
+
     pub fn plain_text(bytes: impl Into<Vec<u8>>) -> Self {
         Self {
             format: InputFormat::PlainText,

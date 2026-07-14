@@ -357,6 +357,9 @@ fn apply_single_transform(
         TransformId::JsonFieldFold => {
             transforms::json_fold::fold_json(bytes).map_err(|e| e.to_string())
         }
+        TransformId::JsonValueDict => {
+            transforms::json_dict::dict_json(bytes).map_err(|e| e.to_string())
+        }
         TransformId::SchemaCompaction => {
             // ponytail: a fixed example cap for now; per-mode example counts are a future
             // config knob (F-011 acceptance criteria only requires the count be configurable,
@@ -391,6 +394,16 @@ fn validate_safety(
                 return false;
             }
             if !transforms::json_fold::round_trips(before, after) {
+                return false;
+            }
+        }
+        // json_value_dict replaces repeated values with dictionary references — also a
+        // reversible restructure, gated on exact round-trip reconstruction.
+        TransformId::JsonValueDict => {
+            if !safety::json_still_valid(after) {
+                return false;
+            }
+            if !transforms::json_dict::round_trips(before, after) {
                 return false;
             }
         }
@@ -607,6 +620,35 @@ mod tests {
         assert_eq!(applied.status, TransformStatus::Applied);
         assert!(applied.saved_tokens > 0 || applied.tokens_after <= applied.tokens_before);
         assert!(serde_json::from_slice::<serde_json::Value>(&output.bytes).is_ok());
+    }
+
+    #[test]
+    fn json_data_transforms_never_regress_token_count() {
+        // The "exact-token chooser" property: each JSON-data stage (minify -> fold -> dict) is
+        // adopted only if it lowers the exact token count, so no input can come out larger —
+        // including the shapes that sink naive TOON/CSV-ization: ragged, scalar, already-compact.
+        let cases: &[&[u8]] = &[
+            br#"[{"a":1,"b":2},{"a":3,"b":4},{"a":5,"b":6}]"#, // foldable
+            br#"[{"a":1},{"b":2},{"c":3}]"#,                    // ragged, heterogeneous
+            br#"{"x":[1,2,3],"y":"already compact scalar"}"#,   // no repeated structure
+            br#"[1,2,3,4,5,6,7,8,9,10]"#,                       // scalars only
+            br#"{}"#,                                            // trivial
+        ];
+        for case in cases {
+            let input = CompressionInput::json(case.to_vec());
+            let policy = CompressionPolicy::builder().build().unwrap();
+            let output = compress_with_estimator(input, &policy, &ByteHeuristicEstimator).unwrap();
+            assert!(
+                output.report.compressed_tokens <= output.report.original_tokens,
+                "regressed on {}: {} -> {}",
+                String::from_utf8_lossy(case),
+                output.report.original_tokens,
+                output.report.compressed_tokens,
+            );
+            // and every adopted transform round-trips is guaranteed by the pipeline safety gate;
+            // here we just assert the output is still valid JSON.
+            assert!(serde_json::from_slice::<serde_json::Value>(&output.bytes).is_ok());
+        }
     }
 
     #[test]
