@@ -4,8 +4,9 @@
 
 **Fold the noise. Keep the signal.**
 
-The local compression layer for LLM apps and agents. Shrink messages, tool schemas,
-logs, and diffs before inference—with exact token counts and a safety receipt for every change.
+The local compression layer for LLM apps and agents. Shrink messages, tool schemas, JSON
+data, logs, and diffs before inference, with exact token counts and a safety receipt for
+every change.
 
 [![CI](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml/badge.svg)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](crates/tokenfold-py/pyproject.toml)
@@ -16,8 +17,23 @@ logs, and diffs before inference—with exact token counts and a safety receipt 
 
 </div>
 
-> **45.63% fewer tokens** on the checked-in structured-JSON benchmark, measured with the
-> exact tokenizer. Reproduce it with `cargo bench -p tokenfold-core`.
+> **Cut JSON payloads by 60–68% with zero data loss.** A 50-record data blob that saved
+> **0% before v0.2** now folds to **67.6% fewer tokens** — losslessly and reversibly. Every
+> number is an exact `o200k_base` count you can reproduce.
+
+**What you actually save** (exact tokenizer counts, all lossless):
+
+| Your payload | Before v0.2 | With tokenfold | Reversible? |
+| --- | --- | --- | --- |
+| API response, 30 records | 0% | **61.3%** | ✅ |
+| Data blob, 50 repetitive records | 0% | **67.6%** | ✅ |
+| OpenAI request (chat + tool schema) | 38% | **38%** | ✅ |
+| Already-compact / ragged JSON | 0% | 0% (never bloats) | ✅ |
+
+Before v0.2, tokenfold treated generic JSON *data* as plain text and saved nothing. Now it
+folds arrays of same-shape objects into columnar form and dictionaries repeated values — so
+the payloads your agents and pipelines actually send get dramatically smaller, and every byte
+is recoverable.
 
 LLM systems routinely spend context on formatting, repeated logs, verbose schemas, and
 low-signal command output. That waste costs money and crowds useful information out of the
@@ -71,13 +87,24 @@ target/release/tokenfold compress examples/openai_payload.json \
 ```
 
 Compress generic JSON **data** (API responses, records, logs — not just message payloads).
-tokenfold folds arrays of same-shape objects into columnar form and dictionaries repeated
-values, all losslessly:
+This is the v0.2 win: data that used to pass through untouched now gets folded and
+deduplicated, losslessly.
 
 ```bash
 target/release/tokenfold inspect examples/api_response.json --format json
-# larger, more repetitive data compresses further — a 50-record blob folds 0% → ~68%
 ```
+
+```text
+TRANSFORM              MODE          EST TOKENS BEFORE→AFTER      SAVED       %  STATUS
+json_minify            all                           382→247        135   35.3%  applied
+json_field_fold        balanced+                     247→215         32   13.0%  applied
+json_value_dict        balanced+                     215→206          9    4.2%  applied
+TOTAL  382 → 206 tokens   saved 176 (46.1% reduction)
+```
+
+That is a tiny 6-record sample. Real API responses and record dumps repeat far more, so they
+compress far more — a 50-record blob folds **0% → 67.6%**. Ragged or already-compact JSON
+correctly reports little or nothing rather than bloating it.
 
 Or trim noisy output from any command:
 
@@ -143,8 +170,20 @@ print(result.payload.decode())
 print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 ```
 
-Also available: `compress`, `inspect`, `compress_anthropic_payload`, and
-`compress_messages`. Errors use a typed hierarchy rooted at `TokenFoldError`.
+Compress generic JSON **data** with `format="JSON"` — the v0.2 path for API responses and
+records:
+
+```python
+import json, tokenfold
+
+data = json.dumps({"results": [ ... ]})  # your API response / record dump
+result = tokenfold.compress(data, format="JSON", mode="BALANCED")
+print(f"saved {result.report.saved_tokens} tokens ({result.report.savings_pct:.1f}%)")
+# result.payload is the compressed JSON — losslessly reversible
+```
+
+Also available: `inspect`, `compress_anthropic_payload`, and `compress_messages`. Errors use a
+typed hierarchy rooted at `TokenFoldError`.
 
 ### HTTP proxy
 
@@ -235,9 +274,14 @@ Run `tokenfold <command> --help` for flags and examples.
 
 ## Status
 
-tokenfold is source-only `0.1.0` software. Prebuilt binaries, crates.io packages, and PyPI
-wheels have not been published yet. The CLI, Python binding, proxy, MCP server, and optional
-extension crates are implemented and tested in this repository.
+Current release: **`0.2.0`**. Published and installable now:
+
+- **Rust:** [`tokenfold-core`](https://crates.io/crates/tokenfold-core) on crates.io — `cargo add tokenfold-core`
+- **Python:** [`tokenfold`](https://pypi.org/project/tokenfold/) on PyPI — `pip install tokenfold`
+
+The CLI, proxy, MCP server, and optional extension crates are implemented and tested in this
+repository; build them from source for now. Cross-platform prebuilt CLI binaries are not yet
+published.
 
 ## Contributing
 
