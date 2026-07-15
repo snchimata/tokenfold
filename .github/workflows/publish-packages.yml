@@ -179,7 +179,7 @@ jobs:
           for package in target/npm-platforms/*; do
             npm pack "$package" --pack-destination target/npm-tarballs
           done
-          npm pack packages/tokenfold --pack-destination target/npm-tarballs
+          npm pack ./packages/tokenfold --pack-destination target/npm-tarballs
       - uses: actions/upload-artifact@v7
         with:
           name: npm-tarballs
