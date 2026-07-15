@@ -222,8 +222,8 @@ jobs:
         run: |
           mkdir smoke
           npm install --prefix smoke --ignore-scripts --no-audit --no-fund \
-            "tarballs/tokenfold-$VERSION.tgz" \
-            "tarballs/${{ matrix.package }}-$VERSION.tgz"
+            "./tarballs/tokenfold-$VERSION.tgz" \
+            "./tarballs/${{ matrix.package }}-$VERSION.tgz"
       - name: Smoke CLI and TypeScript API
         working-directory: smoke
         shell: bash
@@ -273,9 +273,9 @@ jobs:
               npm publish "$package" --access public --provenance
             fi
           }
-          publish @tokenfold/cli-darwin-arm64 "tarballs/tokenfold-cli-darwin-arm64-$VERSION.tgz"
-          publish @tokenfold/cli-darwin-x64 "tarballs/tokenfold-cli-darwin-x64-$VERSION.tgz"
-          publish @tokenfold/cli-linux-arm64 "tarballs/tokenfold-cli-linux-arm64-$VERSION.tgz"
-          publish @tokenfold/cli-linux-x64 "tarballs/tokenfold-cli-linux-x64-$VERSION.tgz"
-          publish @tokenfold/cli-win32-x64 "tarballs/tokenfold-cli-win32-x64-$VERSION.tgz"
-          publish tokenfold "tarballs/tokenfold-$VERSION.tgz"
+          publish @tokenfold/cli-darwin-arm64 "./tarballs/tokenfold-cli-darwin-arm64-$VERSION.tgz"
+          publish @tokenfold/cli-darwin-x64 "./tarballs/tokenfold-cli-darwin-x64-$VERSION.tgz"
+          publish @tokenfold/cli-linux-arm64 "./tarballs/tokenfold-cli-linux-arm64-$VERSION.tgz"
+          publish @tokenfold/cli-linux-x64 "./tarballs/tokenfold-cli-linux-x64-$VERSION.tgz"
+          publish @tokenfold/cli-win32-x64 "./tarballs/tokenfold-cli-win32-x64-$VERSION.tgz"
+          publish tokenfold "./tarballs/tokenfold-$VERSION.tgz"
