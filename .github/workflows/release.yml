@@ -10,8 +10,7 @@ name: Release
 # only, not detached signatures. Add a signing step (e.g. `cosign` / `minisign`) once D-007 picks
 # a key management approach; until then the release notes must say "checksummed, not signed."
 #
-# NOTE: this workflow has not been run. It triggers on pushing a `v*.*.*` tag — don't push one
-# without deciding that's actually wanted.
+# Pushing a `v*.*.*` tag builds and publishes the matching GitHub Release.
 
 on:
   push:
@@ -25,10 +24,14 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Verify tag matches Cargo version
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          test "$GITHUB_REF_NAME" = "v$version"
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -36,7 +39,7 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked
 
@@ -44,7 +47,7 @@ jobs:
     name: security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-audit
       - uses: taiki-e/install-action@cargo-deny
@@ -55,10 +58,10 @@ jobs:
     name: golden-cross-platform
     strategy:
       matrix:
-        os: [macos-14, macos-13, ubuntu-latest]
+        os: [macos-15, macos-15-intel, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked -- golden
 
@@ -70,7 +73,7 @@ jobs:
     name: bench-regression
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo bench --workspace --locked
 
@@ -78,7 +81,7 @@ jobs:
     name: fidelity-smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: python eval/run_fidelity.py --gate --profile smoke-first-consumer
 
   cross-compile:
@@ -88,10 +91,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
             cross: false
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
             cross: false
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
@@ -104,7 +107,7 @@ jobs:
             cross: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -124,7 +127,7 @@ jobs:
           out="tokenfold-${{ matrix.target }}${ext}"
           cp "target/${{ matrix.target }}/release/${bin}${ext}" "$out"
           sha256sum "$out" > "$out.sha256" 2>/dev/null || shasum -a 256 "$out" > "$out.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tokenfold-${{ matrix.target }}
           path: |
@@ -136,14 +139,14 @@ jobs:
     needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-cyclonedx --locked
       - run: cargo cyclonedx --format json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
-          path: "*.cdx.json"
+          path: "**/*.cdx.json"
 
   publish-github-release:
     name: publish-github-release
@@ -152,7 +155,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
       - name: flatten artifacts
@@ -160,7 +163,9 @@ jobs:
           mkdir -p release
           find dist -type f -exec cp {} release/ \;
           ls -la release
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release/*
+          body: SHA-256 checksummed; not signed.
           generate_release_notes: true
+          fail_on_unmatched_files: true

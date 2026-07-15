@@ -45,7 +45,7 @@ fn compress_openai_body() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // --- 2. Generic JSON data (API response, records, logs) -----------------------------------
-// This is the v0.2 path: data-JSON that isn't an LLM message payload. tokenfold minifies it,
+// Data-JSON that isn't an LLM message payload is minified,
 // folds arrays of same-shape objects into columnar form (each key once, not once per row),
 // and dictionaries repeated values — all losslessly (every stage is round-trip gated).
 fn compress_json_data() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,179 +1,144 @@
-<div align="center">
-
 # tokenfold
 
-**Make every prompt and payload work harder.**
+**Send less noise. Fit more context. Pay for fewer input tokens.**
 
-Tokenfold is a local compression layer for LLM apps and agents. It shrinks the noisy parts of
-prompts, schemas, JSON data, logs, and diffs before inference so you can fit more signal into
-the same context window and spend less on tokens.
+Local, provider-neutral compression for prompts, tool schemas, JSON, logs, and diffs.
 
-[![CI](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml/badge.svg)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](crates/tokenfold-py/pyproject.toml)
-[![Rust 1.97](https://img.shields.io/badge/rust-1.97-000000?logo=rust&logoColor=white)](rust-toolchain.toml)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](Cargo.toml)
+[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/codecov/c/github/snchimata/tokenfold/main?logo=codecov&style=flat-square)](https://app.codecov.io/gh/snchimata/tokenfold) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](Cargo.toml)
 
-[Quick start](#quick-start) · [Why tokenfold](#why-tokenfold) · [Integrations](#one-engine-five-ways-to-use-it) · [Safety](#safe-by-design) · [Benchmark](#measured-not-marketed)
+[Quick start](#quick-start) · [Why tokenfold](#why-tokenfold) · [Integrations](#pick-your-integration) · [Benchmarks](#reproduce-the-numbers)
 
-</div>
+---
 
-> **Real results, not hype.** On repetitive JSON data, tokenfold cuts payloads by up to
-> **67.6%** with exact, reversible compression. On the bundled OpenAI-style example, it removes
-> **133 tokens** and shrinks the payload by **38.4%** without changing the meaning.
+## Proven compression, not projections
 
-**What users typically save**
+| Repetitive JSON | API responses | Tool schemas |
+| :---: | :---: | :---: |
+| **67.6% fewer tokens** | **61.3% fewer tokens** | **45.63% fewer tokens** |
+| 50-record payload | 30-record payload | 1.8 MB OpenAI-style fixture |
 
-| Payload | Outcome |
-| --- | --- |
-| Repetitive API or record data | up to **67.6% fewer tokens** |
-| Structured OpenAI-style requests | **38.4% smaller** in the example |
-| JSON-heavy agent payloads | **46.1% smaller** in a 6-record sample |
-
-Tokenfold works before your model call. It removes whitespace, folds repeated JSON structure,
-shortens schemas, and redacts secrets first so you keep more signal and less noise.
-
-```text
-app or agent  ──  messages · schemas · logs · diffs  ──▶  tokenfold  ──▶  any LLM
-                                                            │
-                                                            └── payload + receipt
-```
-
-You get a smaller payload, an exact receipt for what changed, and a local workflow that stays
-under your control.
+All three results use exact `o200k_base` counts in balanced mode. The
+JSON-data results are lossless. The schema benchmark preserves required
+fields and descriptions while trimming redundant examples. Repetitive,
+structured data benefits most.
 
 ## Quick start
 
-Install the CLI from source or use the published packages:
+Download the `v0.3.0` CLI for Linux, macOS, or Windows from
+[GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.0),
+then verify it with the adjacent `.sha256` file.
+
+Or install the Python package:
+
+```bash
+pip install tokenfold
+```
+
+Compress an OpenAI-style request before sending it to your provider:
+
+```python
+import json
+from pathlib import Path
+
+from tokenfold import CompressionMode, compress_openai_payload
+
+result = compress_openai_payload(
+    Path("request.json").read_text(),
+    mode=CompressionMode.BALANCED,
+)
+compressed_request = json.loads(result.payload)
+
+print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
+# Pass compressed_request to your existing OpenAI client.
+```
+
+Want to try the CLI from source? Inspect the bundled request without changing it:
 
 ```bash
 git clone https://github.com/snchimata/tokenfold.git
 cd tokenfold
-cargo build --release --locked -p tokenfold-cli
-```
-
-Python users can also install the package directly:
-
-```bash
-pip install tokenfold
-```
-
-Preview the savings on the bundled OpenAI payload without changing it:
-
-```bash
-target/release/tokenfold inspect examples/openai_payload.json --format openai
-```
-
-Example output:
-
-```text
-TRANSFORM              MODE          EST TOKENS BEFORE→AFTER      SAVED       %  STATUS
-json_minify            all                           346→229        117   33.8%  applied
-schema_compaction      all                           229→213         16    7.0%  applied
-TOTAL  346 → 213 tokens   saved 133 (38.4% reduction)
-```
-
-Compress to a budget. The payload goes to stdout and the receipt goes to stderr, so the
-result is safe to pipe:
-
-```bash
-target/release/tokenfold compress examples/openai_payload.json \
-  --format openai \
-  --target-tokens 250 > compressed.json
-```
-
-For repetitive JSON data, inspect the bundled sample and see the larger wins:
-
-```bash
-target/release/tokenfold inspect examples/api_response.json --format json
+cargo run --release --locked -p tokenfold-cli -- \
+  inspect examples/openai_payload.json --format openai
 ```
 
 ```text
-TRANSFORM              MODE          EST TOKENS BEFORE→AFTER      SAVED       %  STATUS
-json_minify            all                           382→247        135   35.3%  applied
-json_field_fold        balanced+                     247→215         32   13.0%  applied
-json_value_dict        balanced+                     215→206          9    4.2%  applied
-TOTAL  382 → 206 tokens   saved 176 (46.1% reduction)
-```
-
-On larger repetitive record sets, those gains grow further — up to **67.6% fewer tokens**.
-
-Or trim noisy output from any command:
-
-```bash
-target/release/tokenfold wrap -- git diff
+json_minify          346 → 229   saved 117
+schema_compaction    229 → 213   saved  16
+TOTAL                346 → 213   saved 133 (38.4% reduction, estimated)
 ```
 
 ## Why tokenfold
 
-- **Keep more signal in the context window.** Remove formatting, repetition, and low-value
-  content before it eats your budget or crowds out the important bits.
-- **Make your prompts cheaper.** Smaller payloads mean lower token spend and fewer retries.
-- **See exact savings.** Every run reports before/after token counts and the transforms that
-  changed the payload.
-- **Stay in control.** Tokenfold runs locally and gives you a receipt you can inspect before you
-  ship the compressed payload.
-- **Use it anywhere.** The same Rust core powers the CLI, Python package, HTTP proxy, MCP
-  server, and Rust integrations.
+Models do not need the same object key hundreds of times. Providers still
+count every token. Tokenfold removes that structural waste before the model
+call, so you get:
 
-## One engine, five ways to use it
+- **Lower input cost** — send fewer billable tokens without changing providers.
+- **More useful context** — reclaim room for instructions, evidence, and
+  conversation history.
+- **Less data movement** — shrink payloads crossing queues, proxies, logs,
+  and evaluation runs.
+- **Fewer blind spots** — inspect counts, transforms, and warnings.
+- **No new data processor** — run locally, in-process, or behind your own
+  loopback proxy.
 
-| Surface | Entry point | Best for |
+```text
+messages · schemas · JSON · logs · diffs
+                    │
+                    ▼
+                tokenfold ──────▶ any LLM provider
+                    │
+                    └───────────▶ compressed payload + receipt
+```
+
+## What it improves
+
+| Workload | User benefit |
+| --- | --- |
+| APIs and record sets | Store repeated keys and values once |
+| Provider requests | Shrink messages and schemas without changing API shape |
+| Agent logs and diffs | Keep evidence; collapse repetitive output |
+| Token budgets | Meet the target or return an honest best effort |
+| Sensitive workflows | Redact detected secrets before reports or storage |
+
+## Pick your integration
+
+One Rust engine powers every surface, so policies and receipts stay
+consistent as your stack changes.
+
+| Surface | Best for | Install or run |
 | --- | --- | --- |
-| CLI | `tokenfold` | Files, stdin, command output, and local agent workflows |
-| Python | `import tokenfold` | Python applications and evaluation pipelines |
-| HTTP proxy | `tokenfold-proxy` | OpenAI- or Anthropic-shaped traffic in flight |
-| MCP server | `tokenfold mcp serve` | MCP-compatible agents and editors |
-| Rust library | `tokenfold-core` | Native embedding with typed policies and reports |
+| Python | Applications and evaluation pipelines | `pip install tokenfold` |
+| Rust | Native embedding | `cargo add tokenfold-core` |
+| CLI | Files and command output | [Download a release binary](https://github.com/snchimata/tokenfold/releases/latest) |
+| HTTP proxy | Provider-shaped traffic | Build `tokenfold-proxy` from source |
+| MCP server | MCP-compatible agents and editors | `tokenfold mcp serve` |
 
-### Python
+### Compress generic JSON
 
-The Python package is a native `pyo3` binding for CPython 3.9+:
-
-```bash
-pip install tokenfold
-```
-
-A Windows wheel is published; on Linux/macOS pip builds the sdist from source (needs a Rust
-toolchain). To build from a checkout instead, use [maturin](https://www.maturin.rs/):
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install maturin
-maturin develop --release -m crates/tokenfold-py/Cargo.toml
-```
+Use `format="JSON"` for API responses, record dumps, and other data that is
+not an LLM request:
 
 ```python
-from pathlib import Path
-from tokenfold import CompressionMode, compress_openai_payload
+import json
+import tokenfold
 
-payload = Path("examples/openai_payload.json").read_text()
-result = compress_openai_payload(
-    payload,
-    target_tokens=250,
-    mode=CompressionMode.BALANCED,
+result = tokenfold.compress(
+    json.dumps({
+        "results": [
+            {"id": 101, "region": "us-east-1", "plan": "pro"},
+            {"id": 102, "region": "us-east-1", "plan": "pro"},
+            {"id": 103, "region": "us-east-1", "plan": "pro"},
+        ]
+    }),
+    format="JSON",
+    mode="BALANCED",
 )
 
-print(result.payload.decode())
-print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
+print(f"saved {result.report.saved_tokens} tokens")
 ```
 
-Compress generic JSON **data** with `format="JSON"` — the v0.2 path for API responses and
-records:
-
-```python
-import json, tokenfold
-
-data = json.dumps({"results": [ ... ]})  # your API response / record dump
-result = tokenfold.compress(data, format="JSON", mode="BALANCED")
-print(f"saved {result.report.saved_tokens} tokens ({result.report.savings_pct:.1f}%)")
-# result.payload is the compressed JSON — losslessly reversible
-```
-
-Also available: `inspect`, `compress_anthropic_payload`, and `compress_messages`. Errors use a
-typed hierarchy rooted at `TokenFoldError`.
-
-### HTTP proxy
+### Run the proxy
 
 ```bash
 cargo build --release --locked -p tokenfold-proxy
@@ -182,98 +147,65 @@ target/release/tokenfold-proxy \
   --target-tokens 12000
 ```
 
-The proxy binds to `127.0.0.1:8787` by default, requires an HTTPS upstream, streams SSE
-without buffering, and returns `X-TokenFold-*` receipt headers.
+The proxy listens on `127.0.0.1:8787` by default, streams SSE responses, and
+returns the compression receipt in `X-TokenFold-*` headers.
 
-### MCP server
+## Safety you can inspect
 
-```bash
-target/release/tokenfold mcp serve
-```
+Tokenfold recounts after every stage and stops when the target is met or the
+allowed transform set is exhausted.
 
-The stdio server exposes `tokenfold_compress`, `tokenfold_inspect`, `tokenfold_retrieve`,
-and `tokenfold_stats` over JSON-RPC 2.0.
+- **Never larger:** a transform stays only when it reduces the token count.
+- **Reversible JSON:** every structural rewrite must pass an exact round trip.
+- **Clear provenance:** exact tokenizer results and estimates are labeled separately.
+- **Actionable receipts:** every result lists savings, transforms, warnings,
+  and final status.
+- **Honest limits:** unreachable targets return an explicit status instead of
+  silently deleting more content.
 
-## Safe by design
+Lossy log and diff transforms remain policy-gated. Optional originals can be
+stored by SHA-256 hash; detected secret-shaped content is excluded.
 
-tokenfold applies ordered transforms, recounts after every stage, and stops when the target
-is met or the safe transform set is exhausted.
+## Reproduce the numbers
 
-```text
-input  ──▶  redact secrets  ──▶  compact  ──▶  recount  ──▶  payload + report
-```
+| Fixture | Exact token reduction | Source |
+| --- | ---: | --- |
+| Repetitive 50-record JSON | **67.6%** | [Changelog] |
+| 30-record API response | **61.3%** | [Changelog] |
+| 1.8 MB OpenAI tool schema | **45.63%** | [Thresholds] |
 
-| Stage | Availability | What it does |
-| --- | --- | --- |
-| `secret_redaction` | Always on | Redacts secret-shaped values before reporting, logging, or persistence |
-| `json_minify` | Default | Removes insignificant JSON whitespace |
-| `schema_compaction` | Default | Shortens examples while preserving descriptions and required fields |
-| `json_field_fold` | Balanced / aggressive | Folds arrays of same-shape objects into columnar `{cols, rows}` — each key once, not once per row (generic JSON data) |
-| `json_value_dict` | Balanced / aggressive | Replaces repeated large values with dictionary references (generic JSON data) |
-| `log_compaction` | Balanced / aggressive | Collapses repeated, low-signal log lines |
-| `diff_compaction` | Experimental | Reduces low-signal diff context |
+[changelog]: CHANGELOG.md
+[thresholds]: crates/tokenfold-core/benches/THRESHOLDS.toml
 
-`json_field_fold` and `json_value_dict` are **lossless and reversible**: each is applied only
-if it passes an exact round-trip check (`unfold(fold(x)) == x`) *and* lowers the exact token
-count, so a payload can never come out larger or altered. Lossy transforms must clear a
-downstream fidelity gate before promotion. Originals can also be stored by SHA-256 hash when
-reversibility is requested; secret-shaped content is never persisted.
-
-## Measured, not marketed
-
-The structured-JSON benchmark measures **45.63% exact token savings** in balanced mode on a
-deterministic, pretty-printed OpenAI tool-schema fixture. On generic JSON **data**, the v0.2
-columnar fold + value dictionary reach **~61–68% exact savings** on repetitive records
-(30–50 rows), losslessly. All numbers are quoted against exact `o200k_base` counts and are
-reproducible benchmarks, not a promise for every workload — ragged or already-compact JSON
-correctly reports single-digit or no savings rather than pretending.
+Run the regression benchmark:
 
 ```bash
 cargo bench -p tokenfold-core
 ```
 
-The tokenizer, fixture, hardware record, and regression thresholds are documented in
-[`crates/tokenfold-core/benches/THRESHOLDS.toml`](crates/tokenfold-core/benches/THRESHOLDS.toml)
-and [`CHANGELOG.md`](CHANGELOG.md).
+Or inspect the small bundled JSON sample:
 
-<details>
-<summary><strong>CLI command map</strong></summary>
+```bash
+cargo run --release --locked -p tokenfold-cli -- \
+  inspect examples/api_response.json --format json
+```
 
-| Command | Purpose |
-| --- | --- |
-| `inspect` | Preview achievable savings |
-| `compress` | Compress a file or stdin |
-| `diff` | Compare raw and compressed payloads |
-| `wrap` (`shell`) | Run a command and compress its output |
-| `benchmark` | Measure fixtures with before/after token counts |
-| `init` / `uninit` | Install or remove an agent-host integration |
-| `doctor` | Check estimator, config, and integration health |
-| `mcp serve` | Start the MCP server over stdio |
-| `retrieve` | Restore an original saved by hash |
-| `stats` / `gain` | Report local token savings |
-| `session` | Report command-wrapping coverage |
-| `filters` | Manage command-output filters |
-| `output-savings` | Report measured or estimated output-token savings |
-| `learn` (`discover`) | Propose policy changes from local history |
-
-Run `tokenfold <command> --help` for flags and examples.
-
-</details>
+The sample reports 382 → 206 estimated tokens, a **46.1% reduction**. Ragged
+or compact inputs may save little; Tokenfold reports that result honestly.
 
 ## Status
 
-Current release: **`0.2.0`**. Published and installable now:
-
-- **Rust:** [`tokenfold-core`](https://crates.io/crates/tokenfold-core) on crates.io — `cargo add tokenfold-core`
-- **Python:** [`tokenfold`](https://pypi.org/project/tokenfold/) on PyPI — `pip install tokenfold`
-
-The CLI, proxy, MCP server, and optional extension crates are implemented and tested in this
-repository; build them from source for now. Cross-platform prebuilt CLI binaries are not yet
-published.
+Version **0.3.0** is available from [GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.0)
+as SHA-256-checksummed (not signed) CLI binaries for Linux, macOS, and Windows,
+plus CycloneDX SBOMs.
+The `tokenfold` Python package and `tokenfold-core` Rust crate remain at version
+**0.2.0** on [PyPI](https://pypi.org/project/tokenfold/) and
+[crates.io](https://crates.io/crates/tokenfold-core), respectively.
+The proxy and extension crates remain available from source.
 
 ## Contributing
 
-Issues and pull requests are welcome. Run the same core checks as CI before opening a PR:
+Issues and pull requests are welcome. Run the core checks before opening a PR:
 
 ```bash
 cargo fmt --all --check
@@ -282,13 +214,15 @@ cargo test --workspace --locked
 python eval/run_fidelity.py --gate --profile smoke-first-consumer
 ```
 
-Security and dependency checks:
-
-```bash
-cargo audit
-cargo deny check advisories bans licenses sources
-```
-
 ## License
 
 [Apache-2.0](Cargo.toml)
+
+## Reclaim your context window
+
+Start with one representative payload. Install `tokenfold`, inspect the
+receipt, and see how many tokens your application can stop sending today.
+
+```bash
+pip install tokenfold
+```

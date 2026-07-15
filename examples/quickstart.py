@@ -10,7 +10,7 @@ It shows the two things you'll actually do in an app:
   1. compress_messages(...) — hand it your OpenAI-style chat list, get a compressed
      list back plus exact token accounting, ready to send to a model.
   2. compress(...) — compress a raw request body (bytes/str) for any supported format.
-  3. compress(..., format="JSON") — v0.2: compress generic JSON *data* (API responses,
+  3. compress(..., format="JSON") — compress generic JSON *data* (API responses,
      records, logs), not just message payloads. Losslessly folds repeated keys and values.
 
 Every call returns a typed report: before/after tokens, which transforms ran, and any
@@ -66,7 +66,7 @@ def compress_a_raw_body() -> None:
 
 
 def compress_generic_json_data() -> None:
-    """v0.2: compress a JSON API response (not a message payload) — the 60–95% case."""
+    """Compress a JSON API response (not a message payload)."""
     data = (Path(__file__).parent / "api_response.json").read_text()
     result = tokenfold.compress(data, format="JSON", mode="BALANCED")
     report = result.report

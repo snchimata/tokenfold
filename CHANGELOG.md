@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased (v0.2 / Phase 5 complete, pending publish)
+## [0.3.0] - 2026-07-15
+
+### Release highlights
+
+- Download SHA-256-checksummed (not signed) `tokenfold` CLI binaries for Linux, macOS, and Windows
+  from GitHub Releases.
+- Compress repetitive JSON data losslessly with reversible field folding and value dictionaries.
+- Use the same compression engine through the CLI, Python binding, HTTP proxy, MCP server, or Rust crates.
+- Inspect exact or clearly labeled estimated token savings with per-transform receipts and secret redaction.
+- Extend Tokenfold with provider adapters, BM25 retrieval, output-savings reports, image metadata stripping,
+  policy learning, and signed-update primitives.
 
 ### Content-aware JSON-data compression (2026-07-14): generic `json` format + two reversible transforms
 

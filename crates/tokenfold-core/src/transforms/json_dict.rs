@@ -147,7 +147,11 @@ fn replace(
             }
             Value::Object(o)
         }
-        Value::Array(a) => Value::Array(a.iter().map(|it| replace(it, counts, index, index_of)).collect()),
+        Value::Array(a) => Value::Array(
+            a.iter()
+                .map(|it| replace(it, counts, index, index_of))
+                .collect(),
+        ),
         _ => v.clone(),
     }
 }

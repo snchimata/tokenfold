@@ -629,10 +629,10 @@ mod tests {
         // including the shapes that sink naive TOON/CSV-ization: ragged, scalar, already-compact.
         let cases: &[&[u8]] = &[
             br#"[{"a":1,"b":2},{"a":3,"b":4},{"a":5,"b":6}]"#, // foldable
-            br#"[{"a":1},{"b":2},{"c":3}]"#,                    // ragged, heterogeneous
-            br#"{"x":[1,2,3],"y":"already compact scalar"}"#,   // no repeated structure
-            br#"[1,2,3,4,5,6,7,8,9,10]"#,                       // scalars only
-            br#"{}"#,                                            // trivial
+            br#"[{"a":1},{"b":2},{"c":3}]"#,                   // ragged, heterogeneous
+            br#"{"x":[1,2,3],"y":"already compact scalar"}"#,  // no repeated structure
+            br#"[1,2,3,4,5,6,7,8,9,10]"#,                      // scalars only
+            br#"{}"#,                                          // trivial
         ];
         for case in cases {
             let input = CompressionInput::json(case.to_vec());
