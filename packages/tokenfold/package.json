@@ -1,0 +1,58 @@
+{
+  "name": "tokenfold",
+  "version": "0.3.1",
+  "description": "Token-aware compression for LLM payloads, backed by the tokenfold Rust CLI.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snchimata/tokenfold.git",
+    "directory": "packages/tokenfold"
+  },
+  "homepage": "https://github.com/snchimata/tokenfold#readme",
+  "bugs": "https://github.com/snchimata/tokenfold/issues",
+  "keywords": [
+    "llm",
+    "tokens",
+    "compression",
+    "cli"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "tokenfold": "./bin/tokenfold.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs ../../scripts/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "optionalDependencies": {
+    "@tokenfold/cli-darwin-x64": "0.3.1",
+    "@tokenfold/cli-darwin-arm64": "0.3.1",
+    "@tokenfold/cli-linux-x64": "0.3.1",
+    "@tokenfold/cli-linux-arm64": "0.3.1",
+    "@tokenfold/cli-win32-x64": "0.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

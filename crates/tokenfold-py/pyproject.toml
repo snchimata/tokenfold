@@ -7,7 +7,7 @@ name = "tokenfold"
 description = "Token-compression toolkit for LLM payloads (Python binding over the tokenfold-core Rust crate)"
 readme = "../../README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = { file = "../../LICENSE" }
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Python bindings for tokenfold token-aware compression."
 
 [lib]
 # Not named "tokenfold" -- that collides with tokenfold-cli's `[[bin]] name = "tokenfold"`
@@ -15,7 +16,7 @@ name = "tokenfold_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-tokenfold-core = { path = "../tokenfold-core" }
+tokenfold-core = { version = "0.3.1", path = "../tokenfold-core" }
 serde_json = { workspace = true }
 pyo3 = { version = "0.29.0", features = ["abi3-py39"] }
 
@@ -25,4 +26,3 @@ pyo3 = { version = "0.29.0", features = ["abi3-py39"] }
 # rlib/cdylib build (outside maturin) needs. maturin enables it itself only for the
 # actual wheel build (see pyproject.toml's `features` list).
 extension-module = ["pyo3/extension-module"]
-
