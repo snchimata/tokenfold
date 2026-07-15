@@ -67,12 +67,21 @@ the canonical compression receipt:
 ```typescript
 import { compress } from "tokenfold";
 
+const input = new TextEncoder().encode(JSON.stringify({
+  results: [
+    { id: 101, region: "us-east-1", plan: "pro" },
+    { id: 102, region: "us-east-1", plan: "pro" },
+    { id: 103, region: "us-east-1", plan: "pro" },
+  ],
+}, null, 2));
+
 const { payload, report } = await compress(input, {
   format: "json",
   mode: "balanced",
 });
 
 console.log(`saved ${report.saved_tokens} tokens`);
+console.log(new TextDecoder().decode(payload));
 ```
 
 Want to try the CLI from source? Inspect the bundled request without changing it:
@@ -219,13 +228,17 @@ or compact inputs may save little; Tokenfold reports that result honestly.
 
 ## Status
 
-Version **0.3.1** provides SHA-256-checksummed (not signed) CLI binaries for
-Linux, macOS, and Windows from [GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1),
-plus CycloneDX SBOMs. Registry packages are published to
-[PyPI](https://pypi.org/project/tokenfold/), [npm](https://www.npmjs.com/package/tokenfold),
-and [crates.io](https://crates.io/crates/tokenfold-core). npm installs the
-matching native binary package without a post-install download or local Rust
-build.
+Version **0.3.1** is live on every supported distribution channel:
+
+| Ecosystem | Published packages | Artifacts |
+| --- | --- | --- |
+| Python | [`tokenfold==0.3.1`](https://pypi.org/project/tokenfold/0.3.1/) | Source distribution and ABI3 wheels for Linux x64/ARM64, macOS x64/ARM64, and Windows x64 |
+| TypeScript | [`tokenfold@0.3.1`](https://www.npmjs.com/package/tokenfold/v/0.3.1) | Typed Node.js API plus the matching `@tokenfold/cli-*` native package, with no post-install download or local Rust build |
+| Rust | [`tokenfold-core`](https://crates.io/crates/tokenfold-core/0.3.1), [`tokenfold-output`](https://crates.io/crates/tokenfold-output/0.3.1), [`tokenfold-learn`](https://crates.io/crates/tokenfold-learn/0.3.1), and [`tokenfold-cli`](https://crates.io/crates/tokenfold-cli/0.3.1) | Source packages published in dependency order |
+
+[GitHub release `v0.3.1`](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1)
+provides SHA-256-checksummed (not signed) CLI binaries for Linux, macOS, and
+Windows, plus CycloneDX SBOMs.
 
 ## Contributing
 
