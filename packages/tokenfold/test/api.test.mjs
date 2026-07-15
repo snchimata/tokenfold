@@ -61,14 +61,17 @@ test("spawn failures use a stable error code", async () => {
   process.env.TOKENFOLD_BINARY_PATH = testBinary;
 });
 
-test("a missing platform package uses the binary_not_found code", () => {
+test("a missing platform package uses the binary_not_found code", (context) => {
   delete process.env.TOKENFOLD_BINARY_PATH;
-  assert.throws(binaryPath, (error) => {
+  try {
+    binaryPath();
+    context.skip("the native package for this platform is installed");
+  } catch (error) {
     assert.ok(error instanceof TokenFoldProcessError);
     assert.equal(error.code, "binary_not_found");
-    return true;
-  });
-  process.env.TOKENFOLD_BINARY_PATH = testBinary;
+  } finally {
+    process.env.TOKENFOLD_BINARY_PATH = testBinary;
+  }
 });
 
 test("low-level run returns non-zero status while high-level calls throw", async () => {
