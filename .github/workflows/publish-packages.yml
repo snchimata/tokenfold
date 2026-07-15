@@ -57,7 +57,7 @@ jobs:
         run: |
           test -n "$CARGO_REGISTRY_TOKEN"
           publish() {
-            if curl --fail --silent --show-error "https://crates.io/api/v1/crates/$1/$VERSION" >/dev/null; then
+            if cargo info --registry crates-io "$1@$VERSION" >/dev/null 2>&1; then
               echo "$1 $VERSION already exists; skipping"
               return 0
             fi
@@ -68,7 +68,7 @@ jobs:
             done
             for attempt in 1 2 3 4 5 6; do
               cargo publish -p "$1" --locked && return 0
-              if curl --fail --silent "https://crates.io/api/v1/crates/$1/$VERSION" >/dev/null; then
+              if cargo info --registry crates-io "$1@$VERSION" >/dev/null 2>&1; then
                 echo "$1 $VERSION became available after the publish attempt"
                 return 0
               fi
