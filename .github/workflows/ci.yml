@@ -34,17 +34,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
-      - uses: codecov/codecov-action@v5
+      - run: cargo llvm-cov report --summary-only
+      - uses: actions/upload-artifact@v7
         with:
-          files: lcov.info
-          fail_ci_if_error: true
-          use_oidc: true
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: error
 
   golden-cross-platform:
     name: golden-cross-platform
