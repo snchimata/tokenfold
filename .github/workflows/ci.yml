@@ -29,6 +29,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked
 
+  node-api:
+    name: node-api (Node ${{ matrix.node }})
+    strategy:
+      matrix:
+        node: [22, 24]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: packages/tokenfold/package-lock.json
+      - run: cargo build --release --locked -p tokenfold-cli
+      - run: npm ci
+        working-directory: packages/tokenfold
+      - run: npm test
+        working-directory: packages/tokenfold
+        env:
+          TOKENFOLD_TEST_BINARY: ${{ github.workspace }}/target/release/tokenfold
+
   coverage:
     name: coverage
     runs-on: ubuntu-latest

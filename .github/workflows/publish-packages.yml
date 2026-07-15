@@ -1,0 +1,281 @@
+name: Publish packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing GitHub release version to publish
+        required: true
+        default: 0.3.1
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/tokenfold/package-lock.json
+      - name: Verify one version across registries
+        shell: bash
+        run: |
+          cargo_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          npm_version=$(node -p "require('./packages/tokenfold/package.json').version")
+          test "$VERSION" = "$cargo_version"
+          test "$VERSION" = "$npm_version"
+          test "v$VERSION" = "$(git describe --tags --exact-match)"
+      - run: cargo publish -p tokenfold-core --dry-run --locked
+      - run: npm ci
+        working-directory: packages/tokenfold
+      - run: npm run build
+        working-directory: packages/tokenfold
+
+  publish-crates:
+    needs: release-ready
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish ordered Cargo dependency chain
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$CARGO_REGISTRY_TOKEN"
+          publish() {
+            if curl --fail --silent --show-error "https://crates.io/api/v1/crates/$1/$VERSION" >/dev/null; then
+              echo "$1 $VERSION already exists; skipping"
+              return 0
+            fi
+            for attempt in 1 2 3 4 5 6; do
+              cargo publish -p "$1" --dry-run --locked && break
+              test "$attempt" -eq 6 && return 1
+              sleep 15
+            done
+            for attempt in 1 2 3 4 5 6; do
+              cargo publish -p "$1" --locked && return 0
+              if curl --fail --silent "https://crates.io/api/v1/crates/$1/$VERSION" >/dev/null; then
+                echo "$1 $VERSION became available after the publish attempt"
+                return 0
+              fi
+              test "$attempt" -eq 6 || sleep 15
+            done
+            return 1
+          }
+          publish tokenfold-core
+          publish tokenfold-output
+          publish tokenfold-learn
+          publish tokenfold-cli
+
+  python-wheels:
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --out dist -m crates/tokenfold-py/Cargo.toml
+          manylinux: auto
+      - name: Install and test wheel
+        shell: bash
+        run: |
+          python -m pip install pytest dist/*.whl
+          python -m pytest python-tests -q
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-${{ matrix.target }}
+          path: dist/*.whl
+
+  python-sdist:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "maturin>=1.5,<2.0" twine
+      - run: python -m maturin sdist --out dist -m crates/tokenfold-py/Cargo.toml
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-sdist
+          path: dist/*
+
+  publish-python:
+    needs: [publish-crates, python-wheels, python-sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: python-*
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+
+  npm-pack:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/tokenfold/package-lock.json
+      - name: Download GitHub release binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern "tokenfold-*" --dir target/npm-assets
+      - run: node scripts/stage-npm-platform-packages.mjs "$VERSION" target/npm-assets target/npm-platforms
+      - run: npm ci
+        working-directory: packages/tokenfold
+      - name: Pack npm packages
+        shell: bash
+        run: |
+          mkdir -p target/npm-tarballs
+          for package in target/npm-platforms/*; do
+            npm pack "$package" --pack-destination target/npm-tarballs
+          done
+          npm pack packages/tokenfold --pack-destination target/npm-tarballs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-tarballs
+          path: target/npm-tarballs/*.tgz
+
+  npm-smoke:
+    needs: npm-pack
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 22
+            package: tokenfold-cli-linux-x64
+          - os: ubuntu-latest
+            node: 24
+            package: tokenfold-cli-linux-x64
+          - os: ubuntu-24.04-arm
+            node: 24
+            package: tokenfold-cli-linux-arm64
+          - os: macos-15-intel
+            node: 24
+            package: tokenfold-cli-darwin-x64
+          - os: macos-15
+            node: 24
+            package: tokenfold-cli-darwin-arm64
+          - os: windows-latest
+            node: 24
+            package: tokenfold-cli-win32-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-tarballs
+          path: tarballs
+      - name: Install packed root and platform packages
+        shell: bash
+        run: |
+          mkdir smoke
+          npm install --prefix smoke --ignore-scripts --no-audit --no-fund \
+            "tarballs/tokenfold-$VERSION.tgz" \
+            "tarballs/${{ matrix.package }}-$VERSION.tgz"
+      - name: Smoke CLI and TypeScript API
+        working-directory: smoke
+        shell: bash
+        run: |
+          npx --no-install tokenfold --version | grep "tokenfold $VERSION"
+          node --input-type=module --eval "import { compress, inspect } from 'tokenfold'; const input = Uint8Array.from(Buffer.from('[{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"}]')); const a = await compress(input, { format: 'json' }); const b = await inspect(input, { format: 'json' }); if (a.report.schema_version !== '1.0' || b.report.schema_version !== '1.0' || !Buffer.from(b.payload).equals(Buffer.from(input))) process.exit(1);"
+      - if: runner.os == 'Linux'
+        name: Prove Linux binary is static
+        shell: bash
+        run: |
+          binary=$(find smoke/node_modules/@tokenfold -type f -path '*/bin/tokenfold' | head -1)
+          file "$binary" | grep -q 'static'
+          ! readelf -l "$binary" | grep -q INTERP
+
+  release-ready:
+    needs: [validate, python-wheels, python-sdist, npm-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All registry artifacts passed their pre-publication checks."
+
+  publish-npm:
+    needs: [npm-smoke, publish-python]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-tarballs
+          path: tarballs
+      - name: Publish platform packages, then root package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          publish() {
+            local name="$1"
+            local package="$2"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION already exists; skipping"
+            else
+              npm publish "$package" --access public --provenance
+            fi
+          }
+          publish @tokenfold/cli-darwin-arm64 "tarballs/tokenfold-cli-darwin-arm64-$VERSION.tgz"
+          publish @tokenfold/cli-darwin-x64 "tarballs/tokenfold-cli-darwin-x64-$VERSION.tgz"
+          publish @tokenfold/cli-linux-arm64 "tarballs/tokenfold-cli-linux-arm64-$VERSION.tgz"
+          publish @tokenfold/cli-linux-x64 "tarballs/tokenfold-cli-linux-x64-$VERSION.tgz"
+          publish @tokenfold/cli-win32-x64 "tarballs/tokenfold-cli-win32-x64-$VERSION.tgz"
+          publish tokenfold "tarballs/tokenfold-$VERSION.tgz"
