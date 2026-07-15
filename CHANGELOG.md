@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.1] - 2026-07-15
+
+- Install Tokenfold from npm with `npm install tokenfold` and call the same
+  Rust engine through typed `compress()`, `inspect()`, and `run()` APIs.
+- Install the matching native npm binary automatically on Linux, macOS, or
+  Windows without a post-install download or local Rust build.
+- Install version 0.3.1 from PyPI or crates.io, with ABI3 Python wheels and an
+  ordered Cargo dependency chain verified before publication.
+
 ## [0.3.0] - 2026-07-15
 
 ### Release highlights

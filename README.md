@@ -4,7 +4,7 @@
 
 Local, provider-neutral compression for prompts, tool schemas, JSON, logs, and diffs.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=coverage&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](Cargo.toml)
+[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=coverage&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=npm&logo=npm&style=flat-square)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 
 [Quick start](#quick-start) · [Why tokenfold](#why-tokenfold) · [Integrations](#pick-your-integration) · [Benchmarks](#reproduce-the-numbers)
 
@@ -24,8 +24,17 @@ structured data benefits most.
 
 ## Quick start
 
-Download the `v0.3.0` CLI for Linux, macOS, or Windows from
-[GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.0),
+Install the interface that fits your stack:
+
+```bash
+pip install tokenfold       # Python 3.9+
+npm install tokenfold       # Node.js 22+
+cargo add tokenfold-core    # Rust library
+cargo install tokenfold-cli # Rust CLI
+```
+
+Or download the `v0.3.1` CLI for Linux, macOS, or Windows from
+[GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1),
 then verify it with the adjacent `.sha256` file.
 
 Or install the Python package:
@@ -50,6 +59,20 @@ compressed_request = json.loads(result.payload)
 
 print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 # Pass compressed_request to your existing OpenAI client.
+```
+
+The TypeScript package calls the same local Rust engine and returns bytes plus
+the canonical compression receipt:
+
+```typescript
+import { compress } from "tokenfold";
+
+const { payload, report } = await compress(input, {
+  format: "json",
+  mode: "balanced",
+});
+
+console.log(`saved ${report.saved_tokens} tokens`);
 ```
 
 Want to try the CLI from source? Inspect the bundled request without changing it:
@@ -109,6 +132,7 @@ consistent as your stack changes.
 | Surface | Best for | Install or run |
 | --- | --- | --- |
 | Python | Applications and evaluation pipelines | `pip install tokenfold` |
+| TypeScript | Node.js applications and automation | `npm install tokenfold` |
 | Rust | Native embedding | `cargo add tokenfold-core` |
 | CLI | Files and command output | [Download a release binary](https://github.com/snchimata/tokenfold/releases/latest) |
 | HTTP proxy | Provider-shaped traffic | Build `tokenfold-proxy` from source |
@@ -195,13 +219,13 @@ or compact inputs may save little; Tokenfold reports that result honestly.
 
 ## Status
 
-Version **0.3.0** is available from [GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.0)
-as SHA-256-checksummed (not signed) CLI binaries for Linux, macOS, and Windows,
-plus CycloneDX SBOMs.
-The `tokenfold` Python package and `tokenfold-core` Rust crate remain at version
-**0.2.0** on [PyPI](https://pypi.org/project/tokenfold/) and
-[crates.io](https://crates.io/crates/tokenfold-core), respectively.
-The proxy and extension crates remain available from source.
+Version **0.3.1** provides SHA-256-checksummed (not signed) CLI binaries for
+Linux, macOS, and Windows from [GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1),
+plus CycloneDX SBOMs. Registry packages are published to
+[PyPI](https://pypi.org/project/tokenfold/), [npm](https://www.npmjs.com/package/tokenfold),
+and [crates.io](https://crates.io/crates/tokenfold-core). npm installs the
+matching native binary package without a post-install download or local Rust
+build.
 
 ## Contributing
 
@@ -212,11 +236,12 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --locked
 python eval/run_fidelity.py --gate --profile smoke-first-consumer
+cd packages/tokenfold && npm ci && npm test
 ```
 
 ## License
 
-[Apache-2.0](Cargo.toml)
+[Apache-2.0](LICENSE)
 
 ## Reclaim your context window
 
