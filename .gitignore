@@ -1,6 +1,7 @@
 /target
-/data
 /tokenfold.toml
 /.tokenfoldrc
 /docs/solution-design/*
 *.cdx.json
+.env
+.claude/*
