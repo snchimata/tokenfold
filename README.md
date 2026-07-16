@@ -97,10 +97,12 @@ cargo run --release --locked -p tokenfold-cli -- \
   inspect examples/openai_payload.json --format openai
 ```
 
+Across 100 requests with the same payload shape, those savings add up to:
+
 ```text
-json_minify          346 → 229   saved 117
-schema_compaction    229 → 213   saved  16
-TOTAL                346 → 213   saved 133 (38.4% reduction, estimated)
+json_minify          34,600 → 22,900   saved 11,700
+schema_compaction    22,900 → 21,300   saved  1,600
+TOTAL                34,600 → 21,300   saved 13,300 (38.4% reduction, estimated)
 ```
 
 ## Why tokenfold
