@@ -1,6 +1,6 @@
 <div align="center">
 
-# tokenfold
+# TOKENFOLD
 
 **Send less noise. Fit more context. Pay for fewer input tokens.**
 
