@@ -51,10 +51,25 @@ Install `tiktoken` (`pip install -e 'eval[exact]'`) for exact `o200k_base` ceili
 the harness falls back to the same byte/4 heuristic as `tokenfold-core` and labels the report
 `"backend": "heuristic"`.
 
+## Baseline kinds: selectors vs. compressors
+
+- **Selectors** (`keep_all`, `forced_only`, `recency`, `frequency`, `bm25`) rank atomic units.
+  The harness force-keeps critical-atom units and enforces the exact token ceiling on them, so
+  100% critical-atom survival and the ceiling are guarantees.
+- **Compressors** (`deterministic-tokenfold`) run a whole-pipeline best-effort compressor over
+  the source — the harness does *not* force atoms through them, so their critical-atom survival
+  and achieved ratio are **measured, not asserted**. `deterministic-tokenfold` shells out to the
+  real Rust CLI, discovered via `TOKENFOLD_BIN`, then a local `target/{release,debug}` build,
+  then `PATH`; when it isn't found the baseline is cleanly skipped (`n/a`) and the report/gate
+  say so, so this harness still runs in a build-less CI. It is the primary **baseline to beat**:
+  it is lossless/evidence-safe (task + critical survival ≈ 1.0) but often cannot reach aggressive
+  budgets on low-repetition inputs — the exact gap a learned selector must close.
+
 ## Deferred to later v0.4-alpha work (not hidden)
 
-- Additional baselines as `SELECTORS` entries: RTK, RTK+tokenfold, deterministic-tokenfold (Rust
-  CLI subprocess), LLMLingua-style, and the unmodified Headroom Kompress-v2 achieved-token sweep.
+- Remaining baselines: RTK and RTK+tokenfold (external tool), an LLMLingua-style selector, and
+  the unmodified Headroom Kompress-v2 achieved-token sweep. (`deterministic-tokenfold` is now
+  implemented as a compressor baseline — see above.)
 - Tier-B public-repo corpora with license/revision manifests; project-disjoint train/test splits
   and near-dedup across splits.
 - Structural segmentation (diff hunks, JSON containers, AST/code blocks) — v0.4-alpha segments by
