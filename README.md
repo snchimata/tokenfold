@@ -37,8 +37,8 @@ cargo add tokenfold-core    # Rust library
 cargo install tokenfold-cli # Rust CLI
 ```
 
-Or download the `v0.3.1` CLI for Linux, macOS, or Windows from
-[GitHub Releases](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1),
+Or download the CLI for Linux, macOS, or Windows from
+[GitHub Releases](https://github.com/snchimata/tokenfold/releases/latest),
 then verify it with the adjacent `.sha256` file.
 
 Or install the Python package:
@@ -231,20 +231,6 @@ cargo run --release --locked -p tokenfold-cli -- \
 
 The sample reports 382 → 206 estimated tokens, a **46.1% reduction**. Ragged
 or compact inputs may save little; Tokenfold reports that result honestly.
-
-## Status
-
-Version **0.3.1** is live on every supported distribution channel:
-
-| Ecosystem | Published packages | Artifacts |
-| --- | --- | --- |
-| Python | [`tokenfold==0.3.1`](https://pypi.org/project/tokenfold/0.3.1/) | Source distribution and ABI3 wheels for Linux x64/ARM64, macOS x64/ARM64, and Windows x64 |
-| TypeScript | [`tokenfold@0.3.1`](https://www.npmjs.com/package/tokenfold/v/0.3.1) | Typed Node.js API plus the matching `@tokenfold/cli-*` native package, with no post-install download or local Rust build |
-| Rust | [`tokenfold-core`](https://crates.io/crates/tokenfold-core/0.3.1), [`tokenfold-output`](https://crates.io/crates/tokenfold-output/0.3.1), [`tokenfold-learn`](https://crates.io/crates/tokenfold-learn/0.3.1), and [`tokenfold-cli`](https://crates.io/crates/tokenfold-cli/0.3.1) | Source packages published in dependency order |
-
-[GitHub release `v0.3.1`](https://github.com/snchimata/tokenfold/releases/tag/v0.3.1)
-provides SHA-256-checksummed (not signed) CLI binaries for Linux, macOS, and
-Windows, plus CycloneDX SBOMs.
 
 ## Contributing
 
