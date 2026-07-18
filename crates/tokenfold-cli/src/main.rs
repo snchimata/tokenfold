@@ -4,12 +4,13 @@ mod diff;
 mod format;
 mod mcp;
 mod render;
+mod rtk;
 mod stats_cmd;
 
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
-use tokenfold_core::report::CommandReport;
+use tokenfold_core::report::{CommandReport, EstimatorInfo, PipelineReport, PipelineStageReport};
 use tokenfold_core::token_estimator::{ByteHeuristicEstimator, TiktokenEstimator, TokenEstimator};
 use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, TokenFoldError};
 
@@ -97,6 +98,14 @@ enum Command {
         /// F-045: namespace stored originals are keyed under (see `tokenfold retrieve`).
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
+        /// F-054: route command output through an external RTK before tokenfold's generic
+        /// pipeline. Falls open to the tokenfold-only path if RTK is missing/incompatible.
+        #[arg(long = "rtk")]
+        rtk: bool,
+        /// F-055: opt into CCR — hand RTK a permission-restricted per-run tee dir, ingest the
+        /// pre-RTK raw capture through redaction/persistence, then delete it. Requires `--rtk`.
+        #[arg(long = "rtk-capture-raw", requires = "rtk")]
+        rtk_capture_raw: bool,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         argv: Vec<String>,
     },
@@ -282,8 +291,17 @@ fn main() {
         Command::Wrap {
             store_originals,
             retrieve_namespace,
+            rtk,
+            rtk_capture_raw,
             argv,
-        } => cmd_wrap(&global, argv, store_originals, retrieve_namespace),
+        } => cmd_wrap(
+            &global,
+            argv,
+            store_originals,
+            retrieve_namespace,
+            rtk,
+            rtk_capture_raw,
+        ),
         Command::Benchmark { fixtures, format } => cmd_benchmark(&global, fixtures, format),
         Command::Init { agent, dry_run } => cmd_init(&global, agent, dry_run),
         Command::Uninit { agent } => cmd_uninit(&global, agent),
@@ -743,11 +761,180 @@ fn apply_mode_change(
     Ok(())
 }
 
+/// Builds a token estimator matching `info`, so per-stage token counts use the same backend as
+/// `compress()` (a precondition for reporting `total_saved_tokens`).
+fn estimator_for(info: &EstimatorInfo) -> Box<dyn TokenEstimator> {
+    if info.backend != "tiktoken" {
+        return Box::new(ByteHeuristicEstimator);
+    }
+    match TiktokenEstimator::o200k_base() {
+        Ok(e) => Box::new(e),
+        Err(_) => Box::new(ByteHeuristicEstimator),
+    }
+}
+
+/// `(combined_output, exit_code, duration_ms, stdout_bytes, stderr_bytes)` from a wrapped child.
+type ChildRun = (Vec<u8>, Option<i32>, u64, usize, usize);
+
+/// Runs a child command directly (the tokenfold-only path).
+fn run_child(program: &str, args: &[String]) -> Result<ChildRun, TokenFoldError> {
+    let start = std::time::Instant::now();
+    let child_output = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| TokenFoldError::InvalidInput(format!("failed to launch `{program}`: {e}")))?;
+    let duration_ms = start.elapsed().as_millis() as u64;
+    // ponytail: combines stdout+stderr by concatenation (stdout then stderr), not true
+    // chronological interleaving. Good enough for compression; upgrade to a real merged pipe
+    // (or add `--passthrough-stderr` to skip the merge) if interleaving order ever matters.
+    let mut raw = child_output.stdout.clone();
+    raw.extend_from_slice(&child_output.stderr);
+    Ok((
+        raw,
+        child_output.status.code(),
+        duration_ms,
+        child_output.stdout.len(),
+        child_output.stderr.len(),
+    ))
+}
+
+/// Inputs to [`build_pipeline_report`]. Grouped into a struct because there are too many for a
+/// readable positional signature.
+struct BuildPipeline<'a> {
+    rtk_ran: bool,
+    rtk_version: Option<&'a str>,
+    rtk_duration_ms: Option<f64>,
+    rtk_stage_status: &'a str,
+    rtk_bypass_reason: Option<&'a str>,
+    rtk_capture_raw: bool,
+    raw_capture_completeness: Option<&'a str>,
+    raw_input_bytes: Option<usize>,
+    raw_input_tokens: Option<usize>,
+    raw_stored: bool,
+    rtk_evidence_ref: Option<String>,
+    /// Bytes actually entering `compress()` (post-RTK on the RTK path, post-filter on the
+    /// fail-open path). Must match what `report.original_tokens` was counted over, so the
+    /// tokenfold stage's byte and token savings stay consistent and RTK/filter reductions are
+    /// never credited to tokenfold_core.
+    compress_input_bytes: usize,
+    final_output_bytes: usize,
+    store_originals: bool,
+    compress_ms: f64,
+    report: &'a tokenfold_core::report::CompressionReport,
+}
+
+/// F-055: assemble the staged `raw -> RTK -> tokenfold` receipt. RTK's savings live only in the
+/// RTK stage and in `total_saved_tokens`; they are never folded into the top-level
+/// `saved_tokens`, which stays scoped to tokenfold_core.
+fn build_pipeline_report(p: BuildPipeline) -> PipelineReport {
+    let report = p.report;
+
+    // --- RTK stage ---
+    // When RTK ran there is no tokenfold filter between it and compress(), so RTK's output *is*
+    // the compress input; tokens == report.original_tokens.
+    let (rtk_output_bytes, rtk_output_tokens) = if p.rtk_ran {
+        (Some(p.compress_input_bytes), Some(report.original_tokens))
+    } else {
+        (None, None)
+    };
+    let rtk_saved_bytes = match (p.raw_input_bytes, rtk_output_bytes) {
+        (Some(i), Some(o)) => Some(i.saturating_sub(o)),
+        _ => None,
+    };
+    let rtk_saved_tokens = match (p.raw_input_tokens, rtk_output_tokens) {
+        (Some(i), Some(o)) => Some(i.saturating_sub(o)),
+        _ => None,
+    };
+    let rtk_recoverability = if p.raw_stored {
+        "full"
+    } else if p.rtk_ran && p.rtk_capture_raw {
+        "none"
+    } else {
+        "not_applicable"
+    };
+    let rtk_stage = PipelineStageReport {
+        id: "rtk".to_string(),
+        version: p.rtk_version.map(str::to_string),
+        input_bytes: p.raw_input_bytes,
+        output_bytes: rtk_output_bytes,
+        saved_bytes: rtk_saved_bytes,
+        input_tokens: p.raw_input_tokens,
+        output_tokens: rtk_output_tokens,
+        saved_tokens: rtk_saved_tokens,
+        estimator: p.raw_input_tokens.map(|_| report.estimator.clone()),
+        status: p.rtk_stage_status.to_string(),
+        duration_ms: p.rtk_duration_ms,
+        bypass_reason: p.rtk_bypass_reason.map(str::to_string),
+        provenance: match p.rtk_version {
+            Some(v) => format!("external:rtk@{v}"),
+            None => "external:rtk".to_string(),
+        },
+        recoverability: rtk_recoverability.to_string(),
+        evidence_ref: p.rtk_evidence_ref,
+    };
+
+    // --- tokenfold stage ---
+    let tf_status = if report.compressed_tokens < report.original_tokens {
+        "applied"
+    } else {
+        "passthrough"
+    };
+    let tf_stage = PipelineStageReport {
+        id: "tokenfold".to_string(),
+        version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        input_bytes: Some(p.compress_input_bytes),
+        output_bytes: Some(p.final_output_bytes),
+        saved_bytes: Some(p.compress_input_bytes.saturating_sub(p.final_output_bytes)),
+        input_tokens: Some(report.original_tokens),
+        output_tokens: Some(report.compressed_tokens),
+        saved_tokens: Some(report.saved_tokens),
+        estimator: Some(report.estimator.clone()),
+        status: tf_status.to_string(),
+        duration_ms: Some(p.compress_ms),
+        bypass_reason: None,
+        provenance: "tokenfold_core".to_string(),
+        recoverability: if p.store_originals { "full" } else { "none" }.to_string(),
+        evidence_ref: None,
+    };
+
+    let raw_capture = if !p.rtk_ran || !p.rtk_capture_raw {
+        "not_applicable"
+    } else {
+        p.raw_capture_completeness.unwrap_or("unavailable")
+    };
+    let upstream_recoverability = if !p.rtk_ran {
+        "not_applicable"
+    } else if p.raw_stored {
+        "full"
+    } else if p.store_originals {
+        "tokenfold_only"
+    } else {
+        "none"
+    };
+
+    PipelineReport {
+        raw_input_bytes: p.raw_input_bytes,
+        raw_input_tokens: p.raw_input_tokens,
+        final_output_bytes: p.final_output_bytes,
+        final_output_tokens: report.compressed_tokens,
+        // Same estimator across raw and final (estimator_for mirrors report.estimator).
+        total_saved_tokens: p
+            .raw_input_tokens
+            .map(|r| r.saturating_sub(report.compressed_tokens)),
+        raw_capture: raw_capture.to_string(),
+        upstream_recoverability: upstream_recoverability.to_string(),
+        stages: vec![rtk_stage, tf_stage],
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_wrap(
     global: &GlobalFlags,
     argv: Vec<String>,
     store_originals: bool,
     retrieve_namespace: Option<String>,
+    use_rtk: bool,
+    rtk_capture_raw: bool,
 ) -> Result<i32, TokenFoldError> {
     let Some((program, args)) = argv.split_first() else {
         return Err(TokenFoldError::InvalidInput(
@@ -768,21 +955,38 @@ fn cmd_wrap(
     validate_enable_requires_experimental(&resolved.effective)?;
     let policy = build_policy(&resolved.effective)?;
 
-    let start = std::time::Instant::now();
-    let child_output = std::process::Command::new(program)
-        .args(args)
-        .output()
-        .map_err(|e| TokenFoldError::InvalidInput(format!("failed to launch `{program}`: {e}")))?;
-    let duration_ms = start.elapsed().as_millis() as u64;
-    let child_exit_code = child_output.status.code();
+    // --- Stage 1: acquire command output, RTK-composed or direct. ---
+    // F-054: RTK preflight runs *before* the child. If RTK is missing/incompatible we fail open
+    // to the tokenfold-only path here, before any side-effectful command has started. Once RTK
+    // (or the child) has been spawned we never rerun it — its output and exit code are final.
+    let mut rtk_ran = false;
+    let mut rtk_version: Option<String> = None;
+    let mut rtk_duration_ms: Option<f64> = None;
+    let mut rtk_raw_capture: Option<rtk::RawCapture> = None;
+    let mut rtk_stage_status = "not_applicable".to_string();
+    let mut rtk_bypass_reason: Option<String> = None;
 
-    // ponytail: combines stdout+stderr by concatenation (stdout then stderr), not true
-    // chronological interleaving. Good enough for compression; upgrade to a real merged pipe
-    // (or add `--passthrough-stderr` to skip the merge) if interleaving order ever matters.
-    let mut raw = child_output.stdout.clone();
-    raw.extend_from_slice(&child_output.stderr);
-    let stdout_bytes = child_output.stdout.len();
-    let stderr_bytes = child_output.stderr.len();
+    let (raw, child_exit_code, duration_ms, stdout_bytes, stderr_bytes) = if use_rtk {
+        match rtk::preflight() {
+            rtk::Preflight::Ready { path, version } => {
+                let run = rtk::run(&path, &version, &argv, rtk_capture_raw)?;
+                rtk_ran = true;
+                rtk_version = Some(run.version.clone());
+                rtk_duration_ms = Some(run.duration_ms);
+                rtk_raw_capture = run.raw_capture;
+                rtk_stage_status = run.stage_status.clone();
+                let n = run.output.len();
+                (run.output, run.exit_code, run.duration_ms as u64, n, 0)
+            }
+            rtk::Preflight::FailOpen { status, note } => {
+                rtk_stage_status = status;
+                rtk_bypass_reason = Some(note);
+                run_child(program, args)?
+            }
+        }
+    } else {
+        run_child(program, args)?
+    };
 
     // F-047: check for a trusted filter pack matching the invoked argv *before* the generic
     // compress() pipeline runs. Composition choice (see ROADMAP.md F-047, "runs before or
@@ -793,18 +997,25 @@ fn cmd_wrap(
     // `CompressionReport.original_tokens`/`saved_tokens` reflect the post-filter input to
     // compress(), not the true pre-filter raw size — `CommandReport.raw_output_bytes` below
     // still reports the true raw byte count for that visibility.
-    let filter_match =
-        tokenfold_core::filters::resolve_matching_filter(&tokenfold_core::filters::FilterLookup {
-            argv: &argv,
-            raw_output: &raw,
-            enabled: resolved.effective.filters_enabled,
-            project_filters_path: Some(&resolved.effective.filters_project_filters_path),
-            user_filters_path: Some(&resolved.effective.filters_user_filters_path),
-            trust_store_path: &resolved.effective.filters_trust_store_path,
-            trust_project_filters: resolved.effective.filters_trust_project_filters,
-        });
-
-    let (pipeline_input, filter_pack_id, filter_version, filter_never_worse_reverted) =
+    //
+    // F-054 double-filtering avoidance: when RTK ran, it already owns command-specific
+    // filtering, so tokenfold's overlapping filter pack is skipped. Mandatory redaction,
+    // generic compression, safety rollback, and the compress-level never_worse guard still run
+    // (they live inside compress()).
+    let (pipeline_input, filter_pack_id, filter_version, filter_never_worse_reverted) = if rtk_ran {
+        (raw.clone(), None, None, false)
+    } else {
+        let filter_match = tokenfold_core::filters::resolve_matching_filter(
+            &tokenfold_core::filters::FilterLookup {
+                argv: &argv,
+                raw_output: &raw,
+                enabled: resolved.effective.filters_enabled,
+                project_filters_path: Some(&resolved.effective.filters_project_filters_path),
+                user_filters_path: Some(&resolved.effective.filters_user_filters_path),
+                trust_store_path: &resolved.effective.filters_trust_store_path,
+                trust_project_filters: resolved.effective.filters_trust_project_filters,
+            },
+        );
         match &filter_match {
             Some(matched) => {
                 let filtered = matched.filter.apply(&raw)?;
@@ -817,20 +1028,96 @@ fn cmd_wrap(
                 )
             }
             None => (raw.clone(), None, None, false),
-        };
+        }
+    };
 
     let resolved_format = resolve_format(resolved.effective.format, &pipeline_input, true);
     let compression_input = CompressionInput {
         format: resolved_format,
         bytes: pipeline_input.clone(),
     };
+    let compress_start = std::time::Instant::now();
     let mut output = tokenfold_core::compress(compression_input, &policy)?;
+    let compress_ms = compress_start.elapsed().as_secs_f64() * 1000.0;
 
     let compress_never_worse = output.report.compressed_tokens > output.report.original_tokens;
     if compress_never_worse {
         output.bytes = pipeline_input.clone();
     }
     let never_worse_applied = filter_never_worse_reverted || compress_never_worse;
+
+    // --- Stage 2 accounting: CCR raw-capture ingestion (F-055). ---
+    // The transient tee file was already deleted by rtk::run's RAII guard once its bytes were
+    // read into memory; here we only persist those in-memory bytes through the normal
+    // redaction/persistence gate. `RetrievalStore::store` refuses secret-matched bytes, so a
+    // secret capture is never persisted.
+    let mut raw_input_bytes: Option<usize> = None;
+    let mut raw_input_tokens: Option<usize> = None;
+    let mut rtk_evidence_ref: Option<String> = None;
+    let mut raw_stored = false;
+    if let Some(cap) = &rtk_raw_capture {
+        if cap.completeness == "complete" {
+            let est = estimator_for(&output.report.estimator);
+            raw_input_bytes = Some(cap.bytes.len());
+            raw_input_tokens = Some(est.count_bytes(&cap.bytes));
+            let store = tokenfold_core::retrieval_store::RetrievalStore::open(
+                &resolved.effective.retrieval_backend,
+                "sha256",
+                resolved.effective.retrieval_store_path.clone(),
+            )?;
+            match store.store(
+                &cap.bytes,
+                &resolved.effective.retrieval_namespace,
+                resolved.effective.retrieval_ttl_seconds,
+            ) {
+                Ok(marker) => {
+                    raw_stored = true;
+                    rtk_evidence_ref = Some(marker.hash);
+                }
+                Err(TokenFoldError::SafetyViolation(_)) => {
+                    // Never persisted; the receipt labels the pre-RTK stage unrecoverable.
+                    rtk_bypass_reason = Some(
+                        "pre-RTK raw capture matched a secret pattern and was not persisted"
+                            .to_string(),
+                    );
+                }
+                Err(e) => {
+                    rtk_bypass_reason = Some(format!("failed to persist pre-RTK raw capture: {e}"));
+                }
+            }
+        } else {
+            rtk_bypass_reason = Some(format!(
+                "pre-RTK raw capture is {}; upstream detail is unrecoverable",
+                cap.completeness
+            ));
+        }
+    }
+
+    if use_rtk {
+        let final_output_bytes = output.bytes.len();
+        let pipeline = build_pipeline_report(BuildPipeline {
+            rtk_ran,
+            rtk_version: rtk_version.as_deref(),
+            rtk_duration_ms,
+            rtk_stage_status: &rtk_stage_status,
+            rtk_bypass_reason: rtk_bypass_reason.as_deref(),
+            rtk_capture_raw,
+            raw_capture_completeness: rtk_raw_capture.as_ref().map(|c| c.completeness.as_str()),
+            raw_input_bytes,
+            raw_input_tokens,
+            raw_stored,
+            rtk_evidence_ref,
+            // What compress() actually sees: post-RTK bytes on the RTK path, post-filter bytes on
+            // the fail-open path (pipeline_input == raw.clone() when rtk ran). The true pre-filter
+            // raw byte count stays visible via CommandReport.raw_output_bytes.
+            compress_input_bytes: pipeline_input.len(),
+            final_output_bytes,
+            store_originals,
+            compress_ms,
+            report: &output.report,
+        });
+        output.report.pipeline = Some(pipeline);
+    }
 
     output.report.command = Some(CommandReport {
         command_family: None,
@@ -970,6 +1257,9 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
             Err(e) => (None, Some(e.to_string())),
         };
 
+    // F-054: additive RTK health. RTK is optional, so `missing` is a warning, never a failure.
+    let rtk = rtk::doctor_probe();
+
     if global.json {
         println!(
             "{}",
@@ -978,6 +1268,14 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
                 "config_path": config_path.as_ref().map(|p| p.display().to_string()),
                 "config_error": config_error,
                 "agent": agent.as_ref().map(|a| serde_json::json!({ "name": a, "supported": false })),
+                "rtk": {
+                    "status": rtk.status,
+                    "path": rtk.path,
+                    "version": rtk.version,
+                    "compatible": rtk.compatible,
+                    "raw_capture": rtk.raw_capture,
+                    "notes": rtk.notes,
+                },
             })
         );
     } else {
@@ -999,6 +1297,14 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
         }
         if let Some(a) = &agent {
             println!("  agent '{a}': not supported yet (no v0.1 host integration has shipped)");
+        }
+        match rtk.version {
+            Some(v) => println!("  rtk: {} ({})", rtk.status, v),
+            None => println!("  rtk: {} (optional)", rtk.status),
+        }
+        println!("  rtk raw-capture: {}", rtk.raw_capture);
+        for note in &rtk.notes {
+            println!("    - {note}");
         }
     }
     Ok(if config_error.is_some() { 5 } else { 0 })

@@ -16,6 +16,10 @@ pub struct CompressionReport {
     pub format: String,
     pub task_scope: String,
     pub request_id: Option<String>,
+    /// F-055: staged `raw -> RTK -> tokenfold` accounting. `None` for the common
+    /// single-stage path; populated only by RTK-composed `wrap --rtk` runs.
+    #[serde(default)]
+    pub pipeline: Option<PipelineReport>,
     pub quality: Option<QualityReport>,
     pub budget: Option<BudgetReport>,
     pub cache: Option<CacheReport>,
@@ -61,6 +65,7 @@ impl CompressionReport {
             format,
             task_scope,
             request_id: None,
+            pipeline: None,
             quality: None,
             budget: None,
             cache: None,
@@ -80,6 +85,53 @@ pub struct EstimatorInfo {
     pub backend: String,
     pub model: Option<String>,
     pub is_exact: bool,
+}
+
+/// F-055: separates savings and recoverability across composed stages (RTK then
+/// tokenfold) so RTK's savings are never credited to tokenfold. The top-level
+/// `original_tokens` keeps its v1 meaning — tokens *entering* `tokenfold_core`,
+/// which is the post-RTK count when composed. See INTERFACES.md §1.9 / §2.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PipelineReport {
+    /// Pre-RTK byte count. `Some` only when a complete raw capture was observed.
+    pub raw_input_bytes: Option<usize>,
+    /// Pre-RTK token count. `Some` only when raw capture is complete.
+    pub raw_input_tokens: Option<usize>,
+    pub final_output_bytes: usize,
+    /// Equals top-level `compressed_tokens`.
+    pub final_output_tokens: usize,
+    /// Populated only when raw and final counts use the same estimator.
+    pub total_saved_tokens: Option<usize>,
+    /// `"complete"`, `"partial"`, `"unavailable"`, or `"not_applicable"`.
+    pub raw_capture: String,
+    /// `"full"`, `"tokenfold_only"`, `"none"`, or `"not_applicable"`.
+    pub upstream_recoverability: String,
+    pub stages: Vec<PipelineStageReport>,
+}
+
+/// F-055: one composed stage. Count fields are nullable because an unavailable
+/// stage or missing pre-stage capture cannot be measured honestly.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PipelineStageReport {
+    /// `"rtk"` or `"tokenfold"`.
+    pub id: String,
+    pub version: Option<String>,
+    pub input_bytes: Option<usize>,
+    pub output_bytes: Option<usize>,
+    pub saved_bytes: Option<usize>,
+    pub input_tokens: Option<usize>,
+    pub output_tokens: Option<usize>,
+    pub saved_tokens: Option<usize>,
+    pub estimator: Option<EstimatorInfo>,
+    /// `"applied"`, `"passthrough"`, `"unavailable"`, `"incompatible"`, or `"failed"`.
+    pub status: String,
+    pub duration_ms: Option<f64>,
+    pub bypass_reason: Option<String>,
+    /// e.g. `"external:rtk@0.4.1"` or `"tokenfold_core"`.
+    pub provenance: String,
+    /// `"full"`, `"partial"`, `"none"`, or `"not_applicable"`.
+    pub recoverability: String,
+    pub evidence_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
