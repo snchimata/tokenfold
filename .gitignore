@@ -5,3 +5,6 @@
 *.cdx.json
 .env
 .claude/*
+# Python bytecode caches (eval/ + python-tests harnesses)
+__pycache__/
+*.pyc

@@ -26,7 +26,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -152,6 +155,57 @@ SELECTORS = {
 }
 
 
+# --- whole-pipeline compressor baselines ------------------------------------------------------
+# Unlike SELECTORS (which rank atomic units and get the harness's deterministic critical-atom
+# forcing + hard ceiling), a COMPRESSOR runs an external best-effort pipeline over the whole
+# source. It is NOT unit-selection: it may miss the exact ceiling (best effort) and the harness
+# does not force critical atoms through it, so its critical-atom survival is *measured and
+# reported*, never assumed. `deterministic-tokenfold` is the primary baseline to beat.
+
+
+def _find_tokenfold() -> str | None:
+    """Locate the tokenfold CLI: TOKENFOLD_BIN, then a local target build, then PATH."""
+    env = os.environ.get("TOKENFOLD_BIN")
+    if env and Path(env).is_file():
+        return env
+    root = Path(__file__).resolve().parent.parent
+    exe = "tokenfold.exe" if os.name == "nt" else "tokenfold"
+    for sub in ("target/release", "target/debug"):
+        candidate = root / sub / exe
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which("tokenfold")
+
+
+_TOKENFOLD_BIN = _find_tokenfold()
+
+
+def compress_tokenfold(source: str, budget: int) -> str | None:
+    """Run `tokenfold compress --target-tokens <budget>` over `source` (auto-detected format),
+    returning the compressed payload, or None when the CLI is unavailable/errors. Best-effort:
+    tokenfold may return a payload above the budget when its lossless/evidence transforms cannot
+    reach the target — that is a measured property, not a harness failure."""
+    if not _TOKENFOLD_BIN:
+        return None
+    try:
+        proc = subprocess.run(
+            [_TOKENFOLD_BIN, "compress", "--quiet", "--target-tokens", str(budget)],
+            input=source.encode("utf-8"),
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if not proc.stdout:
+        return None
+    return proc.stdout.decode("utf-8", errors="replace")
+
+
+COMPRESSORS = {
+    "deterministic-tokenfold": compress_tokenfold,
+}
+
+
 # --- token-ceiling allocator ------------------------------------------------------------------
 
 
@@ -195,15 +249,24 @@ def allocate(
 # --- task scoring (deterministic proxy) -------------------------------------------------------
 
 
+def _ws_strip(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
 def score_task(kept_text: str, fixture: dict) -> dict:
     """Deterministic proxy for downstream task success: every critical atom present AND the gold
     answer span present in the retained context. Not an LLM judge (which model-research.md
-    reserves for diagnosing failures, never for satisfying a gate)."""
+    reserves for diagnosing failures, never for satisfying a gate).
+
+    Containment is whitespace-insensitive so a lossless reformat (e.g. a compressor minifying
+    `"max_results": 25` to `"max_results":25`) still counts as surviving. Selector baselines keep
+    original bytes, so this does not change their scores."""
+    hay = _ws_strip(kept_text)
     atoms = fixture.get("critical_atoms", [])
-    survived = sum(1 for a in atoms if a in kept_text)
+    survived = sum(1 for a in atoms if _ws_strip(a) in hay)
     atom_survival = survived / len(atoms) if atoms else 1.0
     gold = fixture.get("gold_answer")
-    answer_present = 1.0 if (not gold or gold in kept_text) else 0.0
+    answer_present = 1.0 if (not gold or _ws_strip(gold) in hay) else 0.0
     success = 1.0 if atom_survival == 1.0 and answer_present == 1.0 else 0.0
     return {
         "task_success": success,
@@ -244,24 +307,57 @@ def run_one(fixture: dict, baseline: str, target_ratio: float) -> dict:
     return result
 
 
+def run_one_compressor(fixture: dict, name: str, target_ratio: float) -> dict:
+    source = fixture["source"]
+    raw_tokens = count_tokens(source)
+    budget = round(raw_tokens * target_ratio)
+    compressed = COMPRESSORS[name](source, budget)
+    base = {
+        "baseline": name,
+        "fixture": fixture["id"],
+        "family": fixture.get("family"),
+        "target_ratio": target_ratio,
+        "kind": "compressor",
+    }
+    if compressed is None:
+        base["available"] = False
+        return base
+    achieved = count_tokens(compressed)
+    base.update(
+        {
+            "available": True,
+            "raw_tokens": raw_tokens,
+            "budget_tokens": budget,
+            "achieved_tokens": achieved,
+            "achieved_ratio": round(achieved / raw_tokens, 4) if raw_tokens else 0.0,
+            # Best effort: tokenfold may exceed the budget when lossless transforms can't reach
+            # it. Informational, not a failure.
+            "over_budget": achieved > budget,
+        }
+    )
+    base.update(score_task(compressed, fixture))
+    return base
+
+
 def _mean(xs: list[float]) -> float:
     return round(sum(xs) / len(xs), 4) if xs else 0.0
 
 
 def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
-    rows = [
-        run_one(fx, name, r)
-        for name in SELECTORS
-        for r in ratios
-        for fx in fixtures
+    selector_rows = [
+        run_one(fx, name, r) for name in SELECTORS for r in ratios for fx in fixtures
+    ]
+    compressor_rows = [
+        run_one_compressor(fx, name, r) for name in COMPRESSORS for r in ratios for fx in fixtures
     ]
     summary = []
     for name in SELECTORS:
         for r in ratios:
-            group = [x for x in rows if x["baseline"] == name and x["target_ratio"] == r]
+            group = [x for x in selector_rows if x["baseline"] == name and x["target_ratio"] == r]
             summary.append(
                 {
                     "baseline": name,
+                    "kind": "selector",
                     "target_ratio": r,
                     "mean_task_success": _mean([x["task_success"] for x in group]),
                     "mean_critical_atom_survival": _mean(
@@ -271,14 +367,35 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
                     "over_budget_count": sum(1 for x in group if x["over_budget"]),
                 }
             )
+    for name in COMPRESSORS:
+        for r in ratios:
+            group = [x for x in compressor_rows if x["baseline"] == name and x["target_ratio"] == r]
+            avail = [x for x in group if x.get("available")]
+            summary.append(
+                {
+                    "baseline": name,
+                    "kind": "compressor",
+                    "target_ratio": r,
+                    "available": len(avail),
+                    "of": len(group),
+                    "mean_task_success": _mean([x["task_success"] for x in avail]),
+                    "mean_critical_atom_survival": _mean(
+                        [x["critical_atom_survival"] for x in avail]
+                    ),
+                    "mean_achieved_ratio": _mean([x["achieved_ratio"] for x in avail]),
+                    "over_budget_count": sum(1 for x in avail if x["over_budget"]),
+                }
+            )
     return {
         "harness": "v0.4-alpha-baselines",
         "tokenizer": TOKENIZER,
         "fixture_count": len(fixtures),
-        "baselines": list(SELECTORS),
+        "selectors": list(SELECTORS),
+        "compressors": list(COMPRESSORS),
+        "tokenfold_available": _TOKENFOLD_BIN is not None,
         "ratios": ratios,
         "summary": summary,
-        "rows": rows,
+        "rows": selector_rows + compressor_rows,
     }
 
 
@@ -324,6 +441,8 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
         "gate": "pass" if not failures else "fail",
         "tokenizer": TOKENIZER,
         "checked": len(fixtures) * len(ratios) * len(SELECTORS),
+        # Compressor baselines are best-effort (measured, not gated); report availability only.
+        "tokenfold_available": _TOKENFOLD_BIN is not None,
         "failures": failures,
     }
     print(json.dumps(artifact, indent=2))
@@ -331,12 +450,19 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
 
 
 def _print_summary(report: dict) -> None:
-    print(f"# v0.4-alpha baselines  (tokenizer: {report['tokenizer']['backend']})")
+    tf = "available" if report["tokenfold_available"] else "MISSING (skipped)"
+    print(
+        f"# v0.4-alpha baselines  (tokenizer: {report['tokenizer']['backend']}, "
+        f"deterministic-tokenfold: {tf})"
+    )
     print(f"# {report['fixture_count']} fixtures  ratios={report['ratios']}\n")
-    print(f"{'baseline':<13}{'ratio':>6}{'task':>7}{'crit':>7}{'achieved':>10}{'over':>6}")
+    print(f"{'baseline':<24}{'ratio':>6}{'task':>7}{'crit':>7}{'achieved':>10}{'over':>6}")
     for s in report["summary"]:
+        if s["kind"] == "compressor" and s.get("available", 0) == 0:
+            print(f"{s['baseline']:<24}{s['target_ratio']:>6}{'n/a':>7}{'n/a':>7}{'n/a':>10}{'-':>6}")
+            continue
         print(
-            f"{s['baseline']:<13}{s['target_ratio']:>6}{s['mean_task_success']:>7}"
+            f"{s['baseline']:<24}{s['target_ratio']:>6}{s['mean_task_success']:>7}"
             f"{s['mean_critical_atom_survival']:>7}{s['mean_achieved_ratio']:>10}"
             f"{s['over_budget_count']:>6}"
         )
