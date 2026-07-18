@@ -1,0 +1,10 @@
+{
+  "id": "json_schema_001",
+  "family": "json_schema",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"search\",\n  \"request_id\": \"tc-7f3a2b1c\",\n  \"params\": {\n    \"query\": \"quarterly revenue\",\n    \"max_results\": 25,\n    \"timeout_ms\": 3000,\n    \"filters\": {\n      \"region\": \"emea\",\n      \"currency\": \"eur\"\n    }\n  },\n  \"retries\": 2\n}\n",
+  "query": "what is the configured max_results value?",
+  "gold_answer": "\"max_results\": 25",
+  "critical_atoms": ["tc-7f3a2b1c"],
+  "notes": "Line-segmented JSON (structural segmentation deferred). The answer line matches the query; request_id is force-kept. Gold answer is the full key:value so containment can't false-match a stray '25'."
+}
