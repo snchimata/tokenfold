@@ -329,3 +329,76 @@ fn doctor_reports_rtk_available_with_capture_guidance() {
     // Tee is off by default; capture is not ready until the user enables RTK's [tee] section.
     assert_eq!(report["rtk"]["raw_capture"], "unavailable");
 }
+
+/// Regression: on the `--rtk` fail-open path the command-specific filter pack still runs, so the
+/// tokenfold pipeline stage must measure bytes over the *post-filter* compress input (not the raw
+/// command output). Otherwise the filter's byte reduction is wrongly credited to tokenfold_core
+/// and the stage's saved_bytes disagrees with its saved_tokens.
+#[test]
+fn failopen_filter_reduction_is_not_credited_to_tokenfold_stage() {
+    let dir = unique_dir("failopen_filter");
+    let project = dir.join("proj.toml");
+    let trust = dir.join("trust.json");
+    let config = dir.join("cfg.toml");
+    // A trusted project filter matching `git --version` that replaces "git version" (11 bytes)
+    // with "GITVER" (6 bytes): a deterministic 5-byte reduction regardless of the version number.
+    std::fs::write(
+        &project,
+        "schema_version = \"1.0\"\n\n[pack]\nid = \"failopen-pack\"\nversion = \"1.0.0\"\n\n\
+         [[filters]]\nid = \"gv\"\nversion = \"1.0.0\"\nmatch_command = [\"git\", \"--version\"]\n\n\
+         [[filters.stages]]\ntype = \"replace\"\npattern = \"git version\"\nreplacement = \"GITVER\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &config,
+        format!(
+            "[filters]\nproject_filters = {:?}\ntrust_store = {:?}\n",
+            project.to_string_lossy().replace('\\', "/"),
+            trust.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .unwrap();
+
+    let out = tf(&dir)
+        .args(["filters", "trust", "--config"])
+        .arg(&config)
+        .arg(&project)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "trust failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // rtk missing -> fail open; the git-version filter still runs on the raw command output.
+    let out = tf(&dir)
+        .env("TOKENFOLD_RTK_BIN", dir.join("no-such-rtk"))
+        .args(["--json", "wrap", "--rtk", "--config"])
+        .arg(&config)
+        .args(["--", "git", "--version"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report = report_from_stderr(&out.stderr);
+    // Fail-open still filtered (double-filter avoidance only applies when RTK actually ran).
+    assert_eq!(report["command"]["filter_pack_id"], "failopen-pack");
+    let raw_bytes = report["command"]["raw_output_bytes"].as_u64().unwrap();
+    let tf_stage = &report["pipeline"]["stages"][1];
+    assert_eq!(tf_stage["id"], "tokenfold");
+    let tf_in = tf_stage["input_bytes"].as_u64().unwrap();
+    let tf_out = tf_stage["output_bytes"].as_u64().unwrap();
+    // The tokenfold stage saw the post-filter input (5 bytes smaller than raw), not the raw output.
+    assert_eq!(
+        tf_in,
+        raw_bytes - 5,
+        "tokenfold stage must measure the post-filter compress input, not raw command output"
+    );
+    // Its byte savings therefore reflect only tokenfold's own work (input - output), never the
+    // filter's reduction.
+    assert_eq!(tf_stage["saved_bytes"].as_u64().unwrap(), tf_in - tf_out);
+}

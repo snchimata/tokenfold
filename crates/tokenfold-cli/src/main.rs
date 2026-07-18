@@ -812,7 +812,11 @@ struct BuildPipeline<'a> {
     raw_input_tokens: Option<usize>,
     raw_stored: bool,
     rtk_evidence_ref: Option<String>,
-    post_rtk_bytes: usize,
+    /// Bytes actually entering `compress()` (post-RTK on the RTK path, post-filter on the
+    /// fail-open path). Must match what `report.original_tokens` was counted over, so the
+    /// tokenfold stage's byte and token savings stay consistent and RTK/filter reductions are
+    /// never credited to tokenfold_core.
+    compress_input_bytes: usize,
     final_output_bytes: usize,
     store_originals: bool,
     compress_ms: f64,
@@ -826,9 +830,10 @@ fn build_pipeline_report(p: BuildPipeline) -> PipelineReport {
     let report = p.report;
 
     // --- RTK stage ---
-    // Post-RTK bytes/tokens are what enters compress(); tokens == report.original_tokens.
+    // When RTK ran there is no tokenfold filter between it and compress(), so RTK's output *is*
+    // the compress input; tokens == report.original_tokens.
     let (rtk_output_bytes, rtk_output_tokens) = if p.rtk_ran {
-        (Some(p.post_rtk_bytes), Some(report.original_tokens))
+        (Some(p.compress_input_bytes), Some(report.original_tokens))
     } else {
         (None, None)
     };
@@ -877,9 +882,9 @@ fn build_pipeline_report(p: BuildPipeline) -> PipelineReport {
     let tf_stage = PipelineStageReport {
         id: "tokenfold".to_string(),
         version: Some(env!("CARGO_PKG_VERSION").to_string()),
-        input_bytes: Some(p.post_rtk_bytes),
+        input_bytes: Some(p.compress_input_bytes),
         output_bytes: Some(p.final_output_bytes),
-        saved_bytes: Some(p.post_rtk_bytes.saturating_sub(p.final_output_bytes)),
+        saved_bytes: Some(p.compress_input_bytes.saturating_sub(p.final_output_bytes)),
         input_tokens: Some(report.original_tokens),
         output_tokens: Some(report.compressed_tokens),
         saved_tokens: Some(report.saved_tokens),
@@ -1102,7 +1107,10 @@ fn cmd_wrap(
             raw_input_tokens,
             raw_stored,
             rtk_evidence_ref,
-            post_rtk_bytes: raw.len(),
+            // What compress() actually sees: post-RTK bytes on the RTK path, post-filter bytes on
+            // the fail-open path (pipeline_input == raw.clone() when rtk ran). The true pre-filter
+            // raw byte count stays visible via CommandReport.raw_output_bytes.
+            compress_input_bytes: pipeline_input.len(),
             final_output_bytes,
             store_originals,
             compress_ms,
