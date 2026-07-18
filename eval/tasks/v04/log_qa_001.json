@@ -1,0 +1,10 @@
+{
+  "id": "log_qa_001",
+  "family": "log_qa",
+  "tier": "A",
+  "source": "2026-07-01T10:00:00Z INFO service=auth starting up region=us-east-1\n2026-07-01T10:00:01Z INFO service=auth config loaded pool_size=32\n2026-07-01T10:00:02Z INFO service=auth healthcheck ok\n2026-07-01T10:00:03Z INFO service=auth request received route=/login user=alice\n2026-07-01T10:00:03Z DEBUG service=auth cache miss key=sess-alice\n2026-07-01T10:00:04Z INFO service=auth request received route=/login user=bob\n2026-07-01T10:00:05Z ERROR service=auth database connection timeout after 5000ms code=DB_TIMEOUT\n2026-07-01T10:00:06Z INFO service=auth retry scheduled req-id=req-9f3a\n2026-07-01T10:00:07Z INFO service=auth healthcheck ok\n2026-07-01T10:00:08Z INFO service=auth shutting down region=us-east-1\n",
+  "query": "what database error caused the request timeout?",
+  "gold_answer": "DB_TIMEOUT",
+  "critical_atoms": ["req-9f3a"],
+  "notes": "Answer (ERROR line) is NOT a critical atom and is an older line, so recency drops it at tight budgets while bm25 keeps it; the audit-critical req-id is on a separate line and is force-kept."
+}

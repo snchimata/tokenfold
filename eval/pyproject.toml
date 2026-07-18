@@ -12,6 +12,9 @@ dependencies = []
 # Not required to run `python eval/run_fidelity.py --gate ...`.
 # Reserved for future test suites around the harness itself.
 dev = ["pytest>=7"]
+# Exact provider-token ceilings for `run_baselines.py` (v0.4 research harness). Optional:
+# without it the harness falls back to tokenfold-core's byte/4 heuristic and labels the report.
+exact = ["tiktoken>=0.7"]
 
 [build-system]
 requires = ["setuptools>=61"]
