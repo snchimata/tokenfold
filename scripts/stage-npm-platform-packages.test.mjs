@@ -33,7 +33,7 @@ async function fixture() {
 test("stages five exact-version platform packages with verified checksums", async () => {
   const { assets, directory, output } = await fixture();
   try {
-    execFileSync(process.execPath, [script, "0.3.1", assets, output], { cwd: root });
+    execFileSync(process.execPath, [script, "0.3.2", assets, output], { cwd: root });
     const packages = [
       "cli-darwin-x64",
       "cli-darwin-arm64",
@@ -43,7 +43,7 @@ test("stages five exact-version platform packages with verified checksums", asyn
     ];
     for (const packageDirectory of packages) {
       const manifest = JSON.parse(await readFile(join(output, packageDirectory, "package.json")));
-      assert.equal(manifest.version, "0.3.1");
+      assert.equal(manifest.version, "0.3.2");
       assert.equal(manifest.publishConfig.provenance, true);
     }
     if (process.platform !== "win32") {
@@ -60,7 +60,7 @@ test("rejects a mismatched platform checksum", async () => {
   try {
     await writeFile(join(assets, `${assetNames[0]}.sha256`), `${"0".repeat(64)}  bad\n`);
     assert.throws(
-      () => execFileSync(process.execPath, [script, "0.3.1", assets, output], {
+      () => execFileSync(process.execPath, [script, "0.3.2", assets, output], {
         cwd: root,
         stdio: "pipe",
       }),

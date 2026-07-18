@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.2] - 2026-07-18
+
+- Compose an external, optional RTK command filter ahead of Tokenfold with
+  `tokenfold wrap --rtk`: RTK handles command-specific filtering while Tokenfold
+  keeps its mandatory secret redaction, generic compression, receipts, and
+  never-worse guard. RTK is never bundled or made mandatory.
+- Fall open automatically to the Tokenfold-only path when RTK is missing or
+  incompatible, detected by a preflight check *before* the wrapped command runs,
+  so a side-effectful command is never launched twice.
+- Read a staged `raw -> RTK -> tokenfold` receipt (the new `pipeline` object in
+  the JSON report) that keeps each stage's byte and token savings separate; RTK
+  savings are never credited to Tokenfold's own compression.
+- Opt into end-to-end capture-and-compress reversibility with
+  `--rtk-capture-raw`: the pre-RTK output is ingested through the same secret
+  redaction and persistence gate, secret-matched bytes are never stored, and a
+  missing or truncated capture is reported as unrecoverable rather than
+  reversible.
+- Check RTK availability, version, and raw-capture readiness with
+  `tokenfold doctor` (additive `rtk` field), without Tokenfold ever reading or
+  editing your RTK configuration.
+
 ## [0.3.1] - 2026-07-15
 
 - Install Tokenfold from npm with `npm install tokenfold` and call the same

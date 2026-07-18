@@ -1,6 +1,6 @@
 {
   "name": "tokenfold",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Token-aware compression for LLM payloads, backed by the tokenfold Rust CLI.",
   "license": "Apache-2.0",
   "repository": {
@@ -41,11 +41,11 @@
     "prepack": "npm run build"
   },
   "optionalDependencies": {
-    "@tokenfold/cli-darwin-x64": "0.3.1",
-    "@tokenfold/cli-darwin-arm64": "0.3.1",
-    "@tokenfold/cli-linux-x64": "0.3.1",
-    "@tokenfold/cli-linux-arm64": "0.3.1",
-    "@tokenfold/cli-win32-x64": "0.3.1"
+    "@tokenfold/cli-darwin-x64": "0.3.2",
+    "@tokenfold/cli-darwin-arm64": "0.3.2",
+    "@tokenfold/cli-linux-x64": "0.3.2",
+    "@tokenfold/cli-linux-arm64": "0.3.2",
+    "@tokenfold/cli-win32-x64": "0.3.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

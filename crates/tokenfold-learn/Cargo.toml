@@ -8,4 +8,4 @@ repository.workspace = true
 description = "Policy-learning proposals for tokenfold compression reports."
 
 [dependencies]
-tokenfold-core = { version = "0.3.1", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.3.2", path = "../tokenfold-core" }
