@@ -1,0 +1,12 @@
+{
+  "id": "rust_holdout_001",
+  "family": "rust_holdout",
+  "tier": "A",
+  "source": "//! Segment compaction for the tokenfold on-disk index layer (F-041 holdout slice).\nuse crate::index::segment::SegmentId;\nuse std::sync::atomic::Ordering;\n\n/// Per-segment liveness stats sampled at the start of a compaction cycle.\npub struct SegmentStats {\n    pub live_bytes: u64,\n    pub tombstones: u32,\n}\n\nimpl Compactor {\n    /// True when a segment has accumulated enough tombstones to be rewritten.\n    pub fn should_compact(&self, stats: &SegmentStats) -> bool {\n        stats.tombstones > self.tombstone_threshold\n    }\n\n    /// Merge the chosen segments and hand back the id of the newly written one.\n    pub fn merge_segments(&mut self, ids: &[SegmentId]) -> Result<SegmentId, CompactError> {\n        let target = self.allocate_segment()?;\n        self.write_merged(target, ids)?;\n        Ok(target)\n    }\n\n    fn allocate_segment(&mut self) -> SegmentId {\n        SegmentId(self.next_id.fetch_add(1, Ordering::SeqCst) + 1)\n    }\n}\n",
+  "query": "what Result type does the merge_segments function return on success?",
+  "gold_answer": "merge_segments(&mut self, ids: &[SegmentId]) -> Result<SegmentId, CompactError>",
+  "critical_atoms": [
+    "crate::index::segment"
+  ],
+  "notes": "Answer is the merge_segments signature line (query-relevant via 'merge_segments'/'Result'), not a critical atom, so recency/forced_only drop it at a 25% budget while bm25 keeps it; the audit-critical module path crate::index::segment sits on the use line and is force-kept."
+}
