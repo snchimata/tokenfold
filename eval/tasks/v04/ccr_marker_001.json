@@ -1,0 +1,12 @@
+{
+  "id": "ccr_marker_001",
+  "family": "ccr_marker",
+  "tier": "A",
+  "source": "$ artifactctl publish --repo prod ./build/app-2.14.0.tar.gz\n[10:22:01] connecting to registry registry.internal.example.com:8443\n[10:22:01] authenticated as ci-bot correlation-id=cid-4b8e2d1a\n[10:22:02] uploading layer 1/3 base-runtime size=41.2MB\n[10:22:03] uploading layer 2/3 dependencies size=88.7MB\n[10:22:05] uploading layer 3/3 application size=12.4MB\n[10:22:06] computing manifest digest from 3 layers\n[10:22:06] published digest sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\n[10:22:06] assigned immutable tag prod-2.14.0-b317\n[10:22:07] registry quota remaining 214.5GB of 500GB\n[10:22:07] replication started to region eu-west-1\n[10:22:08] replication started to region ap-south-1\n[10:22:08] replication started to region us-east-2\n[10:22:09] audit event recorded status=OK\n[10:22:09] metrics flushed to telemetry pipeline\n[10:22:09] publish complete in 6.8s status=OK\n",
+  "query": "what sha256 manifest digest was published to the registry for this release?",
+  "gold_answer": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "critical_atoms": [
+    "cid-4b8e2d1a"
+  ],
+  "notes": "CCR: the published digest must be reconstructable. bm25 keeps the digest line (shares 'sha256/digest/published/registry/manifest' with the query) so it reconstructs the value even at the 0.25 ceiling, while recency spends the budget on the later replication/audit/metrics lines and forced_only keeps only the marker line, so both drop the value. The audit marker cid-4b8e2d1a sits on the authentication line and is force-kept independent of the selector."
+}

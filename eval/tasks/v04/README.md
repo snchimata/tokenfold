@@ -5,6 +5,17 @@ research (`docs/solution-design/model-research.md`). Everything here is **shadow
 measures deterministic keep/drop selectors against downstream tasks; no model is involved and
 nothing reaches a served path.
 
+## Coverage (11 Tier-A fixtures)
+
+Spanning the required slices from model-research.md §Prerequisites: `log_qa`, `log_multi_service`
+(logs/tool QA), `diff_review`, `code_patch` (diff review / change localization), `code_build_error`
+(build/test failures), `json_schema`, `tool_call_json` (JSON/schema + tool calls),
+`long_context_needle` (long mixed context with an id/hash/path needle), `ccr_marker` (CCR
+reconstruction), and `rust_holdout` + `typescript_holdout` (the project-disjoint Rust/TS hard
+slices). Every fixture is gate-validated and confirmed to *differentiate* selectors (at least one
+selector fails the task at the 25% ceiling, so the report is discriminating rather than trivially
+1.0 everywhere).
+
 ## Fixture schema
 
 ```json

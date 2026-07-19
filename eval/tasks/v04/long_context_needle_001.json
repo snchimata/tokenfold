@@ -1,0 +1,13 @@
+{
+  "id": "long_context_needle_001",
+  "family": "long_context_needle",
+  "tier": "A",
+  "source": "# deploy-runbook: payments-service release pipeline notes\nservice: payments-api\nregion: us-west-2\nreplicas: 6\ncanary_percent: 10\nhealth_check_path: /healthz\ntimeout_seconds: 30\nOn-call opened incident INC-4471 when p99 latency spiked during the rollout.\nRollback stays gated behind the signed manifest /etc/deploy/ring.yaml on bastion-3.\n2026-07-02T14:21:55Z INFO scheduler drained connections from the old replica set\n2026-07-02T14:22:03Z INFO probe reported green across all six pods in us-west-2\n2026-07-02T14:22:09Z INFO deploy promoted artifact digest sha256:9c1f4e2b to the production ring\n2026-07-02T14:22:15Z INFO scheduler scaled the canary pool back to zero after cutover\n2026-07-02T14:22:40Z DEBUG metrics exporter flushed 1284 samples to the collector\nThe release captain verified dashboards looked nominal before closing the change window.\nA follow-up chore is filed to rotate the staging credentials before the next quarterly audit.\nMost pipeline runs are uneventful and simply repeat the same green health probes each minute.\nNothing else in this window required a page or a manual intervention from the operators.\n",
+  "query": "which artifact digest was promoted to the production ring?",
+  "gold_answer": "sha256:9c1f4e2b",
+  "critical_atoms": [
+    "INC-4471",
+    "/etc/deploy/ring.yaml"
+  ],
+  "notes": "Needle (artifact digest on a mid-context log line) shares 'artifact/digest/promoted/production/ring' with the query so bm25 keeps it, but it is neither a critical atom nor a late line, so recency/forced_only drop it at 0.25; the incident id and manifest path are force-kept on separate lines."
+}

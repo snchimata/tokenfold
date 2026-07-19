@@ -1,0 +1,12 @@
+{
+  "id": "code_patch_001",
+  "family": "code_patch",
+  "tier": "A",
+  "source": "diff --git a/src/billing/refund.rs b/src/billing/refund.rs\nindex 4a1c9e2..b7f0d31 100644\n--- a/src/billing/refund.rs\n+++ b/src/billing/refund.rs\n@@ -12,10 +12,13 @@ impl RefundProcessor {\n     pub fn process(&self, order: &Order, refund: Money) -> Result<Receipt, RefundError> {\n         let account = self.ledger.account_for(order.customer_id);\n         let original_charge = order.total_charged();\n         self.audit.record(\"refund_requested\", order.id);\n-        let receipt = self.ledger.post_credit(account, refund)?;\n+        if refund > original_charge {\n+            return Err(RefundError::ExceedsOriginalCharge);\n+        }\n+        let receipt = self.ledger.post_credit(account, refund)?;\n         self.notify.send_refund_email(order.customer_id, &receipt);\n         Ok(receipt)\n     }\n }\n",
+  "query": "what condition did the fix add comparing the refund to the original_charge?",
+  "gold_answer": "if refund > original_charge",
+  "critical_atoms": [
+    "src/billing/refund.rs"
+  ],
+  "notes": "The added guard is the only line carrying both query tokens (refund AND original_charge), so bm25 ranks it top and keeps it, while recency (prefers trailing lines) and forced_only drop it; the audit-critical changed file path lives only on the diff/---/+++ headers and is force-kept."
+}
