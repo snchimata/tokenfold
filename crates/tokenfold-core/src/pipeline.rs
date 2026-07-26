@@ -366,6 +366,10 @@ fn apply_single_transform(
             // not that Phase 2 ship distinct values per mode).
             transforms::schema::compact_schema(bytes, 1).map_err(|e| e.to_string())
         }
+        TransformId::LogFieldFold => {
+            let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+            Ok(transforms::log_fold::fold_log(text).into_bytes())
+        }
         TransformId::LogCompaction => {
             let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
             Ok(transforms::logs::compact(text, false).into_bytes())
@@ -421,6 +425,13 @@ fn validate_safety(
                 if !safety::json_key_order_preserved(before, after) {
                     return false;
                 }
+            }
+        }
+        // log_field_fold restructures templated log lines into a columnar form, so its safety
+        // invariant is exact reversibility: unfolding the output must reproduce the input bytes.
+        TransformId::LogFieldFold => {
+            if !transforms::log_fold::round_trips(before, after) {
+                return false;
             }
         }
         TransformId::LogCompaction | TransformId::DiffCompaction => {}
