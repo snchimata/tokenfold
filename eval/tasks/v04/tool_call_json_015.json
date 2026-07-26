@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_015",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"container_restart_sweep\",\n  \"sweep\": \"crs-b02f7e91\",\n  \"sha256\": \"a68f0d3c\",\n  \"containers\": [\n    {\n      \"container_id\": \"ctr-8a01f2\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f3\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f4\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f5\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f6\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f7\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f8\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01f9\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 137\n    },\n    {\n      \"container_id\": \"ctr-8a01fa\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    },\n    {\n      \"container_id\": \"ctr-8a01fb\",\n      \"restarted_at\": \"2026-07-24T09:15:00Z\",\n      \"exit_code\": 0\n    }\n  ]\n}\n",
+  "query": "which container was terminated because it ran out of memory?",
+  "gold_answer": "\"exit_code\": 137",
+  "critical_atoms": [
+    "crs-b02f7e91",
+    "a68f0d3c"
+  ],
+  "notes": "Ten container-restart records; only ctr-8a01f9 exited with code 137 (every other container exited 0), while the query's 'ran out of memory' shares no vocabulary with 'exit_code' or '137', so bm25 scores every line 0 and falls back to keeping the first few containers by position. At a ~10% budget llmlingua_style's surprisal does pick out the rare '137' token among the repeated '0' exit codes, but recency keeps only the later containers and frequency is drawn to the header lines instead. sweep and sha256 are force-kept on separate header lines."
+}

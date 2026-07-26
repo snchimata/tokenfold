@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_011",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"traffic_shaping_policy_apply\",\n  \"apply\": \"tsa-914b2c\",\n  \"sha256\": \"7d0e4fa1\",\n  \"policies\": [\n    {\n      \"service\": \"checkout-api\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"search-api\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"recs-api\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"media-transcoder\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"billing-api\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"session-store-proxy\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"image-resizer\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"export-worker\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 640,\n      \"throttled\": true\n    },\n    {\n      \"service\": \"geo-lookup\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    },\n    {\n      \"service\": \"pricing-engine\",\n      \"region\": \"us-east-1\",\n      \"bandwidth_kbps\": 20000\n    }\n  ]\n}\n",
+  "query": "which service had its outbound bandwidth capped below its normal ceiling?",
+  "gold_answer": "\"throttled\": true",
+  "critical_atoms": [
+    "tsa-914b2c",
+    "7d0e4fa1"
+  ],
+  "notes": "Ten service policy records; only export-worker carries a throttled line, and the throttled value itself shares no vocabulary with the query, so bm25 scores it 0 -- its only real overlap is the generic word 'service', tied identically across all ten entries, so it defaults to the first one (checkout-api). At a ~10% budget frequency and llmlingua_style are drawn to other service names and the header lines instead, and recency keeps only the tail of the list. apply and sha256 are force-kept on separate header lines from the gold line."
+}

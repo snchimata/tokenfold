@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_012",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"database_migration_runner\",\n  \"run\": \"mig-3a7c081f\",\n  \"rollback\": \"/mig/3a7c081f.sql\",\n  \"steps\": [\n    {\n      \"step_id\": \"0041_add_orders_index\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0042_backfill_customer_region\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0043_drop_legacy_view\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0044_add_ledger_partition\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0045_rename_invoice_column\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0046_add_fk_shipments_orders\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"failed\",\n      \"error_code\": \"23503\"\n    },\n    {\n      \"step_id\": \"0047_backfill_tax_rates\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0048_add_returns_table\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0049_widen_amount_precision\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    },\n    {\n      \"step_id\": \"0050_add_audit_trigger\",\n      \"applied_by\": \"migrations-bot\",\n      \"status\": \"applied\"\n    }\n  ]\n}\n",
+  "query": "which error_code was raised by the failed migration step?",
+  "gold_answer": "\"error_code\": \"23503\"",
+  "critical_atoms": [
+    "mig-3a7c081f",
+    "/mig/3a7c081f.sql"
+  ],
+  "notes": "Ten migration steps; only step 0046 fails, splitting the outcome across two adjacent lines -- 'status': 'failed' and the error_code line beneath it. Both carry one exact query term each and score almost identically under bm25, so the tie is broken by document order and the status line is kept first; at a ~10% budget there is only room for one of the two, and the error_code line loses. frequency and llmlingua_style rank the header path/id lines above it instead, and recency keeps only the trailing steps. run and rollback are force-kept on separate header lines."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "typescript_holdout_013",
+  "family": "typescript_holdout",
+  "tier": "A",
+  "source": "// src/net/retryPolicies.ts\n// policy-manifest: sha1:7c4e9b21fa06\n// last-reviewed: sre-oncall-2026w17\n\nexport type RetryPolicy = readonly [service: string, maxAttempts: number, backoffMs: number];\n\nexport const RETRY_POLICIES: RetryPolicy[] = [\n  [\"auth\", 3, 150],\n  [\"session\", 3, 150],\n  [\"profile\", 3, 200],\n  [\"search\", 2, 250],\n  [\"catalog\", 3, 200],\n  [\"pricing\", 3, 200],\n  [\"inventory\", 2, 300],\n  [\"cart\", 3, 150],\n  [\"checkout\", 4, 400],\n  [\"ledger-settlement\", 7, 4000],\n  [\"shipping\", 3, 300],\n  [\"tax\", 3, 200],\n  [\"fraud-check\", 4, 500],\n  [\"loyalty\", 2, 250],\n  [\"review\", 2, 250],\n  [\"recommendation\", 2, 300],\n  [\"notification\", 3, 200],\n  [\"webhook\", 3, 300],\n  [\"export\", 3, 500],\n  [\"import\", 3, 500],\n  [\"backup\", 2, 1000],\n  [\"sync\", 3, 400],\n  [\"metrics\", 2, 200],\n  [\"logging\", 2, 200],\n  [\"health-check\", 1, 100],\n  [\"config\", 2, 150],\n  [\"feature-flag\", 2, 150],\n  [\"ab-experiment\", 2, 150],\n  [\"support-ticket\", 3, 250],\n];\n\nexport function policyFor(service: string): RetryPolicy | undefined {\n  return RETRY_POLICIES.find(([name]) => name === service);\n}\n",
+  "query": "Before the money-movement step gives up and surfaces an error to the customer, how many attempts and what backoff does it use?",
+  "gold_answer": "[\"ledger-settlement\", 7, 4000],",
+  "critical_atoms": [
+    "src/net/retryPolicies.ts",
+    "sha1:7c4e9b21fa06"
+  ],
+  "notes": "A 30-entry retry-policy tuple array where the query describes the ledger-settlement row by function ('money-movement step ... gives up') rather than by its literal key, so bm25 finds no term overlap and falls back to file order; recency favors the array's last few entries and misses the mid-file settlement row. frequency ties most rows (every service name plus its attempt/backoff pair is locally unique) and lands on an earlier tied row instead. llmlingua_style's surprisal weighting happens to favor the settlement row's unusually large attempt/backoff values, recovering it where the other three selectors do not. The file path and policy-manifest hash sit on their own header lines and are force-kept."
+}
