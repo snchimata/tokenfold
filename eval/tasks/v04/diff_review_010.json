@@ -1,0 +1,13 @@
+{
+  "id": "diff_review_010",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/config/services/replica-overrides.properties b/config/services/replica-overrides.properties\nindex 8f3a1c2d9e0b..4b7e9d0d1a2c 100644\n--- a/config/services/replica-overrides.properties\n+++ b/config/services/replica-overrides.properties\n@@ -1,32 +1,32 @@\n # replica overrides applied per quarterly capacity review\n # change-ticket: CHG-88214\n-auth-service.replicas=4\n+auth-service.replicas=5\n-billing-service.replicas=6\n+billing-service.replicas=7\n-catalog-service.replicas=5\n+catalog-service.replicas=4\n-cart-service.replicas=3\n+cart-service.replicas=4\n-checkout-service.replicas=6\n+checkout-service.replicas=9\n-inventory-service.replicas=4\n+inventory-service.replicas=5\n-notification-service.replicas=2\n+notification-service.replicas=3\n-payments-service.replicas=5\n+payments-service.replicas=6\n-pricing-service.replicas=3\n+pricing-service.replicas=2\n-recommendation-service.replicas=4\n+recommendation-service.replicas=5\n-search-service.replicas=6\n+search-service.replicas=5\n-session-service.replicas=3\n+session-service.replicas=4\n-shipping-service.replicas=4\n+shipping-service.replicas=5\n-tax-service.replicas=2\n+tax-service.replicas=3\n-user-service.replicas=5\n+user-service.replicas=6\n",
+  "query": "What did the diff change checkout-service's replica count to?",
+  "gold_answer": "checkout-service.replicas=9",
+  "critical_atoms": [
+    "4b7e9d0d1a2c",
+    "CHG-88214"
+  ],
+  "notes": "35-line properties diff where every one of 15 services gets a near-identical replicas=N change; only checkout-service's new value answers the query, and it shares the query's vocabulary directly (lexical case). At a ~10% budget, recency (favors the last-listed service) and raw frequency (every line has the same token shape 'X.replicas=N') rank the 15 change lines almost identically, so a selector must actually weigh the query term rather than position or repetition. The hash and ticket id each appear on a single header/comment line, separate from the answer line, keeping the forced floor small relative to the haystack."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "diff_review_013",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/ops/cron/nightly-jobs.crontab b/ops/cron/nightly-jobs.crontab\nindex 5e0a83c1f9d4..1a6f4b9e3c72 100644\n--- a/ops/cron/nightly-jobs.crontab\n+++ b/ops/cron/nightly-jobs.crontab\n@@ -1,32 +1,32 @@\n # schedule-owner: platform-ops\n # audit-id: AUD-70742\n-0 2 * * * /opt/jobs/run-backup-accounts.sh\n+0 3 * * * /opt/jobs/run-backup-accounts.sh\n-0 2 * * * /opt/jobs/run-backup-billing.sh\n+0 1 * * * /opt/jobs/run-backup-billing.sh\n-0 2 * * * /opt/jobs/run-backup-carts.sh\n+0 4 * * * /opt/jobs/run-backup-carts.sh\n-0 2 * * * /opt/jobs/run-backup-catalog.sh\n+0 3 * * * /opt/jobs/run-backup-catalog.sh\n-0 2 * * * /opt/jobs/run-backup-inventory.sh\n+0 1 * * * /opt/jobs/run-backup-inventory.sh\n-0 2 * * * /opt/jobs/run-backup-invoices.sh\n+0 3 * * * /opt/jobs/run-backup-invoices.sh\n-0 2 * * * /opt/jobs/run-backup-metrics.sh\n+0 * * * * /opt/jobs/run-backup-metrics.sh\n-0 2 * * * /opt/jobs/run-backup-notifications.sh\n+0 4 * * * /opt/jobs/run-backup-notifications.sh\n-0 2 * * * /opt/jobs/run-backup-orders.sh\n+0 1 * * * /opt/jobs/run-backup-orders.sh\n-0 2 * * * /opt/jobs/run-backup-payments.sh\n+0 3 * * * /opt/jobs/run-backup-payments.sh\n-0 2 * * * /opt/jobs/run-backup-pricing.sh\n+0 4 * * * /opt/jobs/run-backup-pricing.sh\n-0 2 * * * /opt/jobs/run-backup-reviews.sh\n+0 1 * * * /opt/jobs/run-backup-reviews.sh\n-0 2 * * * /opt/jobs/run-backup-search.sh\n+0 3 * * * /opt/jobs/run-backup-search.sh\n-0 2 * * * /opt/jobs/run-backup-sessions.sh\n+0 4 * * * /opt/jobs/run-backup-sessions.sh\n-0 2 * * * /opt/jobs/run-backup-shipping.sh\n+0 1 * * * /opt/jobs/run-backup-shipping.sh\n",
+  "query": "Which nightly job was changed to run every hour instead of once a day?",
+  "gold_answer": "0 * * * * /opt/jobs/run-backup-metrics.sh",
+  "critical_atoms": [
+    "1a6f4b9e3c72",
+    "AUD-70742"
+  ],
+  "notes": "36-line crontab diff: 15 jobs each shift their nightly hour by one (formatted identically as '0 N * * * /opt/jobs/run-backup-X.sh'); only the metrics job's schedule changes shape entirely (to '0 * * * *'), which the query paraphrases as 'every hour' without naming the job or the cron syntax (semantic/structural case). Every line shares the tokens 'run-backup' and 'jobs', so term-overlap and frequency selectors can't discriminate; only recognizing the one structurally different schedule works at a tight budget. Audit id and index hash each sit on one comment line, apart from the answer line."
+}

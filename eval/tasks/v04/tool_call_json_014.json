@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_014",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"cache_invalidation_batch\",\n  \"batch\": \"cib-4e9a13\",\n  \"lock\": \"/cache/4e9a13.lock\",\n  \"targets\": [\n    {\n      \"cache_key\": \"checkout:cart:summary:v2\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"conflicted\",\n      \"conflict\": \"cart:totals:v2\"\n    },\n    {\n      \"cache_key\": \"profile:avatar:thumb:v1\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"search:suggest:top:v3\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"pricing:region:emea:v1\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"session:idle:timeout:v2\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"recs:homepage:feed:v4\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"inventory:sku:count:v1\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"notif:digest:daily:v2\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"billing:invoice:pdf:v1\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    },\n    {\n      \"cache_key\": \"catalog:facet:filters:v3\",\n      \"owner\": \"checkout-team-cache-pool\",\n      \"status\": \"invalidated\"\n    }\n  ]\n}\n",
+  "query": "which cache key did checkout:cart:summary:v2 conflict with during invalidation?",
+  "gold_answer": "\"conflict\": \"cart:totals:v2\"",
+  "critical_atoms": [
+    "cib-4e9a13",
+    "/cache/4e9a13.lock"
+  ],
+  "notes": "Nine cache-invalidation targets; only checkout:cart:summary:v2 conflicts, and its conflict value sits one line below the cache_key line that shares the query's literal wording. bm25 ranks both lines near the top, but the cache_key line scores slightly higher and is kept first; at a ~10% budget there is no room left for the conflict line itself. frequency favors other, rarer cache keys, llmlingua_style favors the header lines, and recency keeps only the tail of the list. batch and lock are force-kept on separate header lines."
+}

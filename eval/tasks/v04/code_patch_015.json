@@ -1,0 +1,12 @@
+{
+  "id": "code_patch_015",
+  "family": "code_patch",
+  "tier": "A",
+  "source": "diff --git a/include/ledger_errors.h b/include/ledger_errors.h\nindex 3d9f7c2..0e5b4a8 100644\n--- a/include/ledger_errors.h\n+++ b/include/ledger_errors.h\n@@ -1,38 +1,39 @@\n #define ERR_INVALID_TOKEN 4101\n #define ERR_EXPIRED_SESSION 4102\n #define ERR_RATE_LIMITED 4103\n #define ERR_DUPLICATE_ENTRY 4104\n #define ERR_NOT_FOUND 4105\n #define ERR_PERMISSION_DENIED 4106\n #define ERR_INVALID_SIGNATURE 4107\n #define ERR_CLOCK_SKEW 4108\n #define ERR_MALFORMED_REQUEST 4109\n #define ERR_UNSUPPORTED_VERSION 4110\n #define ERR_PAYLOAD_TOO_LARGE 4111\n #define ERR_CONNECTION_RESET 4112\n #define ERR_TIMEOUT_UPSTREAM 4113\n #define ERR_CIRCUIT_OPEN 4114\n #define ERR_STALE_CACHE 4115\n #define ERR_LOCK_CONTENTION 4116\n #define ERR_QUEUE_FULL 4117\n #define ERR_SCHEMA_MISMATCH 4118\n #define ERR_CHECKSUM_MISMATCH 4119\n+#define ERR_QUOTA_EXCEEDED_STORAGE 4173\n #define ERR_PARTIAL_WRITE 4120\n #define ERR_READ_ONLY_MODE 4121\n #define ERR_MAINTENANCE_WINDOW 4122\n #define ERR_FEATURE_DISABLED 4123\n #define ERR_QUOTA_EXCEEDED_API 4124\n #define ERR_QUOTA_EXCEEDED_BANDWIDTH 4125\n #define ERR_ACCOUNT_SUSPENDED 4126\n #define ERR_ACCOUNT_LOCKED 4127\n #define ERR_BILLING_HOLD 4128\n #define ERR_REGION_BLOCKED 4129\n #define ERR_UNSUPPORTED_CURRENCY 4130\n #define ERR_INVALID_ADDRESS 4131\n #define ERR_DUPLICATE_SHIPMENT 4132\n #define ERR_CARRIER_UNAVAILABLE 4133\n #define ERR_LABEL_VOID_FAILED 4134\n #define ERR_RETURN_WINDOW_CLOSED 4135\n #define ERR_REFUND_ALREADY_ISSUED 4136\n #define ERR_CURRENCY_MISMATCH 4137\n #define ERR_EXPORT_IN_PROGRESS 4138\n",
+  "query": "Which new error code was introduced for the case where a user has no space left to upload additional files?",
+  "gold_answer": "ERR_QUOTA_EXCEEDED_STORAGE 4173",
+  "critical_atoms": [
+    "3d9f7c2..0e5b4a8"
+  ],
+  "notes": "The added #define is paraphrased in the query ('no space left to upload files') without reusing any of its literal macro token ('err_quota_exceeded_storage'), so bm25 scores it no higher than the 37 other ERR_* lines and, like every other selector here, drops it at both a ~10% and a 25% budget. Two existing macros (ERR_QUOTA_EXCEEDED_API, ERR_QUOTA_EXCEEDED_BANDWIDTH) are near-identical decoys sharing its prefix, and recency favors the 19 macros that follow it in the header. No deterministic selector in this set recovers the answer at either ceiling, since matching the paraphrased failure condition to the right macro requires more than term overlap or position."
+}

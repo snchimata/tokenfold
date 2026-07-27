@@ -1,0 +1,13 @@
+{
+  "id": "code_patch_014",
+  "family": "code_patch",
+  "tier": "A",
+  "source": "diff --git a/src/experiments/rollout_flags.js b/src/experiments/rollout_flags.js\nindex 9f2c4d1..6a7e0b3 100644\n--- a/src/experiments/rollout_flags.js\n+++ b/src/experiments/rollout_flags.js\n@@ -1,41 +1,42 @@\n // audit: experiment review ticket EXP-5561\n const ROLLOUT_PERCENT = {\n   newCheckoutFlow: 50,\n   darkModeDefault: 100,\n   aiSearchSuggestions: 10,\n   socialLoginGoogle: 100,\n   socialLoginApple: 75,\n   expressShippingBadge: 25,\n   giftWrapOption: 40,\n   oneClickReorder: 15,\n   savedPaymentMethods: 100,\n   biometricLogin: 30,\n   pushNotificationsOptIn: 60,\n   emailDigestWeekly: 80,\n   smsAlertsEnabled: 20,\n   inAppSurveyPrompt: 5,\n   referralProgramBanner: 35,\n   loyaltyTierBadge: 90,\n   wishlistSharing: 45,\n   productVideoPreview: 20,\n   arTryOnPreview: 8,\n+  quantumCheckoutPreload: 5,\n   priceDropAlerts: 55,\n   backInStockAlerts: 65,\n   bundleDiscountEngine: 30,\n   dynamicPricingTest: 12,\n   guestCheckoutSkip: 70,\n   addressAutocomplete: 100,\n   taxEstimateInline: 85,\n   deliveryEtaBanner: 40,\n   returnsSelfService: 25,\n   chatSupportWidget: 50,\n   orderTrackingMap: 60,\n   subscriptionPause: 20,\n   giftCardBalanceCheck: 90,\n   storeCreditPrompt: 15,\n   multiCurrencyDisplay: 10,\n   localizedReviews: 35,\n   accessibilityHighContrast: 100,\n   reducedMotionMode: 100,\n   cartAbandonmentEmail: 75,\n };\n",
+  "query": "What rollout percentage was set for quantumCheckoutPreload in this patch?",
+  "gold_answer": "quantumCheckoutPreload: 5",
+  "critical_atoms": [
+    "9f2c4d1..6a7e0b3",
+    "EXP-5561"
+  ],
+  "notes": "The added flag sits mid-object among 38 other rollout-percentage entries that are all uniquely named one-liners. At a ~10% budget only bm25 keeps the answer line, since the query repeats the added flag's exact camelCase identifier and no other flag shares that token; recency (favors the 19 flags that follow it), frequency and llmlingua_style (near-tied scores across 38 equally-unique names, so the ascending-index tie-break favors the 19 that precede it), and forced_only all drop it. The index hash and the experiment-ticket comment each sit on their own single line, keeping the forced floor small relative to the budget."
+}

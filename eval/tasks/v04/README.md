@@ -5,16 +5,16 @@ research (`docs/solution-design/model-research.md`). Everything here is **shadow
 measures deterministic keep/drop selectors against downstream tasks; no model is involved and
 nothing reaches a served path.
 
-## Coverage (11 Tier-A fixtures)
+## Coverage (77 Tier-A fixtures across 11 families)
 
 Spanning the required slices from model-research.md §Prerequisites: `log_qa`, `log_multi_service`
 (logs/tool QA), `diff_review`, `code_patch` (diff review / change localization), `code_build_error`
 (build/test failures), `json_schema`, `tool_call_json` (JSON/schema + tool calls),
 `long_context_needle` (long mixed context with an id/hash/path needle), `ccr_marker` (CCR
 reconstruction), and `rust_holdout` + `typescript_holdout` (the project-disjoint Rust/TS hard
-slices). Every fixture is gate-validated and confirmed to *differentiate* selectors (at least one
-selector fails the task at the 25% ceiling, so the report is discriminating rather than trivially
-1.0 everywhere).
+slices). Each family has 7 fixtures (`_001`, `_010`-`_015`). Every fixture is gate-validated and
+confirmed to *differentiate* selectors (at least one selector fails the task at the 25% ceiling,
+so the report is discriminating rather than trivially 1.0 everywhere).
 
 ## Fixture schema
 
@@ -26,7 +26,8 @@ selector fails the task at the 25% ceiling, so the report is discriminating rath
   "source": "the raw captured text to compress",
   "query": "the downstream question the compressed context must still answer",
   "gold_answer": "substring that must survive for the task to be answerable",
-  "critical_atoms": ["ids/hashes/paths that must survive regardless of the selector"]
+  "critical_atoms": ["ids/hashes/paths that must survive regardless of the selector"],
+  "notes": "optional: why this fixture discriminates selectors (which ones fail and why)"
 }
 ```
 
@@ -37,6 +38,9 @@ selector fails the task at the 25% ceiling, so the report is discriminating rath
 - **`gold_answer`** should live in a unit that is *not* a critical atom, so whether the task is
   answerable genuinely depends on the selector + token budget. That is what differentiates the
   baselines (and, later, a learned selector) instead of every policy trivially scoring 1.0.
+- **`notes`** (optional, added from `_010` onward) documents the discrimination design intent per
+  fixture — which selectors are expected to fail the task at tight ceilings and why. The harness
+  ignores it; it exists for humans auditing/extending the corpus.
 
 ## Governance tiers (model-research.md §Prerequisites and Data)
 

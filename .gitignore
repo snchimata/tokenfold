@@ -8,6 +8,8 @@
 # Python bytecode caches (eval/ + python-tests harnesses)
 __pycache__/
 *.pyc
-# v0.4-beta learned-selector: model/training code + weights stay LOCAL, never committed.
+# Unsloth's JIT-compiled kernel cache, written to the repo root on GPU training runs.
+/unsloth_compiled_cache/
+# v0.4 learned-selector research: model/training code + weights + corpus + venvs stay LOCAL, never committed.
 # run_baselines.py discovers this via TOKENFOLD_LEARNED_MODULE and skips it cleanly when absent.
 /eval/learned/
