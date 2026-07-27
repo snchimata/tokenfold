@@ -175,7 +175,11 @@ mod tests {
             round_trips(input.as_bytes(), folded.as_bytes()),
             "round_trips() rejected the fold of {input:?}"
         );
-        assert_eq!(unfold_log(&folded), input, "unfold != original for {input:?}");
+        assert_eq!(
+            unfold_log(&folded),
+            input,
+            "unfold != original for {input:?}"
+        );
     }
 
     #[test]
@@ -186,11 +190,18 @@ mod tests {
             .map(|i| format!("req=req-{i:04} status=200 ms={}\n", 30 + i % 20))
             .collect();
         let folded = fold_log(&input);
-        assert!(folded.starts_with(HEADER), "expected folded form, got {folded:?}");
+        assert!(
+            folded.starts_with(HEADER),
+            "expected folded form, got {folded:?}"
+        );
         // the shared skeleton word "status" is emitted once (in the single template), not per line.
         assert_eq!(folded.matches("status").count(), 1);
-        assert!(folded.len() < input.len(), "fold ({}) not smaller than input ({})",
-                folded.len(), input.len());
+        assert!(
+            folded.len() < input.len(),
+            "fold ({}) not smaller than input ({})",
+            folded.len(),
+            input.len()
+        );
         assert_lossless(&input);
     }
 
@@ -249,7 +260,10 @@ mod tests {
         let folded = fold_log(input);
         // Either it wasn't folded (identity) or, if it were, the pipeline would only adopt it when
         // round_trips holds — so the original is always recoverable.
-        assert_eq!(unfold_log(&folded), if folded == input { input } else { input });
+        assert_eq!(
+            unfold_log(&folded),
+            if folded == input { input } else { input }
+        );
     }
 
     use proptest::prelude::*;
