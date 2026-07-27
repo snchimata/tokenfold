@@ -1,0 +1,12 @@
+{
+  "id": "tool_call_json_001",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"http_request\",\n  \"request_id\": \"req-8c14fa9e2b\",\n  \"params\": {\n    \"method\": \"POST\",\n    \"url\": \"https://api.internal/v2/orders\",\n    \"headers\": {\n      \"content_type\": \"application/json\",\n      \"authorization\": \"Bearer scrubbed\"\n    },\n    \"retry\": {\n      \"max_attempts\": 4,\n      \"backoff_ms\": 250,\n      \"timeout_ms\": 8000\n    },\n    \"pagination\": {\n      \"page_size\": 50,\n      \"cursor\": null\n    }\n  },\n  \"trace\": \"otel-4a2f9b\"\n}\n",
+  "query": "what backoff_ms delay is set in the retry policy?",
+  "gold_answer": "\"backoff_ms\": 250",
+  "critical_atoms": [
+    "req-8c14fa9e2b"
+  ],
+  "notes": "Nested tool-call JSON (structural segmentation deferred; line-segmented). The retry backoff line shares 'backoff_ms' with the query so bm25 keeps it at a tight budget, while recency/frequency/llmlingua/forced_only drop it for later or forced-only lines; the audit-critical request_id sits on a separate line and is force-kept. Gold is the full key:value so containment can't false-match a stray 250."
+}

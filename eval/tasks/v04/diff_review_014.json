@@ -1,0 +1,13 @@
+{
+  "id": "diff_review_014",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/config/flags/rollout-percentages.conf b/config/flags/rollout-percentages.conf\nindex c2a9f047e8b1..7e4d0a9c2f56 100644\n--- a/config/flags/rollout-percentages.conf\n+++ b/config/flags/rollout-percentages.conf\n@@ -1,34 +1,34 @@\n # rollout-owner: growth-eng\n # tracking-id: EXP-33920\n-flag.checkout_v2_ui.rollout=45\n+flag.checkout_v2_ui.rollout=55\n-flag.dark_mode.rollout=20\n+flag.dark_mode.rollout=25\n-flag.one_click_reorder.rollout=10\n+flag.one_click_reorder.rollout=15\n-flag.saved_payment_methods.rollout=30\n+flag.saved_payment_methods.rollout=35\n-flag.guest_checkout.rollout=60\n+flag.guest_checkout.rollout=65\n-flag.express_shipping_badge.rollout=15\n+flag.express_shipping_badge.rollout=20\n-flag.wishlist_sharing.rollout=25\n+flag.wishlist_sharing.rollout=30\n-flag.price_drop_alerts.rollout=40\n+flag.price_drop_alerts.rollout=45\n-flag.new_search_ranking.rollout=90\n+flag.new_search_ranking.rollout=100\n-flag.recommendation_carousel.rollout=35\n+flag.recommendation_carousel.rollout=40\n-flag.loyalty_points_v2.rollout=5\n+flag.loyalty_points_v2.rollout=10\n-flag.split_shipment_ui.rollout=50\n+flag.split_shipment_ui.rollout=55\n-flag.address_autocomplete.rollout=70\n+flag.address_autocomplete.rollout=75\n-flag.review_photos.rollout=15\n+flag.review_photos.rollout=20\n-flag.subscription_pause.rollout=20\n+flag.subscription_pause.rollout=25\n",
+  "query": "Which feature flag reached 100% rollout in this change?",
+  "gold_answer": "new_search_ranking.rollout=100",
+  "critical_atoms": [
+    "7e4d0a9c2f56",
+    "EXP-33920"
+  ],
+  "notes": "36-line feature-flag diff: 15 flags each get a plausible +5 rollout bump (identically formatted 'flag.X.rollout=N'); only new_search_ranking's new value is 100, and the query's '100%' and 'rollout' terms match that line directly (lexical case). Recency (favors later flags) and raw frequency (every line has the same shape) rank the 15 change lines near-identically at a ~10% budget, so a selector must actually notice the query-relevant value rather than position or repetition. Tracking id and blob hash each live on one comment/header line, separate from the answer line."
+}

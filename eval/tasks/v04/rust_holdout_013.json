@@ -1,0 +1,12 @@
+{
+  "id": "rust_holdout_013",
+  "family": "rust_holdout",
+  "tier": "A",
+  "source": "//! Criterion micro-benchmark capture for the tokenfold segment engine (F-066 holdout slice).\n// run-id: cr-2026-0714-77b2\nuse crate::bench::segment::harness;\n\nbench_index_lookup_hot  312 ns/iter (+/- 18)\nbench_index_lookup_warm  298 ns/iter (+/- 21)\nbench_index_insert_hot  455 ns/iter (+/- 27)\nbench_index_insert_warm  441 ns/iter (+/- 24)\nbench_index_delete_hot  389 ns/iter (+/- 19)\nbench_index_delete_warm  402 ns/iter (+/- 22)\nbench_query_plan_simple  211 ns/iter (+/- 14)\nbench_query_plan_join  678 ns/iter (+/- 33)\nbench_query_exec_scan  512 ns/iter (+/- 29)\nbench_query_exec_filter  334 ns/iter (+/- 20)\nbench_cache_get_hit  98 ns/iter (+/- 6)\nbench_cache_get_miss  187 ns/iter (+/- 11)\nbench_cache_put  223 ns/iter (+/- 15)\nbench_cache_evict  276 ns/iter (+/- 17)\nbench_wal_append  601 ns/iter (+/- 31)\nbench_wal_fsync  892 ns/iter (+/- 41)\nbench_wal_replay_small  744 ns/iter (+/- 38)\nbench_segment_merge_hot  567 ns/iter (+/- 30)\nbench_segment_merge_warm  589 ns/iter (+/- 32)\nbench_segment_split_hot  498 ns/iter (+/- 26)\nbench_segment_compact_hot  612 ns/iter (+/- 29)\nbench_segment_compact_warm  634 ns/iter (+/- 30)\nbench_segment_compact_cold  9187 ns/iter (+/- 402)\nbench_segment_flush_hot  523 ns/iter (+/- 28)\nbench_snapshot_export  701 ns/iter (+/- 35)\nbench_snapshot_import  733 ns/iter (+/- 37)\nbench_replica_sync_hot  445 ns/iter (+/- 23)\nbench_replica_catchup  667 ns/iter (+/- 34)\nbench_gc_sweep_hot  356 ns/iter (+/- 19)\nbench_gc_compact_hot  589 ns/iter (+/- 27)\nbench_metrics_emit  145 ns/iter (+/- 9)\nbench_metrics_rollup  267 ns/iter (+/- 16)\n",
+  "query": "Scanning this criterion run, which single benchmark's measured latency is roughly an order of magnitude above every other result, and what is that measured value?",
+  "gold_answer": "bench_segment_compact_cold  9187 ns/iter",
+  "critical_atoms": [
+    "cr-2026-0714-77b2"
+  ],
+  "notes": "Semantic case: the query names no bench, module, or number, so bm25 (which needs query term overlap) has nothing to key on and treats all 31 `bench_name  N ns/iter (+/- M)` rows as equally irrelevant; identifying the outlier requires comparing magnitudes across rows, not matching vocabulary. recency is also misled: the outlier sits roughly two thirds through the capture, well before the last several rows a recency-only policy would keep at a tight budget. The run id is on its own force-kept header line, separate from the outlier row."
+}

@@ -15,6 +15,7 @@ pub enum TransformId {
     JsonFieldFold,
     JsonValueDict,
     SchemaCompaction,
+    LogFieldFold,
     LogCompaction,
     DiffCompaction,
 }
@@ -26,6 +27,7 @@ impl TransformId {
             TransformId::JsonFieldFold => "json_field_fold",
             TransformId::JsonValueDict => "json_value_dict",
             TransformId::SchemaCompaction => "schema_compaction",
+            TransformId::LogFieldFold => "log_field_fold",
             TransformId::LogCompaction => "log_compaction",
             TransformId::DiffCompaction => "diff_compaction",
         }
@@ -139,6 +141,25 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
         max_ratio_aggressive: 0.50,
         task_scopes: &[TaskScope::All],
         applicable_formats: &[InputFormat::OpenAiJson, InputFormat::AnthropicJson],
+    },
+    // log_field_fold (v0.4): reversible columnar fold of TEMPLATED log lines — the log-line
+    // analogue of json_field_fold (emit each shared line skeleton once + per-line captured fields).
+    // Lossless (round-trip gated in the pipeline), so max_ratio is unrestricted (1.0), but like
+    // log_compaction it restructures what the model sees, so it stays out of Conservative and ships
+    // behind --experimental until its fidelity gate is green (the same path json_field_fold and
+    // log_compaction took). Runs before the lossy log_compaction (lossless-before-lossy ordering).
+    ModeEntry {
+        transform_id: TransformId::LogFieldFold,
+        version: "1.0.0",
+        conservative_enabled: false,
+        balanced_enabled: false,
+        aggressive_enabled: false,
+        experimental: true,
+        max_ratio_conservative: 0.0,
+        max_ratio_balanced: 1.0,
+        max_ratio_aggressive: 1.0,
+        task_scopes: &[TaskScope::All],
+        applicable_formats: &[InputFormat::PlainText, InputFormat::CommandOutput],
     },
     ModeEntry {
         transform_id: TransformId::LogCompaction,

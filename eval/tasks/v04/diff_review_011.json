@@ -1,0 +1,13 @@
+{
+  "id": "diff_review_011",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/infra/nginx/upstream-pool-checkout.conf b/infra/nginx/upstream-pool-checkout.conf\nindex a91f4e2b7c31..d02c9a4f1e88 100644\n--- a/infra/nginx/upstream-pool-checkout.conf\n+++ b/infra/nginx/upstream-pool-checkout.conf\n@@ -2,30 +2,30 @@ upstream checkout_pool {\n # incident-ref: INC-51309\n-    server 10.4.2.10:8443 weight=6 max_fails=3;\n+    server 10.4.2.10:8443 weight=5 max_fails=3;\n-    server 10.4.2.11:8443 weight=6 max_fails=3;\n+    server 10.4.2.11:8443 weight=4 max_fails=3;\n-    server 10.4.2.12:8443 weight=7 max_fails=3;\n+    server 10.4.2.12:8443 weight=6 max_fails=3;\n-    server 10.4.2.13:8443 weight=5 max_fails=3;\n+    server 10.4.2.13:8443 weight=3 max_fails=3;\n-    server 10.4.2.14:8443 weight=6 max_fails=3;\n+    server 10.4.2.14:8443 weight=4 max_fails=3;\n-    server 10.4.2.15:8443 weight=7 max_fails=3;\n+    server 10.4.2.15:8443 weight=5 max_fails=3;\n-    server 10.4.2.16:8443 weight=5 max_fails=3;\n+    server 10.4.2.16:8443 weight=3 max_fails=3;\n-    server 10.4.2.17:8443 weight=6 max_fails=3;\n+    server 10.4.2.17:8443 weight=6 max_fails=3;\n-    server 10.4.2.18:8443 weight=7 max_fails=3;\n+    server 10.4.2.18:8443 weight=0 max_fails=3;\n-    server 10.4.2.19:8443 weight=6 max_fails=3;\n+    server 10.4.2.19:8443 weight=4 max_fails=3;\n-    server 10.4.2.20:8443 weight=7 max_fails=3;\n+    server 10.4.2.20:8443 weight=5 max_fails=3;\n-    server 10.4.2.21:8443 weight=5 max_fails=3;\n+    server 10.4.2.21:8443 weight=3 max_fails=3;\n-    server 10.4.2.22:8443 weight=6 max_fails=3;\n+    server 10.4.2.22:8443 weight=6 max_fails=3;\n-    server 10.4.2.23:8443 weight=6 max_fails=3;\n+    server 10.4.2.23:8443 weight=4 max_fails=3;\n-    server 10.4.2.24:8443 weight=7 max_fails=3;\n+    server 10.4.2.24:8443 weight=5 max_fails=3;\n",
+  "query": "Which backend server in the pool was drained (set to zero weight) during this rebalance?",
+  "gold_answer": "10.4.2.18:8443 weight=0",
+  "critical_atoms": [
+    "d02c9a4f1e88",
+    "INC-51309"
+  ],
+  "notes": "36-line nginx upstream-pool diff: 15 backend servers each get a small weight change, formatted identically ('server IP:PORT weight=N max_fails=3;'). Only 10.4.2.18 is drained to weight=0, but the query never names the IP or writes 'weight=0' -- it says 'drained', a semantic paraphrase (structural/lexically distant case). Every line shares the tokens 'server', 'weight', and 'max_fails', so term-overlap and frequency selectors see 15 equally-scored candidates; only picking the one structurally distinct value (0 vs everyone else's 3-6) answers the query. The index hash and incident ref sit on their own single lines, apart from the answer line."
+}

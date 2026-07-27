@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_010",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"webhook_dispatch_batch\",\n  \"batch\": \"wh-6f2a19c0\",\n  \"sha256\": \"2eaf80c1\",\n  \"deliveries\": [\n    {\n      \"endpoint\": \"svc-checkout/order-updated\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-shipping/label-created\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-notify/email-queued\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-loyalty/points-accrued\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-tax/invoice-finalized\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-ledger/txn-posted\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 500,\n      \"error_reason\": \"UPSTREAM_TIMEOUT\"\n    },\n    {\n      \"endpoint\": \"svc-search/index-refreshed\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-catalog/price-updated\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-returns/rma-opened\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    },\n    {\n      \"endpoint\": \"svc-crm/contact-synced\",\n      \"region\": \"us-east-1\",\n      \"http_status\": 200\n    }\n  ]\n}\n",
+  "query": "what error_reason was recorded for the failed webhook delivery attempt?",
+  "gold_answer": "\"error_reason\": \"UPSTREAM_TIMEOUT\"",
+  "critical_atoms": [
+    "wh-6f2a19c0",
+    "2eaf80c1"
+  ],
+  "notes": "Ten near-identical delivery records; only the svc-ledger entry carries an error_reason line (every other delivery just reports http_status 200). At a ~10% budget bm25 exactly matches 'error_reason' from the query and keeps the line, but frequency instead favors other endpoint path segments that happen to score rarer, and llmlingua_style spends its non-forced budget on the tool-name line instead; recency keeps only the trailing brackets of the list. batch and sha256 are force-kept on their own header lines, separate from the gold line."
+}

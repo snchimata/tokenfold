@@ -1,0 +1,13 @@
+{
+  "id": "typescript_holdout_014",
+  "family": "typescript_holdout",
+  "tier": "A",
+  "source": "// src/build/versionPins.ts\n// pin-manifest: pins-rev-2026-07-r3\n// generated-from: package-lock.json\n\nexport const VERSION_PINS: Record<string, string> = {\n  \"react\": \"18.3.1\",\n  \"react-dom\": \"18.3.1\",\n  \"typescript\": \"5.5.4\",\n  \"eslint\": \"9.7.0\",\n  \"prettier\": \"3.3.3\",\n  \"vite\": \"5.3.5\",\n  \"vitest\": \"2.0.5\",\n  \"zod\": \"3.23.8\",\n  \"axios\": \"1.7.2\",\n  \"lodash\": \"4.17.21\",\n  \"date-fns\": \"3.6.0\",\n  \"@acme/img-resize\": \"6.2.9\",\n  \"@acme/ui-kit\": \"4.1.0\",\n  \"@acme/auth-client\": \"2.9.3\",\n  \"@acme/logger\": \"1.4.2\",\n  \"@acme/config-loader\": \"1.0.7\",\n  \"@acme/feature-flags\": \"2.2.1\",\n  \"@acme/cache-client\": \"3.0.5\",\n  \"@acme/queue-client\": \"1.6.0\",\n  \"@acme/db-client\": \"5.3.2\",\n  \"webpack\": \"5.93.0\",\n  \"babel-loader\": \"9.1.3\",\n  \"postcss\": \"8.4.40\",\n  \"tailwindcss\": \"3.4.7\",\n  \"jest\": \"29.7.0\",\n  \"ts-node\": \"10.9.2\",\n  \"husky\": \"9.1.4\",\n  \"commitlint\": \"19.3.0\",\n  \"storybook\": \"8.2.6\",\n  \"rollup\": \"4.19.1\",\n};\n\nexport function isPinned(pkg: string): boolean {\n  return pkg in VERSION_PINS;\n}\n",
+  "query": "What version is @acme/img-resize pinned to?",
+  "gold_answer": "\"@acme/img-resize\": \"6.2.9\",",
+  "critical_atoms": [
+    "src/build/versionPins.ts",
+    "pins-rev-2026-07-r3"
+  ],
+  "notes": "A 30-entry semver pin registry where the query names the package directly (@acme/img-resize), so bm25's idf on the rare 'img'/'resize' tokens finds it comfortably inside the ~10% ceiling. Recency favors the registry's last few pins and misses the mid-file entry; frequency and llmlingua_style tie across most rows, since every package name and version string is locally unique, and land on earlier tied rows instead. The file path and pin-manifest id sit on their own header lines and are force-kept."
+}

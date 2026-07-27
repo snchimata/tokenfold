@@ -1,0 +1,12 @@
+{
+  "id": "rust_holdout_012",
+  "family": "rust_holdout",
+  "tier": "A",
+  "source": "//! Wire-protocol error code table for the tokenfold RPC holdout crate (F-058 holdout slice).\nuse crate::rpc::wire::ErrorKind;\n\n/// Numeric codes exchanged on the wire; must stay stable across minor releases.\npub const ERROR_CODES: &[(ErrorKind, u32)] = &[\n    (ErrorKind::Ok, 0),\n    (ErrorKind::Unknown, 1),\n    (ErrorKind::Timeout, 2),\n    (ErrorKind::Cancelled, 3),\n    (ErrorKind::InvalidArgument, 4),\n    (ErrorKind::DeadlineExceeded, 5),\n    (ErrorKind::NotFound, 6),\n    (ErrorKind::AlreadyExists, 7),\n    (ErrorKind::PermissionDenied, 8),\n    (ErrorKind::ResourceExhausted, 9),\n    (ErrorKind::FailedPrecondition, 10),\n    (ErrorKind::Aborted, 11),\n    (ErrorKind::OutOfRange, 12),\n    (ErrorKind::Unimplemented, 13),\n    (ErrorKind::Internal, 14),\n    (ErrorKind::Unavailable, 15),\n    (ErrorKind::DataLoss, 16),\n    (ErrorKind::Unauthenticated, 17),\n    (ErrorKind::TimeoutExceeded, 18),\n    (ErrorKind::QuotaExceeded, 19),\n    (ErrorKind::RetryLater, 20),\n    (ErrorKind::StaleRead, 21),\n    (ErrorKind::LeaseExpired, 22),\n    (ErrorKind::ShardMoved, 23),\n    (ErrorKind::WriteConflict, 24),\n    (ErrorKind::ReadOnlyMode, 25),\n    (ErrorKind::SnapshotTooOld, 26),\n    (ErrorKind::CompactionInProgress, 27),\n    (ErrorKind::ReplicaLagging, 28),\n];\n\nimpl ErrorKind {\n    pub fn code(self) -> u32 {\n        ERROR_CODES.iter().find(|(k, _)| *k == self).map(|(_, c)| *c).unwrap_or(1)\n    }\n}\n",
+  "query": "What numeric error code is assigned to ErrorKind::TimeoutExceeded in the wire protocol table?",
+  "gold_answer": "ErrorKind::TimeoutExceeded, 18",
+  "critical_atoms": [
+    "crate::rpc::wire"
+  ],
+  "notes": "Lexical case: the query repeats 'ErrorKind::TimeoutExceeded' verbatim, which appears on the gold row. At a tight budget that row sits among 28 near-identical `(ErrorKind::Variant, N)` tuple rows, each a unique variant/code pair, so raw term frequency stays flat and recency instead keeps only the last handful of variants (ReadOnlyMode..ReplicaLagging), missing the mid-table TimeoutExceeded row; frequency and llmlingua_style also have little to key on since every row shares the same tuple-literal shape. The rpc::wire module path is on its own force-kept use line, separate from the gold row."
+}

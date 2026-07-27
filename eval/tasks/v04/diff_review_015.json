@@ -1,0 +1,13 @@
+{
+  "id": "diff_review_015",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/.ci/pipelines/build-matrix.yml b/.ci/pipelines/build-matrix.yml\nindex 6b1d84f2a0c7..2f9e5a1d8b34 100644\n--- a/.ci/pipelines/build-matrix.yml\n+++ b/.ci/pipelines/build-matrix.yml\n@@ -3,32 +3,32 @@ jobs:\n # pipeline-owner: build-infra\n # audit-id: BLD-60417\n-  lint: { timeout_minutes: 6 }\n+  lint: { timeout_minutes: 7 }\n-  unit_tests: { timeout_minutes: 9 }\n+  unit_tests: { timeout_minutes: 8 }\n-  integration_tests: { timeout_minutes: 12 }\n+  integration_tests: { timeout_minutes: 11 }\n-  build_frontend: { timeout_minutes: 7 }\n+  build_frontend: { timeout_minutes: 8 }\n-  build_backend: { timeout_minutes: 8 }\n+  build_backend: { timeout_minutes: 19 }\n-  e2e_tests: { timeout_minutes: 14 }\n+  e2e_tests: { timeout_minutes: 13 }\n-  docker_build: { timeout_minutes: 10 }\n+  docker_build: { timeout_minutes: 11 }\n-  security_scan: { timeout_minutes: 9 }\n+  security_scan: { timeout_minutes: 8 }\n-  dependency_audit: { timeout_minutes: 6 }\n+  dependency_audit: { timeout_minutes: 7 }\n-  contract_tests: { timeout_minutes: 8 }\n+  contract_tests: { timeout_minutes: 9 }\n-  perf_smoke: { timeout_minutes: 11 }\n+  perf_smoke: { timeout_minutes: 10 }\n-  deploy_staging: { timeout_minutes: 5 }\n+  deploy_staging: { timeout_minutes: 6 }\n-  migration_check: { timeout_minutes: 9 }\n+  migration_check: { timeout_minutes: 8 }\n-  asset_upload: { timeout_minutes: 4 }\n+  asset_upload: { timeout_minutes: 5 }\n-  notify_slack: { timeout_minutes: 3 }\n+  notify_slack: { timeout_minutes: 4 }\n",
+  "query": "Which CI job's timeout increased the most in this change?",
+  "gold_answer": "build_backend: { timeout_minutes: 19 }",
+  "critical_atoms": [
+    "2f9e5a1d8b34",
+    "BLD-60417"
+  ],
+  "notes": "36-line CI pipeline diff: 15 jobs each get a plausible +/-1 minute timeout adjustment (identically formatted '  X: { timeout_minutes: N }'); only build_backend jumps by 11 minutes, and the query never names that job -- it asks for the largest increase, which requires comparing magnitudes across lines rather than matching query vocabulary (semantic/structural case). Every line shares the token 'timeout_minutes', so term-overlap selectors see 15 equally 'relevant' lines; only the one numeric outlier answers the query. Audit id and index hash each sit on one comment line, apart from the answer line."
+}

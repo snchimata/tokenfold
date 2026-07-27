@@ -1,0 +1,13 @@
+{
+  "id": "typescript_holdout_011",
+  "family": "typescript_holdout",
+  "tier": "A",
+  "source": "// src/config/serviceTimeouts.ts\n// generated: do not hand-edit apart from the registry below\n// manifest-id: cfg-2026-04-11-timeouts\n\nexport const SERVICE_TIMEOUTS_MS: Record<string, number> = {\n  authService: 2500,\n  sessionService: 2000,\n  profileService: 3000,\n  searchService: 3500,\n  notificationService: 4000,\n  emailService: 4500,\n  smsService: 4500,\n  inventoryService: 5000,\n  catalogService: 5000,\n  pricingService: 5500,\n  cartService: 3000,\n  checkoutService: 6000,\n  cardNetworkRelay: 12000,\n  shippingService: 5000,\n  taxService: 4000,\n  fraudService: 6500,\n  loyaltyService: 3000,\n  reviewService: 3500,\n  recommendationService: 4000,\n  analyticsService: 2000,\n  auditService: 3000,\n  webhookService: 5000,\n  reportingService: 7000,\n  exportService: 8000,\n  importService: 8000,\n  backupService: 9000,\n  syncService: 4000,\n  metricsService: 2000,\n  loggingService: 2000,\n  healthCheckService: 1000,\n};\n\nexport function timeoutFor(service: keyof typeof SERVICE_TIMEOUTS_MS): number {\n  return SERVICE_TIMEOUTS_MS[service] ?? 5000;\n}\n",
+  "query": "How many milliseconds does the platform wait on the card-network settlement relay before giving up?",
+  "gold_answer": "cardNetworkRelay: 12000,",
+  "critical_atoms": [
+    "src/config/serviceTimeouts.ts",
+    "cfg-2026-04-11-timeouts"
+  ],
+  "notes": "A 30-entry service-timeout map (SERVICE_TIMEOUTS_MS) where the query describes the payment relay by function ('card-network settlement relay ... giving up') instead of citing its camelCase key cardNetworkRelay, so bm25 finds no literal term overlap and falls back to file order. Recency favors the map's last few entries (metrics/logging/health-check) and frequency/llmlingua_style tie across most rows, since every key+value pair is locally unique, landing on earlier tied rows instead of the mid-file relay entry. All four heuristic selectors miss it at the ~10% ceiling; the file path and manifest id sit on their own header lines and are force-kept."
+}

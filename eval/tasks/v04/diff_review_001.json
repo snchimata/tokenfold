@@ -1,0 +1,10 @@
+{
+  "id": "diff_review_001",
+  "family": "diff_review",
+  "tier": "A",
+  "source": "diff --git a/src/auth/session.rs b/src/auth/session.rs\n--- a/src/auth/session.rs\n+++ b/src/auth/session.rs\n@@ -18,7 +18,7 @@ impl SessionStore {\n     pub fn validate_token(&self, token: &str) -> bool {\n-        self.tokens.contains(token)\n+        self.tokens.contains(token) && !self.revoked.contains(token)\n     }\n \n     pub fn revoke(&self, token: &str) {\n         self.revoked.insert(token.to_string());\n     }\n",
+  "query": "which function changed its return condition to also check revoked tokens?",
+  "gold_answer": "validate_token",
+  "critical_atoms": ["src/auth/session.rs"],
+  "notes": "The changed function signature line carries the answer and is query-relevant; the file path (audit-critical for change localization) sits on the +++/--- headers and is force-kept."
+}
