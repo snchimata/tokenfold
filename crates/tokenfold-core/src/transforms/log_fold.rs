@@ -259,11 +259,8 @@ mod tests {
         let input = "__tf_logfold1__\n[\"x\"]\n0 boom";
         let folded = fold_log(input);
         // Either it wasn't folded (identity) or, if it were, the pipeline would only adopt it when
-        // round_trips holds — so the original is always recoverable.
-        assert_eq!(
-            unfold_log(&folded),
-            if folded == input { input } else { input }
-        );
+        // round_trips holds — so the original is always recoverable either way.
+        assert_eq!(unfold_log(&folded), input);
     }
 
     use proptest::prelude::*;
