@@ -8,5 +8,7 @@
 # Python bytecode caches (eval/ + python-tests harnesses)
 __pycache__/
 *.pyc
+# Unsloth's JIT-compiled kernel cache, written to the repo root on GPU training runs.
+/unsloth_compiled_cache/
 # v0.4 learned-selector research: model/training code + weights + corpus + venvs stay LOCAL, never committed.
 /eval/learned/
