@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.3] - 2026-07-27
+
+- Add `log_field_fold`, a losslessly reversible columnar transform for
+  templated log lines: repeated line skeletons are emitted once, with
+  per-line variable fields captured as a compact row. Ships behind
+  `--experimental`.
+- Add an `llmlingua_style` deterministic selector baseline and grow the
+  research-only v0.4-alpha corpus to 11 paired-task families (77 fixtures) in
+  the local eval harness used to benchmark keep/drop selectors ahead of any
+  learned model. Shadow-only; nothing served, no runtime behavior change.
+- Wire a model-free seam into the eval harness so a locally trained keep/drop
+  selector can register itself via `TOKENFOLD_LEARNED_MODULE` and be scored
+  under the same critical-atom-survival and token-ceiling gates as the
+  deterministic baselines. No model code, weights, or training data ship;
+  only the seam.
+
 ## [0.3.2] - 2026-07-18
 
 - Compose an external, optional RTK command filter ahead of Tokenfold with
