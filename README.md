@@ -26,6 +26,21 @@ JSON-data results are lossless. The schema benchmark preserves required
 fields and descriptions while trimming redundant examples. Repetitive,
 structured data benefits most.
 
+## What it does
+
+- **CLI** — `tokenfold compress` / `inspect` / `diff` any file or stdin;
+  `tokenfold wrap <command>` compresses a command's own output in place.
+- **Library** — the same Rust engine and receipt shape from `pip install tokenfold`
+  or `npm install tokenfold`, so behavior never drifts between languages.
+- **Proxy** — `tokenfold-proxy` sits in front of your provider, compresses
+  requests, and streams responses through untouched.
+- **MCP server** — `tokenfold mcp serve` exposes compress/inspect/retrieve/stats
+  to any MCP-compatible agent or editor.
+- **Receipts, not guesses** — every call returns exact token counts, the
+  transforms it applied, and any warnings, so you can audit what changed.
+- **No ML tax** — one static Rust binary compresses a JSON payload; no Python
+  runtime, no model download, no GPU.
+
 ## Quick start
 
 Install the interface that fits your stack:
@@ -128,6 +143,25 @@ messages · schemas · JSON · logs · diffs
                     │
                     └───────────▶ compressed payload + receipt
 ```
+
+## When to use tokenfold · when to look elsewhere
+
+**Good fit if you...**
+
+- want an exact, auditable receipt for every call instead of an estimate
+- need lossless guarantees on structured data — JSON, schemas, tool
+  arguments — before it reaches a billing meter
+- want to ship a single static binary with no ML runtime, model download,
+  or GPU in the dependency graph
+- are shrinking logs, diffs, and repetitive tool output before they hit an
+  LLM, a log store, or a queue
+
+**Look elsewhere if you...**
+
+- need query-aware summarization of unstructured prose — that calls for a
+  model, and tokenfold stays deterministic on purpose
+- want a hosted API to call — tokenfold runs entirely on your machine or
+  your infrastructure; there is nothing to sign up for
 
 ## What it improves
 
@@ -256,3 +290,7 @@ receipt, and see how many tokens your application can stop sending today.
 ```bash
 pip install tokenfold
 ```
+
+If tokenfold earns a place in your stack, a ⭐ on
+[GitHub](https://github.com/snchimata/tokenfold) helps the next team
+find it.
