@@ -1,0 +1,12 @@
+{
+  "id": "rust_holdout_015",
+  "family": "rust_holdout",
+  "tier": "A",
+  "source": "//! Workspace dependency pin manifest for the tokenfold ingest holdout crate (F-081 holdout slice).\nuse crate::workspace::manifest::PinTable;\n\npub const PINNED_DEPS: &[(&str, &str)] = &[\n    (\"serde\", \"1.0.204\"),\n    (\"serde_json\", \"1.0.120\"),\n    (\"tokio\", \"1.38.0\"),\n    (\"tokio-util\", \"0.7.11\"),\n    (\"bytes\", \"1.6.0\"),\n    (\"thiserror\", \"1.0.61\"),\n    (\"anyhow\", \"1.0.86\"),\n    (\"tracing\", \"0.1.40\"),\n    (\"tracing-subscriber\", \"0.3.18\"),\n    (\"clap\", \"4.5.7\"),\n    (\"regex\", \"1.10.5\"),\n    (\"once_cell\", \"1.19.0\"),\n    (\"parking_lot\", \"0.12.3\"),\n    (\"crossbeam\", \"0.8.4\"),\n    (\"rayon\", \"1.10.0\"),\n    (\"itertools\", \"0.13.0\"),\n    (\"smallvec\", \"1.13.2\"),\n    (\"indexmap\", \"2.2.6\"),\n    (\"bincode\", \"1.3.3\"),\n    (\"prost\", \"0.13.1\"),\n    (\"tonic\", \"0.12.0\"),\n    (\"hyper\", \"1.4.1\"),\n    (\"http\", \"1.1.0\"),\n    (\"url\", \"2.5.2\"),\n    (\"uuid\", \"1.9.1\"),\n    (\"chrono\", \"0.4.38\"),\n    (\"rand\", \"0.8.5\"),\n    (\"zstd\", \"0.13.1\"),\n    (\"lz4_flex\", \"0.11.3\"),\n    (\"memmap2\", \"0.9.4\"),\n    (\"rustls\", \"2.0.0-rc.3\"),\n    (\"webpki-roots\", \"0.26.3\"),\n    (\"h2\", \"0.4.5\"),\n    (\"tower\", \"0.4.13\"),\n];\n",
+  "query": "Scanning the workspace's pinned dependency versions, which single entry uses a pre-release version string instead of a stable semver, and what is that exact pin?",
+  "gold_answer": "(\"rustls\", \"2.0.0-rc.3\")",
+  "critical_atoms": [
+    "crate::workspace::manifest"
+  ],
+  "notes": "Semantic case: the query names no crate or version, so bm25 has no term overlap with any of the 34 `(\"crate\", \"version\")` tuple rows; spotting the one pre-release pin requires recognizing the '-rc.' pattern structurally against otherwise plain X.Y.Z strings, not matching vocabulary. The pin sits two thirds through the table, so recency keeps only the last few rows (webpki-roots, h2, tower) and misses it; frequency and llmlingua_style have little to key on since every row shares the same tuple-literal shape. The workspace::manifest module path is on its own force-kept use line, separate from the pin row."
+}

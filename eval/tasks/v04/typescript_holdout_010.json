@@ -1,0 +1,13 @@
+{
+  "id": "typescript_holdout_010",
+  "family": "typescript_holdout",
+  "tier": "A",
+  "source": "// src/errors/codes.ts\n// Central error-code registry for the platform gateway.\n// audit-hash: sha256:4b9c1e2a7f306d58\n\nexport enum ErrorCode {\n  E_AUTH_MISSING = 4001,\n  E_AUTH_EXPIRED = 4002,\n  E_AUTH_INVALID = 4003,\n  E_AUTH_REVOKED = 4004,\n  E_SESSION_STALE = 4010,\n  E_SESSION_LOCKED = 4011,\n  E_SESSION_MISSING = 4012,\n  E_TOKEN_MALFORMED = 4020,\n  E_TOKEN_EXPIRED = 4021,\n  E_TOKEN_REUSED = 4022,\n  E_SCOPE_DENIED = 4030,\n  E_SCOPE_UNKNOWN = 4031,\n  E_QUOTA_EXCEEDED = 4040,\n  E_QUOTA_RESET_PENDING = 4041,\n  E_RATE_LIMIT_EXCEEDED = 4291,\n  E_RATE_WINDOW_INVALID = 4292,\n  E_PAYLOAD_TOO_LARGE = 4050,\n  E_PAYLOAD_MALFORMED = 4051,\n  E_PAYLOAD_EMPTY = 4052,\n  E_HEADER_MISSING = 4060,\n  E_HEADER_INVALID = 4061,\n  E_ROUTE_NOT_FOUND = 4070,\n  E_ROUTE_DEPRECATED = 4071,\n  E_METHOD_NOT_ALLOWED = 4080,\n  E_CONTENT_TYPE_UNSUPPORTED = 4090,\n  E_VERSION_UNSUPPORTED = 4100,\n  E_UPSTREAM_TIMEOUT = 5010,\n  E_UPSTREAM_UNAVAILABLE = 5011,\n  E_UPSTREAM_RESET = 5012,\n  E_CACHE_MISS_FATAL = 5020,\n  E_CACHE_CORRUPT = 5021,\n  E_DB_CONN_LOST = 5030,\n  E_DB_DEADLOCK = 5031,\n  E_DB_CONSTRAINT = 5032,\n  E_QUEUE_FULL = 5040,\n  E_QUEUE_STALLED = 5041,\n  E_CONFIG_MISSING = 5050,\n  E_CONFIG_INVALID = 5051,\n  E_INTERNAL_UNKNOWN = 5999,\n}\n\nexport function isRetryable(code: ErrorCode): boolean {\n  return code >= 5000 && code !== ErrorCode.E_INTERNAL_UNKNOWN;\n}\n",
+  "query": "What numeric value is assigned to the E_RATE_LIMIT_EXCEEDED error code?",
+  "gold_answer": "E_RATE_LIMIT_EXCEEDED = 4291,",
+  "critical_atoms": [
+    "src/errors/codes.ts",
+    "sha256:4b9c1e2a7f306d58"
+  ],
+  "notes": "A 44-line ErrorCode enum where the query names the target member (E_RATE_LIMIT_EXCEEDED) directly -- a lexical case -- but the header comment's 'error-code registry' phrase gives bm25 an unrelated line with more literal term overlap ('error' + 'code') than the buried enum member itself, so bm25 keeps the wrong line. Every member also carries two effectively unique tokens (its SCREAMING_SNAKE name and its number), so frequency and llmlingua_style tie across almost every member and fall back to file order, landing on the earliest entries rather than the one about a third of the way down. Recency favors the trailing members and the closing function instead. All four heuristic selectors miss the value at the ~10% ceiling; the file path and audit hash sit on their own header lines and are force-kept regardless."
+}

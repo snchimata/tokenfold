@@ -13,9 +13,12 @@ Design mirrors `run_fidelity.py`: standard-library only, JSON fixtures under `ev
 otherwise a byte/4 heuristic (identical to `tokenfold-core`'s fallback) is used and the report
 labels itself accordingly. Nothing here touches the shipped Rust/npm/Python runtime.
 
+Selectors: keep_all, forced_only, recency, frequency, bm25, llmlingua_style (a perplexity-free
+self-information proxy). Compressor baselines: deterministic-tokenfold (Rust CLI).
+
 Deliberately deferred (documented, not hidden — see `eval/tasks/v04/README.md`):
-  - RTK, RTK+tokenfold, deterministic-tokenfold (Rust CLI subprocess), LLMLingua-style, and the
-    unmodified Headroom Kompress-v2 achieved-token sweep are additional `SELECTORS` entries.
+  - RTK and RTK+tokenfold (external tool) and the unmodified Headroom Kompress-v2 achieved-token
+    sweep (needs the ML checkpoint) as additional baselines.
   - Real Tier-B public-repo corpora and project-disjoint train/test splits.
   - Structural (diff-hunk / JSON-container / AST) segmentation; v0.4-alpha segments by line.
   - An LLM judge for task success (the current scorer is a deterministic containment proxy).
@@ -146,12 +149,40 @@ def sel_bm25(units: list[str], query: str) -> list[float]:
     return scores
 
 
+def sel_llmlingua_style(units: list[str], query: str) -> list[float]:
+    """Perplexity-free LLMLingua-style proxy: keep high-information units, drop predictable /
+    redundant ones. Scores each unit by mean per-token self-information (surprisal,
+    `-log2 P(token)`) under a unigram model estimated from the document itself — a deterministic
+    stand-in for LLMLingua's small-LM token perplexity (the real method needs an LM at inference,
+    deferred: model-research.md keeps ML off the default path). Query-independent like `frequency`,
+    but an information-theoretic surprisal rather than a `1/df` heuristic, so boilerplate lines of
+    common tokens rank low and lines carrying rare/surprising content rank high."""
+    counts: dict[str, int] = {}
+    total = 0
+    for unit in units:
+        for tok in _tokens(unit):
+            counts[tok] = counts.get(tok, 0) + 1
+            total += 1
+    if total == 0:
+        return [0.0] * len(units)
+    scores = []
+    for unit in units:
+        toks = _tokens(unit)
+        if not toks:
+            scores.append(0.0)
+            continue
+        surprisal = sum(-math.log2(counts[t] / total) for t in toks) / len(toks)
+        scores.append(surprisal)
+    return scores
+
+
 SELECTORS = {
     "keep_all": sel_keep_all,
     "forced_only": sel_forced_only,
     "recency": sel_recency,
     "frequency": sel_frequency,
     "bm25": sel_bm25,
+    "llmlingua_style": sel_llmlingua_style,
 }
 
 

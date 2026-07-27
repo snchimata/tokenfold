@@ -1,0 +1,12 @@
+{
+  "id": "typescript_holdout_001",
+  "family": "typescript_holdout",
+  "tier": "A",
+  "source": "// src/pricing/discount.ts\nimport { Money } from \"../money\";\n\nexport interface DiscountRule {\n  code: string;\n  percentOff: number;\n  minSubtotal: number;\n  expiresAt: Date;\n}\n\nexport function applyDiscount(subtotal: Money, rule: DiscountRule): Money {\n  if (subtotal.amount < rule.minSubtotal) {\n    return subtotal;\n  }\n  const reduction = subtotal.amount * (rule.percentOff / 100);\n  return subtotal.minus(reduction);\n}\n\nexport function isExpired(rule: DiscountRule, now: Date): boolean {\n  return rule.expiresAt.getTime() < now.getTime();\n}\n",
+  "query": "what numeric type is declared for the percentOff property?",
+  "gold_answer": "percentOff: number;",
+  "critical_atoms": [
+    "src/pricing/discount.ts"
+  ],
+  "notes": "The interface field line carrying `percentOff: number;` is the answer and shares the rare token 'percentoff' with the query, so query-aware bm25 keeps it while recency/frequency (spend the tight 25% budget on later function bodies) and forced_only drop it; the file path is on line 1 and is force-kept."
+}

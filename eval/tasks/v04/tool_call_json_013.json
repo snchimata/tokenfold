@@ -1,0 +1,13 @@
+{
+  "id": "tool_call_json_013",
+  "family": "tool_call_json",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"cluster_health_probe\",\n  \"probe\": \"chp-5b0f92da\",\n  \"sha256\": \"c41a90fe\",\n  \"nodes\": [\n    {\n      \"node_id\": \"node-a01\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-a02\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-a03\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-a04\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-b01\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-b02\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-b03\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-c03\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"degraded\",\n      \"reason\": \"disk_io_saturation\"\n    },\n    {\n      \"node_id\": \"node-d01\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    },\n    {\n      \"node_id\": \"node-d02\",\n      \"zone\": \"us-east-1a\",\n      \"status\": \"ok\"\n    }\n  ]\n}\n",
+  "query": "which cluster node reported a storage bottleneck during the probe, and why?",
+  "gold_answer": "\"reason\": \"disk_io_saturation\"",
+  "critical_atoms": [
+    "chp-5b0f92da",
+    "c41a90fe"
+  ],
+  "notes": "Ten cluster-probe node records; only node-c03 is degraded and carries a reason line ('disk_io_saturation'), while the query's 'storage bottleneck' shares no vocabulary with that value. bm25's only real overlap is the generic word 'node' inside every node-NNN id, so it defaults to the earliest node rather than node-c03. At a ~10% budget frequency and llmlingua_style favor the header lines instead, and recency keeps only the last couple of nodes. probe and sha256 are force-kept on separate header lines."
+}

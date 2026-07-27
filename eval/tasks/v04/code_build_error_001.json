@@ -1,0 +1,12 @@
+{
+  "id": "code_build_error_001",
+  "family": "code_build_error",
+  "tier": "A",
+  "source": "============================= test session starts ==============================\nplatform linux -- Python 3.11.6, pytest-8.1.1, pluggy-1.4.0\nrootdir: /home/ci/checkout-service\ncollected 14 items\n\ntests/test_cart.py ......                                                 [ 42%]\ntests/test_pricing.py ...F..                                              [ 85%]\ntests/test_orders.py ..                                                   [100%]\n\n=================================== FAILURES ===================================\n_________________ test_discount_never_exceeds_subtotal _________________________\n\n    def test_discount_never_exceeds_subtotal():\n        cart = Cart(items=[Item(\"sku-88\", 12.50)])\n        pricing = Pricing(rules=load_rules(\"rules/promo.yaml\"))\n>       assert pricing.apply(cart).discount <= cart.subtotal\nE       AssertionError: computed discount 15.00 exceeds cart subtotal 12.50\nE        +  where 15.00 = Pricing.apply(...).discount\n\ntests/test_pricing.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_pricing.py::test_discount_never_exceeds_subtotal\n================== 1 failed, 13 passed in 0.42s =================================\n",
+  "query": "which test failed and what was the assertion where the discount exceeds the cart subtotal?",
+  "gold_answer": "AssertionError: computed discount 15.00 exceeds cart subtotal 12.50",
+  "critical_atoms": [
+    "tests/test_pricing.py:47"
+  ],
+  "notes": "pytest run with 13 passing lines; the assertion-detail line carries the failure answer and uniquely shares 'discount/exceeds/subtotal' with the query, so bm25 keeps it at a tight budget while forced_only (path-only), recency, and llmlingua_style drop it. The file:line traceback path (audit-critical for fault localization) is on a separate line and is force-kept."
+}

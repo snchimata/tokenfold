@@ -1,0 +1,12 @@
+{
+  "id": "log_multi_service_001",
+  "family": "log_multi_service",
+  "tier": "A",
+  "source": "2026-07-14T09:12:01Z INFO service=gateway request received route=/checkout method=POST trace=tr-8821\n2026-07-14T09:12:01Z INFO service=orders creating order for cart=cart-3390 items=3\n2026-07-14T09:12:02Z INFO service=inventory reserving stock for order sku=WIDGET-42 qty=3\n2026-07-14T09:12:02Z DEBUG service=inventory opening connection to inventory-db replica=r2\n2026-07-14T09:12:03Z ERROR service=inventory connection pool exhausted max_connections=50 reached code=POOL_EXHAUSTED\n2026-07-14T09:12:03Z WARN service=inventory falling back to primary replica after the failure\n2026-07-14T09:12:04Z INFO service=orders received 503 from inventory, marking order pending\n2026-07-14T09:12:04Z INFO service=payments authorization deferred pending stock confirmation\n2026-07-14T09:12:05Z INFO service=gateway responded status=503 latency=3200ms\n2026-07-14T09:12:06Z INFO service=gateway healthcheck ok upstreams=4\n2026-07-14T09:12:07Z INFO service=orders retry queued for order cart=cart-3390\n2026-07-14T09:12:08Z INFO service=notifications email queued template=order-delayed user=carol\n2026-07-14T09:12:09Z INFO service=gateway request received route=/status method=GET\n2026-07-14T09:12:10Z INFO service=metrics flushed 128 series to sink=prometheus\n2026-07-14T09:12:11Z INFO service=orders reconciliation sweep completed trace=tr-8821 req-id=req-4d7e\n2026-07-14T09:12:12Z INFO service=gateway shutting down drain=graceful\n",
+  "query": "what caused the inventory service connection pool to become exhausted during checkout?",
+  "gold_answer": "POOL_EXHAUSTED",
+  "critical_atoms": [
+    "req-4d7e"
+  ],
+  "notes": "Root cause is an early ERROR line (POOL_EXHAUSTED) that shares inventory/connection/pool/exhausted with the query, so bm25 keeps it but recency and forced_only drop it at 0.25; the audit-critical req-id sits on a later line and is force-kept regardless of selector."
+}
