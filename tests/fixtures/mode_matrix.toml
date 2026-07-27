@@ -65,6 +65,23 @@ task_scopes = ["all"]
 applicable_formats = ["openai_json", "anthropic_json"]
 
 [[transforms]]
+id = "log_field_fold"
+version = "1.0.0"
+# v0.4: reversible columnar fold of templated log lines (log-line analogue of json_field_fold —
+# emit each shared line skeleton once + per-line captured fields). Lossless (round-trip gated), so
+# max_ratio is unrestricted; out of Conservative; ships behind --experimental until its fidelity
+# gate is green; runs before the lossy log_compaction on plaintext/command-output logs.
+conservative_enabled = false
+balanced_enabled = false
+aggressive_enabled = false
+experimental = true
+max_ratio_conservative = 0.0
+max_ratio_balanced = 1.0
+max_ratio_aggressive = 1.0
+task_scopes = ["all"]
+applicable_formats = ["plain_text", "command_output"]
+
+[[transforms]]
 id = "log_compaction"
 version = "1.0.0"
 # Promoted out of --experimental 2026-07-12: full-lossy-promotion gate clears every
