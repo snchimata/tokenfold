@@ -185,6 +185,53 @@ SELECTORS = {
     "llmlingua_style": sel_llmlingua_style,
 }
 
+# Snapshot the deterministic set before any learned selector registers, so the report can label
+# which scores came from a model vs. a stdlib heuristic.
+DETERMINISTIC_SELECTORS = tuple(SELECTORS)
+
+
+# --- optional learned selector (v0.4-beta, model code lives locally, never committed) ----------
+# A trained keep/drop selector plugs in here as just another SELECTORS entry — no other harness
+# change. Its code + weights live in a *gitignored* local module ($TOKENFOLD_LEARNED_MODULE,
+# default `learned.selector`, under eval/) that owns the torch/transformers imports, so when the
+# ML stack or the local module is absent the import fails and the selector is cleanly skipped,
+# exactly like tiktoken and the tokenfold CLI above. Contract (model-research.md): the module
+# exposes LEARNED_SELECTORS: dict[str, callable], each callable (units, query) -> list[float]
+# emitting *scores only*; the harness's deterministic critical-atom forcing + ceiling allocator +
+# byte-copy assembly still own the output (so 100% critical-atom survival stays structural, and
+# `--gate` proves the learned selector cannot break it either).
+
+
+def _load_learned_selectors() -> dict:
+    import importlib
+
+    eval_dir = str(Path(__file__).resolve().parent)
+    if eval_dir not in sys.path:
+        sys.path.insert(0, eval_dir)  # importable whether run as a script or imported by a test
+    try:
+        mod = importlib.import_module(
+            os.environ.get("TOKENFOLD_LEARNED_MODULE", "learned.selector")
+        )
+        found = getattr(mod, "LEARNED_SELECTORS", {})
+    except Exception:  # ML absent / module absent / weights missing -> skip, never crash
+        return {}
+    learned = {k: v for k, v in found.items() if callable(v)} if isinstance(found, dict) else {}
+    # Integrity: a learned selector must never shadow a deterministic baseline. Overwriting one
+    # would run the model under that name yet label it deterministic (set-difference below) and
+    # silently drop the real baseline from the comparison. That defeats the whole report, so fail
+    # loud instead — a naming clash is a bug in the local module, not something to paper over.
+    clash = sorted(set(learned) & set(DETERMINISTIC_SELECTORS))
+    if clash:
+        raise ValueError(
+            f"learned selector name(s) {clash} shadow deterministic baselines; rename them in the "
+            "local model module — a learned selector must not overwrite a baseline."
+        )
+    return learned
+
+
+LEARNED_SELECTORS = _load_learned_selectors()
+SELECTORS.update(LEARNED_SELECTORS)
+
 
 # --- whole-pipeline compressor baselines ------------------------------------------------------
 # Unlike SELECTORS (which rank atomic units and get the harness's deterministic critical-atom
@@ -422,6 +469,9 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
         "tokenizer": TOKENIZER,
         "fixture_count": len(fixtures),
         "selectors": list(SELECTORS),
+        "deterministic_selectors": list(DETERMINISTIC_SELECTORS),
+        # v0.4-beta: names registered from the gitignored local model module, [] when ML is absent.
+        "learned_selectors": [s for s in SELECTORS if s not in DETERMINISTIC_SELECTORS],
         "compressors": list(COMPRESSORS),
         "tokenfold_available": _TOKENFOLD_BIN is not None,
         "ratios": ratios,
@@ -482,10 +532,12 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
 
 def _print_summary(report: dict) -> None:
     tf = "available" if report["tokenfold_available"] else "MISSING (skipped)"
+    learned = report.get("learned_selectors") or ["none (ML absent, skipped)"]
     print(
         f"# v0.4-alpha baselines  (tokenizer: {report['tokenizer']['backend']}, "
         f"deterministic-tokenfold: {tf})"
     )
+    print(f"# learned selectors: {', '.join(learned)}")
     print(f"# {report['fixture_count']} fixtures  ratios={report['ratios']}\n")
     print(f"{'baseline':<24}{'ratio':>6}{'task':>7}{'crit':>7}{'achieved':>10}{'over':>6}")
     for s in report["summary"]:
