@@ -17,9 +17,9 @@
 //! [`AdapterFormat::AnthropicMessages`] directly, matching whichever wire shape that framework
 //! actually emits underneath.
 //!
-//! This scope boundary is `roadmap.md`'s Phase 6 ("Full Headroom Parity Extensions") exit
+//! This scope boundary is `roadmap.md`'s Phase 6 ("Optional Framework Adapter Extensions") exit
 //! criterion "Framework adapters pass provider-shape parity tests for scoped SDKs/frameworks",
-//! constrained by D-014 ("Full Headroom Parity Extension Boundary"): adapters cover wire shapes,
+//! constrained by D-014 ("Optional Adapter Extension Boundary"): adapters cover wire shapes,
 //! not every framework name, so the framework/agent layers above stay out of this crate's surface
 //! until they emit a shape of their own.
 

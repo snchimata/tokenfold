@@ -28,8 +28,9 @@ structured data benefits most.
 
 ## What it does
 
-- **CLI** — `tokenfold compress` / `inspect` / `diff` any file or stdin;
-  `tokenfold wrap <command>` compresses a command's own output in place.
+- **CLI** — `tokenfold compress` / `inspect` files or stdin, and compare
+  payloads with `tokenfold diff`; `tokenfold wrap -- <command>` compresses a
+  command's output in place.
 - **Library** — the same Rust engine and receipt shape from `pip install tokenfold`
   or `npm install tokenfold`, so behavior never drifts between languages.
 - **Proxy** — `tokenfold-proxy` sits in front of your provider, compresses
@@ -56,10 +57,12 @@ Or download the CLI for Linux, macOS, or Windows from
 [GitHub Releases](https://github.com/snchimata/tokenfold/releases/latest),
 then verify it with the adjacent `.sha256` file.
 
-Or install the Python package:
+Preview the savings without changing the input, then write the compressed
+payload when you are ready:
 
 ```bash
-pip install tokenfold
+tokenfold inspect payload.json --format json
+tokenfold compress payload.json --format json --output payload.compact.json
 ```
 
 Compress an OpenAI-style request before sending it to your provider:

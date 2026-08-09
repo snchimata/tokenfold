@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.4] - 2026-08-09
+
+- Improve crates.io, PyPI, and npm discoverability: broader package
+  keywords, PyPI trove classifiers (development status, intended audience,
+  license, supported Python versions), and Cargo package categories across
+  the workspace crates. No behavior change.
+- Clarify README CLI usage: the `inspect`-then-`compress` preview flow and
+  the `wrap -- <command>` argument separator.
+- Rewrite `AGENTS.md` as a general contributor/agent guide: a repository
+  map, implementation conventions, and the exact validation commands for
+  Rust, npm, Python-binding, and fidelity-gate changes.
+
 ## [0.3.3] - 2026-07-27
 
 - Add `log_field_fold`, a losslessly reversible columnar transform for

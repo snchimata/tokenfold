@@ -6,6 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Output-token savings reports for tokenfold."
+keywords = ["llm", "tokens", "compression", "reports", "token-optimization"]
+categories = ["compression"]
 
 [dependencies]
-tokenfold-core = { version = "0.3.3", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.3.4", path = "../tokenfold-core" }

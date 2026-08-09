@@ -1,16 +1,76 @@
-# Agent Instructions
+# Repository Guidelines
 
-These instructions apply to every agent working in this repository.
+These instructions apply to the entire repository. More specific `AGENTS.md` files may override them for their directory.
 
-## Required tools
+## Working principles
 
-- Activate and follow **Ponytail** in `full` mode before doing repository work. Prefer the smallest correct change: use existing code and standard-library or native features before adding abstractions, files, or dependencies.
-- Use the **AgentMemory MCP** at `http://localhost:3114` at the start of each task to retrieve relevant project context before inspecting or changing code.
-- If AgentMemory is unavailable, start `agentmemory --port 3114` as a background process, wait for port 3114 to accept connections, and retry the MCP call. If the global command is unavailable, use `npx -y @agentmemory/agentmemory --port 3114`. If port 3114 is unavailable or occupied by another service, choose a free port, start AgentMemory with `--port <port>`, set `AGENTMEMORY_URL=http://localhost:<port>` for the MCP process, and use that endpoint for the rest of the task.
-- Store durable project knowledge in AgentMemory after discovering important architecture, conventions, decisions, or non-obvious fixes. Do not store secrets, credentials, transient command output, or guesses.
-- Every AgentMemory `project` field (on `memory_save` and anywhere else it appears) MUST be a path-derived slug, never a bare display name like `"tokenfold"` — AgentMemory is a shared local service (`localhost:3114`) that other unrelated projects on this machine also write to, and a bare name is not collision-resistant. Derive the slug from the repo's absolute path: lowercase the drive letter, then `--`, then the rest of the path with every `\` (or `/`) replaced by `-`. For this repo's default clone location (`E:\Github\tokenfold`) that slug is `e--Github-tokenfold` — the same convention already used to name this project's local file-based memory directory (`~/.claude/projects/e--Github-tokenfold/memory/`), so the two memory systems stay identifiable by the same key. If the repo is cloned somewhere else, recompute the slug from that path instead of reusing this example verbatim.
-- If Ponytail remains unavailable, say so explicitly before continuing and use the closest available fallback.
+- Make the smallest correct change and reuse existing patterns before adding abstractions or dependencies.
+- Read the implementation, its callers, and nearby tests before editing behavior.
+- Keep changes focused. Do not modify unrelated work already present in the working tree.
+- Treat public CLI output, serialized reports, configuration, and language bindings as compatibility-sensitive interfaces.
+- Never commit secrets, local configuration, generated build output, or benchmark/evaluation caches.
 
-## Git attribution
+## Repository map
 
-Never add Codex, OpenAI, AI-generated, or assistant attribution to commits, authors, co-author trailers, signatures, pull request titles, or pull request descriptions. Use only the user's configured Git identity unless the user explicitly requests otherwise.
+- `crates/tokenfold-core`: compression pipeline, policies, transforms, reports, and token accounting.
+- `crates/tokenfold-cli`: command-line interface and end-to-end CLI behavior.
+- `crates/tokenfold-proxy`: HTTP proxy and forwarding behavior.
+- `crates/tokenfold-py`: PyO3 Python bindings.
+- `crates/tokenfold-{adapters,admin,image,learn,output,rag}`: optional integration and feature crates.
+- `packages/tokenfold`: TypeScript API and npm CLI wrapper.
+- `tests/`: shared fixtures and byte-exact golden cases.
+- `python-tests/`: tests for the built Python extension.
+- `eval/`: Python fidelity harness and transform evaluation.
+- `docs/solution-design/`: architecture, interfaces, testing policy, and roadmap decisions.
+
+## Implementation conventions
+
+- Use the pinned Rust toolchain from `rust-toolchain.toml` and the workspace's Rust 2024 edition.
+- Put shared compression behavior in `tokenfold-core`; keep CLI, proxy, and bindings as thin adapters where practical.
+- Preserve JSON insertion order and stable report fields. Do not change schema versions, output formats, exit codes, or defaults accidentally.
+- Preserve fail-closed safety behavior, redaction guarantees, protected content, and token-budget accounting.
+- Keep lossy or unvalidated transforms behind the existing experimental/fidelity gates.
+- Add tests beside the affected behavior. Prefer focused regression tests over broad new test infrastructure.
+- Golden outputs are versioned contracts. Change them only for an intentional behavior change, explain why, and keep `tests/golden/MANIFEST.toml` synchronized.
+- Avoid new dependencies unless existing workspace crates or the standard library cannot reasonably solve the problem.
+
+## Validation
+
+Run the narrowest relevant checks while iterating, then validate every affected surface before finishing.
+
+For Rust changes:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --locked
+```
+
+For npm/TypeScript changes:
+
+```sh
+cd packages/tokenfold
+npm ci
+npm test
+```
+
+For Python binding changes, build the extension before running its tests:
+
+```sh
+maturin build --release -m crates/tokenfold-py/Cargo.toml
+pytest python-tests
+```
+
+For changes to compression quality, lossy transforms, or promotion gates:
+
+```sh
+python eval/run_fidelity.py --gate --profile smoke-first-consumer
+```
+
+If a check cannot run in the current environment, report exactly which check was skipped and why.
+
+## Documentation and releases
+
+- Update user-facing documentation when commands, configuration, output, or supported integrations change.
+- Use `.github/workflows/`, the code, and tests as the source of truth for validation and release behavior when planning documents disagree with shipped behavior.
+- Do not publish packages, create releases, push tags, or regenerate release artifacts unless explicitly requested.

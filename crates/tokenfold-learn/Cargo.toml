@@ -6,6 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Policy-learning proposals for tokenfold compression reports."
+keywords = ["llm", "tokens", "compression", "policy", "token-optimization"]
+categories = ["compression"]
 
 [dependencies]
-tokenfold-core = { version = "0.3.3", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.3.4", path = "../tokenfold-core" }
