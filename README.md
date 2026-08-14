@@ -4,11 +4,13 @@
 
 **Send less noise. Fit more context. Pay for fewer input tokens.**
 
-Local, provider-neutral compression for prompts, tool schemas, JSON, logs, and diffs.
+**46–68% fewer tokens on JSON & schemas · deterministic · reversible · every call audited**
+
+CLI · Python · TypeScript · proxy · MCP · local-first · provider-neutral
 
 [![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=coverage&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=npm&logo=npm&style=flat-square)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 
-[Quick start](#quick-start) · [Why tokenfold](#why-tokenfold) · [Integrations](#pick-your-integration) · [Benchmarks](#reproduce-the-numbers)
+[Quick start](#quick-start) · [Why tokenfold](#why-tokenfold) · [Integrations](#pick-your-integration) · [Benchmarks](#reproduce-the-numbers) · [Select model](#tokenfold-select)
 
 </div>
 
@@ -39,8 +41,8 @@ structured data benefits most.
   to any MCP-compatible agent or editor.
 - **Receipts, not guesses** — every call returns exact token counts, the
   transforms it applied, and any warnings, so you can audit what changed.
-- **No ML tax** — one static Rust binary compresses a JSON payload; no Python
-  runtime, no model download, no GPU.
+- **Local and lightweight** — one static Rust binary runs on your machine or
+  infrastructure, with no hosted service or additional data processor.
 
 ## Quick start
 
@@ -154,8 +156,8 @@ messages · schemas · JSON · logs · diffs
 - want an exact, auditable receipt for every call instead of an estimate
 - need lossless guarantees on structured data — JSON, schemas, tool
   arguments — before it reaches a billing meter
-- want to ship a single static binary with no ML runtime, model download,
-  or GPU in the dependency graph
+- want a portable static binary with deterministic behavior and a small
+  operational footprint
 - are shrinking logs, diffs, and repetitive tool output before they hit an
   LLM, a log store, or a queue
 
@@ -268,6 +270,61 @@ cargo run --release --locked -p tokenfold-cli -- \
 
 The sample reports 382 → 206 estimated tokens, a **46.1% reduction**. Ragged
 or compact inputs may save little; Tokenfold reports that result honestly.
+
+## Tokenfold Select
+
+**When structural compression ends, rank what matters.**
+
+Tokenfold Core removes structural waste. [Tokenfold Select][tokenfold-select]
+is its optional, query-aware companion: a LoRA-fine-tuned model that ranks
+text spans by relevance before you assemble a smaller context.
+
+| | Tokenfold Core | Tokenfold Select |
+| --- | --- | --- |
+| Best at | JSON, schemas, logs, and diffs | Query-conditioned span ranking |
+| Runtime | Static Rust binary | Granite reranker + LoRA adapter |
+| Contract | Compressed payload + auditable receipt | Ranking logits only |
+
+Select is deliberately separate from the CLI and libraries. That separation
+lets each tool do one job well: Core provides deterministic transforms and
+auditable receipts; Select adds query-aware ranking when relevance matters.
+Your allocator still owns required-content retention and the hard token
+budget.
+
+<details>
+<summary><strong>Python: load the model and score spans</strong></summary>
+
+```python
+from pathlib import Path
+
+import torch
+from huggingface_hub import snapshot_download
+from peft import PeftModel
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+base_id = "ibm-granite/granite-embedding-reranker-english-r2"
+repo_dir = Path(snapshot_download("snchimata/tokenfold-select"))
+adapter_dir = repo_dir / "adapter"
+tok = AutoTokenizer.from_pretrained(adapter_dir)
+base = AutoModelForSequenceClassification.from_pretrained(base_id, dtype=torch.float32)
+model = PeftModel.from_pretrained(base, adapter_dir).eval()
+
+def score(query: str, spans: list[str]) -> list[float]:
+    if not spans:
+        return []
+    enc = tok([query] * len(spans), spans, padding=True, truncation=True,
+              max_length=8192, return_tensors="pt")
+    with torch.no_grad():
+        out = model(input_ids=enc["input_ids"], attention_mask=enc["attention_mask"])
+        return out.logits.view(-1).float().tolist()
+```
+
+</details>
+
+See the [Tokenfold Select model card][tokenfold-select] for setup, evaluation,
+training data, and limitations.
+
+[tokenfold-select]: https://huggingface.co/snchimata/tokenfold-select
 
 ## Contributing
 
