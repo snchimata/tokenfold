@@ -1,13 +1,38 @@
 /target
+
+# Local runtime config and credentials. `.env*` rather than `.env` so that
+# .env.local / .env.production cannot slip through; release credentials should
+# live outside the repository tree entirely.
 /tokenfold.toml
 /.tokenfoldrc
-/docs/solution-design/*
-*.cdx.json
-.env
-.claude/*
+.env*
 
+# Agent / editor configuration, machine-local by nature.
+.claude/*
+/.codex/
+/CLAUDE.local.md
+
+# Working design documents. Tracked source must not reference these -- a clone
+# does not have them. CI enforces that in the `lint` job.
+/docs/solution-design/*
+
+# Build and packaging output.
+node_modules/
+dist/
+*.cdx.json
+
+# Python: virtualenvs, caches, build metadata.
 __pycache__/
 *.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
 
-/unsloth_compiled_cache/
+# Model research: training code, weights, and corpora live here and are never
+# committed. This single rule is what enforces that boundary.
 /eval/learned/
+/unsloth_compiled_cache/
+
+# Scratch data.
+/data/

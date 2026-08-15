@@ -1,11 +1,10 @@
 # v0.4-alpha paired-task baseline corpus
 
-Fixtures for `eval/run_baselines.py` — the "baselines first" stage of the v0.4 learned-selector
-research. Everything here is **shadow-only**: it
-measures deterministic keep/drop selectors against downstream tasks; no model is involved and
-nothing reaches a served path.
+Held-out **evaluation** fixtures for `eval/run_baselines.py`. They measure deterministic keep/drop
+selectors against downstream tasks at exact token ceilings: no model is involved, nothing is
+trained here, and nothing reaches a served path.
 
-## Coverage (77 Tier-A fixtures across 11 families)
+## Coverage (77 fixtures across 11 families)
 
 Spanning the required content slices: `log_qa`, `log_multi_service`
 (logs/tool QA), `diff_review`, `code_patch` (diff review / change localization), `code_build_error`
@@ -22,7 +21,7 @@ so the report is discriminating rather than trivially 1.0 everywhere).
 {
   "id": "log_qa_001",
   "family": "log_qa | diff_review | json_schema | ...",
-  "tier": "A | B | C",
+  "tier": "A",
   "source": "the raw captured text to compress",
   "query": "the downstream question the compressed context must still answer",
   "gold_answer": "substring that must survive for the task to be answerable",
@@ -41,17 +40,20 @@ so the report is discriminating rather than trivially 1.0 everywhere).
 - **`notes`** (optional, added from `_010` onward) documents the discrimination design intent per
   fixture — which selectors are expected to fail the task at tight ceilings and why. The harness
   ignores it; it exists for humans auditing/extending the corpus.
+- **`tier`** is `"A"` on every fixture and records the provenance class described below. It exists
+  so a fixture from anywhere else would be visibly distinguishable; nothing else is accepted here.
 
-## Governance tiers
+## Provenance
 
-| Tier | Source | v0.4 use |
-| --- | --- | --- |
-| A | Project-owned synthetic traces / fault-injected builds | Training + evaluation |
-| B | MIT/Apache/BSD/CC0 public repos with file/revision manifests | Training + project-disjoint eval |
-| C | Explicitly opted-in, locally redacted user traces | Local shadow eval only; never centralized |
+Every fixture here is **project-owned synthetic material** — hand-authored traces and
+fault-injected build output, written for this corpus. Nothing is captured from a user, a customer,
+or a third-party repository, which is why the corpus is safe to track and safe to run in CI by
+default.
 
-Current corpus is **Tier A only** (synthetic, safe as the default CI corpus). Redact and
-secret-scan before persisting anything; reject rather than store secret-shaped content.
+That property is a precondition for adding anything, not an observation about what happens to be
+here. A new fixture must be synthetic and project-owned; redact and secret-scan before committing,
+and reject rather than store anything secret-shaped. Captured or third-party material does not
+belong in this directory regardless of licence.
 
 ## Running
 
@@ -88,8 +90,8 @@ the harness falls back to the same byte/4 heuristic as `tokenfold-core` and labe
 - Remaining baselines: RTK and RTK+tokenfold (external tool), plus an achieved-token sweep of a
   third-party content-aware compressor. (`deterministic-tokenfold` and `llmlingua_style` are now
   implemented — see above.)
-- Tier-B public-repo corpora with license/revision manifests; project-disjoint train/test splits
-  and near-dedup across splits.
+- Broader corpora drawn from permissively-licensed public repositories, with licence and revision
+  manifests recorded per file, plus near-duplicate detection against the existing fixtures.
 - Structural segmentation (diff hunks, JSON containers, AST/code blocks) — v0.4-alpha segments by
   line.
 - Real paired build/test/debug/patch execution and an LLM judge for *diagnosing* failures (never

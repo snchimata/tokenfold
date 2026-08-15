@@ -99,11 +99,24 @@ jobs:
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: the secret scan below is only meaningful if it can see
+          # every commit, not just the tip.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-audit
       - uses: taiki-e/install-action@cargo-deny
       - run: cargo audit
       - run: cargo deny check advisories bans licenses sources
+      # This repo publishes to crates.io, PyPI, npm and GitHub Releases, so a
+      # leaked token is a four-registry problem. Scans full history, not just
+      # the diff, and is blocking on push to main like the rest of this job.
+      - name: secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_ENABLE_SUMMARY: true
 
   # CI gate policy: advisory on merge (gross-regression check only; bench-regression on a
   # dedicated runner is the release-blocking gate — see release.yml).

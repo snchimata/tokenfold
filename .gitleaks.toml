@@ -1,0 +1,41 @@
+# Gitleaks configuration for tokenfold.
+#
+# This repository deliberately contains secret-shaped strings: the whole point
+# of the redaction transform is to detect and mask credentials, so its tests
+# must feed it realistic-looking ones. Those fixtures are allowlisted below.
+#
+# The allowlist is deliberately narrow -- specific literals and specific paths,
+# never a blanket rule -- so that a real credential committed to one of these
+# files is still caught.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documentation placeholders published by the vendors themselves"
+regexTarget = "match"
+regexes = [
+  # AWS's own example key, used verbatim in their public documentation.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+]
+
+[[allowlists]]
+description = "Redaction-transform test fixtures"
+paths = [
+  '''crates/tokenfold-core/src/transforms/redaction\.rs''',
+  '''crates/tokenfold-core/src/safety\.rs''',
+  '''crates/tokenfold-core/src/retrieval_store\.rs''',
+  '''crates/tokenfold-core/src/pipeline/tests\.rs''',
+  '''crates/tokenfold-core/tests/integration\.rs''',
+  '''crates/tokenfold-cli/tests/rtk\.rs''',
+  '''tests/golden/.*''',
+  '''eval/tasks/.*\.json''',
+]
+
+[[allowlists]]
+description = "Lockfiles and vendored manifests carry hashes, not secrets"
+paths = [
+  '''Cargo\.lock''',
+  '''packages/tokenfold/package-lock\.json''',
+]
