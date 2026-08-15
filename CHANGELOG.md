@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.4.0] - 2026-08-15
+
+Minor, not a patch: this release changes the public Rust API (see "Breaking"
+below). Cargo treats `0.3.x` as compatible with `0.3.4`, so shipping these
+changes as `0.3.5` would have broken every downstream crate depending on
+`tokenfold-core = "0.3"` without them opting in. Nothing changes for CLI,
+Python, TypeScript, proxy, or MCP users.
+
+- Add `json_prune`, an opt-in **lossy** JSON array-item selection stage
+  (`--lossy heuristic`, `--lossy-ratio`, `--lossy-preserve`). It runs only on
+  generic JSON, strictly after the lossless pipeline, and is fail-closed:
+  an item is removed only once its original bytes are durably persisted, so
+  every `{"$tf_ref": ...}` marker resolves via `tokenfold retrieve <hash>`.
+- **Breaking (source), Rust library only.**
+  `CompressionPolicy.preview` is now `pub(crate)`, settable only via
+  `CompressionPolicyBuilder::preview` — a preview's output bytes are a
+  projection that can reference deliberately unpersisted content, so it must
+  be opted into by name rather than flipped on an otherwise ordinary policy.
+  `QualityReport::quality_retention` and `contrastive_failure_rate` became
+  `Option<f64>`, so "no fidelity-gate data baked in" reports as absent instead
+  of a fabricated `0.0`. `SkippedReason` gained `IncompatibleWithLossy`.
+- `CompressionReport.quality` is now populated after a lossy run, per
+  INTERFACES.md's presence rule, with `gate_passed: false` and absent metrics
+  while no fidelity gate is baked in. The report `schema_version` stays `1.0`:
+  `quality` was `None` on every code path in every released version, so no
+  report tokenfold has ever emitted contains these fields.
+- `--lossy` now honors the documented early-exit contract: when the lossless
+  pipeline already meets `--target-tokens`, `json_prune` is skipped with
+  `TargetAlreadyMet` instead of destroying data to reach a target already met.
+- A lossy branch that loses to the lossless one no longer persists anything: the
+  candidate is token-checked before the retrieval store is opened, so a
+  rolled-back prune leaves no per-item blobs that nothing references and nothing
+  reports.
+- The merged retrieval report now carries the TTL its per-item entries were
+  really stored with, instead of reporting `null` (which reads as "never
+  expires") whenever the whole-payload receipt had been refused.
+- `--lossy-ratio` is documented for what it is: a best-effort selection hint over
+  the prunable pool, never re-checked against the final document.
+  `--target-tokens` remains the enforced ceiling.
+- Add `examples/incident_feed.json`, a 40-event heterogeneous feed, and
+  `examples/lossy_pruning.py`, a runnable walkthrough covering preview,
+  compress, retrieve, `--lossy-preserve`, and the case where lossy declines
+  because lossless already won. README documents the feature and reports both
+  measured results for that file (28.1% lossless, 39.3% at
+  `--lossy-ratio 0.35`, exact `o200k_base`).
+- `--lossy` no longer forces the pre-transform input to be persisted on formats
+  the lossy stage cannot run on (OpenAI/Anthropic payloads, unresolved `Auto`);
+  `--store-originals` remains the independent request for that on any format.
+- `--lossy` defers `json_field_fold`/`json_value_dict` past the pruning stage
+  rather than disabling them, so a lossy run that prunes nothing produces the
+  same output as a plain lossless run instead of a larger one.
+
 ## [0.3.4] - 2026-08-09
 
 - Improve crates.io, PyPI, and npm discoverability: broader package
