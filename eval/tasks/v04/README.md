@@ -85,9 +85,9 @@ the harness falls back to the same byte/4 heuristic as `tokenfold-core` and labe
 
 ## Deferred to later v0.4-alpha work (not hidden)
 
-- Remaining baselines: RTK and RTK+tokenfold (external tool) and the unmodified Headroom
-  Kompress-v2 achieved-token sweep (needs the ML checkpoint). (`deterministic-tokenfold` and
-  `llmlingua_style` are now implemented — see above.)
+- Remaining baselines: RTK and RTK+tokenfold (external tool), plus an achieved-token sweep of a
+  third-party content-aware compressor. (`deterministic-tokenfold` and `llmlingua_style` are now
+  implemented — see above.)
 - Tier-B public-repo corpora with license/revision manifests; project-disjoint train/test splits
   and near-dedup across splits.
 - Structural segmentation (diff hunks, JSON containers, AST/code blocks) — v0.4-alpha segments by

@@ -17,8 +17,8 @@ Selectors: keep_all, forced_only, recency, frequency, bm25, llmlingua_style (a p
 self-information proxy). Compressor baselines: deterministic-tokenfold (Rust CLI).
 
 Deliberately deferred (documented, not hidden — see `eval/tasks/v04/README.md`):
-  - RTK and RTK+tokenfold (external tool) and the unmodified Headroom Kompress-v2 achieved-token
-    sweep (needs the ML checkpoint) as additional baselines.
+  - RTK and RTK+tokenfold (external tool) as additional baselines, plus an achieved-token sweep
+    of a third-party content-aware compressor.
   - Real Tier-B public-repo corpora and project-disjoint train/test splits.
   - Structural (diff-hunk / JSON-container / AST) segmentation; v0.4-alpha segments by line.
   - An LLM judge for task success (the current scorer is a deterministic containment proxy).
