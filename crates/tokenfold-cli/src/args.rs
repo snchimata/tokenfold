@@ -59,7 +59,7 @@ impl TaskScopeArg {
     }
 }
 
-/// Opt-in lossy JSON array-item selection (`docs/solution-design/lossy-json-compression.md`,
+/// Opt-in lossy JSON array-item selection (drops whole array items to hit a token budget,
 /// local-only). `Heuristic` is the only Phase 1 backend; a future `Select` backend is Phase 2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "snake_case")]

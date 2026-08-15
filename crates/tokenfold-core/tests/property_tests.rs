@@ -1,4 +1,4 @@
-//! Property-based invariants (ENGINEERING.md "Property-Based Tests"). These generate random
+//! Property-based invariants. These generate random
 //! inputs and assert the transform/pipeline contracts hold for all of them, not just the
 //! hand-picked fixtures in `golden.rs` / inline unit tests.
 

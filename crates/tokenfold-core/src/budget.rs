@@ -5,9 +5,9 @@ use crate::input::{CompressionInput, InputFormat};
 use crate::token_estimator::TokenEstimator;
 
 /// Placeholder floor for `retrieval_ttl_seconds` whenever `lossy` is set — see
-/// `CompressionPolicyBuilder::build`'s lossy validation. The design doc lists the exact policy
-/// as an open owner decision (docs/solution-design/lossy-json-compression.md §8), not yet
-/// confirmed; this value only needs to be "clearly more than instant," not final.
+/// `CompressionPolicyBuilder::build`'s lossy validation. The exact retention policy is still an
+/// open owner decision, not yet confirmed; this value only needs to be "clearly more than
+/// instant," not final.
 const MIN_LOSSY_TTL_SECONDS: u64 = 86_400;
 
 // NOT Eq: `lossy_ratio` holds an f64 (same precedent as `CompressionOutput`/`CompressionReport`).
@@ -29,30 +29,30 @@ pub struct CompressionPolicy {
     /// entry doesn't enable it for the current mode. Still requires `experimental` for any
     /// transform whose `ModeEntry.experimental == true` (see `modes::pipeline_for`).
     pub enable: Vec<String>,
-    /// F-045: when true, and the full pre-transform input contains no secret-shaped content,
+    /// When true, and the full pre-transform input contains no secret-shaped content,
     /// `pipeline::compress_with_estimator` persists it to the reversible evidence store
     /// (`retrieval_backend`/`retrieval_store_path`) under its SHA-256 hash.
     pub store_originals: bool,
-    /// F-045: the namespace stored-original entries are keyed under (see
+    /// The evidence-store namespace stored-original entries are keyed under (see
     /// `retrieval_store::RetrievalStore::store`).
     pub retrieval_namespace: String,
-    /// F-045: TTL passed to `RetrievalStore::store` for newly stored originals. `None` means
+    /// TTL passed to `RetrievalStore::store` for newly stored originals. `None` means
     /// "use `retrieval_store::DEFAULT_TTL_SECONDS`" (this is a *default*, not "never expire" —
     /// that per-entry meaning belongs to `RetrievalStore::store`'s own `ttl_seconds` parameter).
     pub retrieval_ttl_seconds: Option<u64>,
-    /// F-045: backend name passed to `RetrievalStore::open` ("memory" | "filesystem" |
+    /// Backend name passed to `RetrievalStore::open` ("memory" | "filesystem" |
     /// "sqlite" — the latter fails clearly, handled as best-effort skip, see
     /// `pipeline::maybe_store_originals`).
     pub retrieval_backend: String,
-    /// F-045: filesystem backend root override. `None` means
+    /// Filesystem backend root override. `None` means
     /// `retrieval_store::default_store_path()`.
     pub retrieval_store_path: Option<PathBuf>,
-    /// Opt-in lossy JSON array-item selection (`docs/solution-design/lossy-json-compression.md`,
-    /// local-only). `None` (the default) means the lossless pipeline is untouched — this field
-    /// is set only by an explicit CLI flag, never derived from `mode`/`experimental`, and is
-    /// deliberately NOT part of `modes.rs`/`ALL_ENTRIES`: it is a fundamentally different
-    /// category (data-lossy, not just structurally-lossy-but-reversible) from every other
-    /// transform in this crate. See `pipeline::apply_lossy_reduction`.
+    /// Opt-in lossy JSON array-item selection: array items are dropped and replaced by a
+    /// recoverable `$tf_ref` marker. `None` (the default) means the lossless pipeline is
+    /// untouched — this field is set only by an explicit CLI flag, never derived from
+    /// `mode`/`experimental`, and is deliberately NOT part of `modes.rs`/`ALL_ENTRIES`: it is a
+    /// fundamentally different category (data-lossy, not just structurally-lossy-but-reversible)
+    /// from every other transform in this crate. See `pipeline::apply_lossy_reduction`.
     pub lossy: Option<LossyPath>,
     /// BEST-EFFORT selection hint, not an enforced budget: how aggressively to prune, as the
     /// fraction (0.0..=1.0) of the prunable pool's own estimated token cost to keep when `lossy`
@@ -422,8 +422,8 @@ fn message_content_bytes(message: &serde_json::Value) -> Option<Vec<u8>> {
     }
 }
 
-/// Keeps file names and hunk headers, matching the `diff_compaction` (F-013) contract of what
-/// must survive compaction. Each kept line is its own segment.
+/// Keeps file names and hunk headers, matching the `diff_compaction` contract of what must
+/// survive compaction. Each kept line is its own segment.
 fn extract_diff_protected(bytes: &[u8]) -> Vec<Vec<u8>> {
     let text = String::from_utf8_lossy(bytes);
     let mut segments = Vec::new();

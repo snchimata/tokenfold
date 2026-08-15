@@ -1,5 +1,5 @@
-//! F-045: reversible evidence store and retrieval (`roadmap.md` F-045, `interfaces.md`
-//! "Retrieval Marker Grammar" and the `[retrieval]` `tokenfold.toml` schema block).
+//! Reversible evidence store and retrieval: content-addressed storage of pre-transform
+//! originals, plus the `[retrieval]` `tokenfold.toml` schema block that configures it.
 //!
 //! Granularity in this pass is whole-payload, not per-span: `pipeline.rs` stores the entire
 //! pre-transform input under its SHA-256 content hash when `CompressionPolicy.store_originals`
@@ -27,7 +27,7 @@ use crate::transforms::redaction;
 /// `tokenfold.toml`'s documented `[retrieval].ttl_seconds` default (7 days).
 pub const DEFAULT_TTL_SECONDS: u64 = 604_800;
 
-/// One retrieval marker's worth of metadata, per `interfaces.md`'s Retrieval Marker Grammar:
+/// One retrieval marker's worth of metadata, in the documented marker grammar:
 /// `[tokenfold:retrieve hash=<hex> alg=sha256 namespace=<ns> bytes=<n> ttl=<seconds>]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetrievalMarker {

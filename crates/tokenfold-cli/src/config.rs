@@ -1,6 +1,7 @@
-//! `tokenfold.toml` / env-var / flag precedence, per INTERFACES.md Part 3. Only the
-//! `[compression]`, `[output]`, `[safety]`, `[retrieval]` (F-045), `[analytics]` (F-046), and
-//! `[filters]` (F-047) sections are implemented — the remaining documented sections (`proxy`,
+//! `tokenfold.toml` / env-var / flag precedence: flags beat environment variables, which beat
+//! the config file (`tokenfold.toml` / `.tokenfoldrc`), which beats built-in defaults. Only the
+//! `[compression]`, `[output]`, `[safety]`, `[retrieval]`, `[analytics]`, and `[filters]`
+//! sections are implemented — the remaining documented sections (`proxy`,
 //! `update`, `benchmark`, `estimator`) describe subsystems that don't exist yet (v0.2+); they
 //! parse as ignored unknown top-level tables rather than being rejected, so a config file
 //! following the full documented schema doesn't break against this subset.
@@ -51,11 +52,11 @@ struct SafetySection {
     unsafe_disable_redaction: bool,
 }
 
-/// F-045 `[retrieval]` — mirrors INTERFACES.md's schema block. `store_originals`/`namespace`
+/// `[retrieval]` — settings for the reversible evidence store. `store_originals`/`namespace`
 /// are threaded into `CompressionPolicy` (see `build_policy`); `ttl_seconds`/`max_store_bytes`
 /// only affect `tokenfold retrieve`'s store construction in this pass — `compress`/`wrap`-time
-/// storage always uses `retrieval_store`'s own default TTL/backend/path (documented v0.2 scope
-/// cut, see ROADMAP.md's F-045 exit-criterion note).
+/// storage always uses `retrieval_store`'s own default TTL/backend/path (a documented v0.2 scope
+/// cut against the store's planned TTL/max-size/gc lifecycle).
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct RetrievalSection {
@@ -67,8 +68,9 @@ struct RetrievalSection {
     store_path: Option<PathBuf>,
 }
 
-/// F-046 `[analytics]` — mirrors INTERFACES.md's schema block exactly (`enabled`, `ledger_db`,
-/// `retention_days`, `hash_project_paths`).
+/// `[analytics]` — settings for the local stats ledger. `deny_unknown_fields` below makes these
+/// four the complete accepted key set: `enabled`, `ledger_db`, `retention_days`,
+/// `hash_project_paths`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct AnalyticsSection {
@@ -78,8 +80,9 @@ struct AnalyticsSection {
     hash_project_paths: Option<bool>,
 }
 
-/// F-047 `[filters]` — mirrors INTERFACES.md's schema block exactly (`enabled`,
-/// `project_filters`, `user_filters`, `trust_store`, `trust_project_filters`).
+/// `[filters]` — filter-pack discovery and trust settings. `deny_unknown_fields` below makes
+/// these five the complete accepted key set: `enabled`, `project_filters`, `user_filters`,
+/// `trust_store`, `trust_project_filters`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct FiltersSection {
@@ -126,7 +129,7 @@ pub struct Effective {
     pub retrieval_namespace: String,
     pub retrieval_ttl_seconds: Option<u64>,
     /// Resolved and validated (precedence + `deny_unknown_fields`), but not yet consumed by
-    /// any command surface in this pass: `tokenfold retrieve gc` (ROADMAP.md F-045) — the only
+    /// any command surface in this pass: `tokenfold retrieve gc` — the only
     /// natural consumer of a size cap — isn't wired up yet. Kept `pub` and tested so a future
     /// `gc` subcommand only needs to read it, not add config plumbing.
     #[allow(dead_code)]
@@ -391,8 +394,8 @@ pub fn resolve(
             .unwrap_or_else(tokenfold_core::filters::TrustStore::default_path)
     };
 
-    // `TOKENFOLD_TRUST_PROJECT_FILTERS=1` is the literal, contract-documented CI override
-    // (INTERFACES.md §7.3) — deliberately NOT namespaced as
+    // `TOKENFOLD_TRUST_PROJECT_FILTERS=1` is the literal CI override that lets project-tier
+    // filter packs load without a trust-store record — deliberately NOT namespaced as
     // `TOKENFOLD_FILTERS_TRUST_PROJECT_FILTERS` so it matches the documented name exactly.
     let filters_trust_project_filters =
         if let Some(v) = env_bool("TOKENFOLD_TRUST_PROJECT_FILTERS").transpose()? {

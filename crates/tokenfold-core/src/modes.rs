@@ -4,7 +4,7 @@
 //! cannot be disabled (see `budget::CompressionPolicyBuilder::build`).
 //!
 //! `tests/fixtures/mode_matrix.toml` mirrors this table for cross-surface testing
-//! (INTERFACES.md Part 2 is the authoritative reference for both).
+//! (this table is authoritative; the fixture must be kept in sync with it).
 
 use crate::budget::{CompressionMode, TaskScope};
 use crate::input::InputFormat;
@@ -71,12 +71,12 @@ impl ModeEntry {
     }
 }
 
-// Canonical ordered table — order here IS the pipeline execution order (INTERFACES.md Part 2:
-// lossless before lossy, higher-savings before lower-savings, within each mode).
+// Canonical ordered table — order here IS the pipeline execution order (lossless before lossy,
+// higher-savings before lower-savings, within each mode).
 //
-// ponytail: `table_compaction` is intentionally omitted. The First Consumer worksheet
-// (plan.md) doesn't name tables among the dominant payload types, so F-019 stays out of
-// scope until a consumer worksheet asks for it (roadmap.md F-019 dependency).
+// ponytail: `table_compaction` is intentionally omitted. Tabular payloads aren't among this
+// project's dominant input types, so a table transform stays out of scope until a real consumer
+// asks for it.
 pub static ALL_ENTRIES: &[ModeEntry] = &[
     ModeEntry {
         transform_id: TransformId::JsonMinify,
@@ -164,11 +164,11 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
     ModeEntry {
         transform_id: TransformId::LogCompaction,
         version: "1.0.0",
-        // Promoted out of --experimental (roadmap.md Phase 5 Task 9, 2026-07-12): the
-        // full-lossy-promotion fidelity gate clears every D-005 draft threshold cleanly
+        // Promoted out of --experimental (Phase 5 fidelity gate, 2026-07-12): the
+        // full-lossy-promotion gate profile clears every draft fidelity threshold cleanly
         // (quality_retention=1.0, contrastive_failure_rate=0.0, critical_token_survival_rate=1.0).
-        // conservative_enabled stays false — per plan.md's mode table, Conservative never runs
-        // lossy-with-evidence transforms at all, same convention table_compaction documents.
+        // conservative_enabled stays false — Conservative never runs lossy-with-evidence
+        // transforms at all, same convention table_compaction documents.
         conservative_enabled: false,
         balanced_enabled: true,
         aggressive_enabled: true,
@@ -182,12 +182,14 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
     ModeEntry {
         transform_id: TransformId::DiffCompaction,
         version: "1.0.0",
-        // Stays --experimental (roadmap.md Phase 5 Task 9, 2026-07-12 re-investigation): the
+        // Stays --experimental (Phase 5 fidelity gate, 2026-07-12 re-investigation): the
         // full-lossy-promotion gate's per_variant breakdown checked the default (body-preserving,
         // task_scope != ChangeSummary) and header-only (TaskScope::ChangeSummary) forms
-        // separately, as F-013 requires, and BOTH miss the D-005 draft thresholds on their own
-        // (default: quality_retention=0.36, contrastive_failure_rate=0.5, critical_token_survival=
-        // 0.5). Root cause: compact_diff has no fallback for non-diff-shaped input — it drops
+        // separately, as diff_compaction's two documented forms require, and BOTH miss the draft
+        // fidelity thresholds on their own — the bar is quality_retention >= 0.95,
+        // contrastive_failure_rate <= 0.005, critical_token_survival >= 0.99, and the default form
+        // measured quality_retention=0.36, contrastive_failure_rate=0.5, critical_token_survival=
+        // 0.5. Root cause: compact_diff has no fallback for non-diff-shaped input — it drops
         // everything, critical tokens included, when no line matches a unified-diff prefix. See
         // eval/tasks/FIXTURES.md's "Scorer status" section for the full measured breakdown.
         conservative_enabled: false,
@@ -205,7 +207,7 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
         ],
     },
     // v0.2+ entries (table_compaction, prose_extraction, code_digest, conversation) added
-    // here after their fidelity approval / D-002 scope decisions land.
+    // here after their fidelity approval / scope decisions land.
 ];
 
 /// Returns the ordered, applicable transform list for a given (mode, task_scope, format).

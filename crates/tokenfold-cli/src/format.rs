@@ -38,10 +38,9 @@ impl FormatArg {
     }
 }
 
-/// Resolves `InputFormat::Auto` per INTERFACES.md §"InputFormat::Auto Detection": a
-/// deliberately conservative sniff, JSON shape first, then diff markers, then plain text.
-/// `from_wrap` is the one caller-supplied hint (rule 4: unformatted `wrap` output defaults to
-/// `CommandOutput` rather than `PlainText`).
+/// Resolves `InputFormat::Auto` with a deliberately conservative sniff: JSON shape first, then
+/// diff markers, then plain text. `from_wrap` is the one caller-supplied hint — unformatted
+/// `wrap` output resolves to `CommandOutput` rather than `PlainText`.
 pub fn detect_format(bytes: &[u8], from_wrap: bool) -> InputFormat {
     if let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) {
         if let Some(obj) = value.as_object()

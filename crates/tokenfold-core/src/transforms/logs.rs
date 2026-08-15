@@ -1,15 +1,15 @@
 //! `log_compaction` transform (canonical id `"log_compaction"`, v1.0.0).
 //!
-//! **Mode:** lossy-with-evidence. Ships behind `--experimental` until the fidelity gate
-//! (roadmap.md F-016) is green for this transform; see `crate::modes::ALL_ENTRIES`.
+//! **Mode:** lossy-with-evidence. Ships behind `--experimental` until the eval harness's
+//! fidelity gate is green for this transform; see `crate::modes::ALL_ENTRIES`.
 //!
 //! Collapses runs of three or more **adjacent** identical lines into three output lines:
 //! the first occurrence, an evidence marker `[repeated Nx]` recording exactly how many
 //! copies were dropped, and the last occurrence. This preserves enough evidence to tell a
 //! reader "this line repeated N times here" without paying the token cost of every copy.
 //!
-//! Deliberate behavioral contract (see `port_spec` in `eval/transforms/log_compaction.py`
-//! and roadmap.md F-012):
+//! Deliberate behavioral contract (the byte-exact golden fixtures under
+//! `tests/golden/log_compaction/` pin every rule below):
 //! - **Threshold is 3, not 2.** Runs of exactly one or exactly two adjacent identical lines
 //!   are left completely untouched — no marker, every line kept. Only a run of three or
 //!   more collapses to the three-line evidence form above, regardless of how long the run

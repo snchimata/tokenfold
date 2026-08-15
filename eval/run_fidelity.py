@@ -3,14 +3,13 @@
 
 WHAT THIS IS
 ------------
-Two profiles of the fidelity gate described in `ENGINEERING.md` ("Fidelity
-Tests") and `ROADMAP.md` (D-005, Fidelity Gate Thresholds) are implemented:
+Two profiles of the fidelity gate are implemented, scored against the draft
+downstream-quality thresholds defined below:
 
   * `smoke-first-consumer` - proves the harness *mechanism* end to end
     (argument parsing, fixture loading, per-fixture scoring, aggregation,
     gate artifact shape, exit codes) using fixtures small enough to
-    hand-verify. Runs on merge + release (ENGINEERING.md's gate-profile
-    table).
+    hand-verify. Runs on merge + release.
   * `full-lossy-promotion` - the release-gate profile that decides whether
     `log_compaction`/`diff_compaction` may leave `--experimental`. Adds an
     accuracy@ratio curve (bucketed by measured compression ratio), the
@@ -22,8 +21,8 @@ WHAT THIS IS NOT
 ----------------
 Neither profile is a live LLM-judged accuracy@ratio harness. As of this
 writing, no `ANTHROPIC_API_KEY` is configured for this project and the real
-downstream-quality thresholds are still an open decision (see
-`ROADMAP.md` D-005, status OPEN). So instead of calling a real model to
+downstream-quality thresholds are still an open decision (the values below
+are drafts, not final). So instead of calling a real model to
 score "did the compressed text still let a downstream task succeed?", both
 profiles substitute the same cheap, fully deterministic, stdlib-only proxy:
 
@@ -52,9 +51,9 @@ FUTURE WORK (tracked, not done here)
 Upgrading to a live LLM-judged scorer - using a pinned model version and a
 real `ANTHROPIC_API_KEY` - to compute genuine downstream-task
 `quality_retention` and `contrastive_failure_rate` is a documented future
-step (see `eval/tasks/FIXTURES.md` and `ENGINEERING.md` "Fidelity Tests").
+step (see `eval/tasks/FIXTURES.md`).
 This bootstrap only proves the gate mechanism works; it does not certify
-that any transform meets the real D-005 thresholds once those are judged
+that any transform meets the real fidelity thresholds once those are judged
 by a live model against real downstream tasks.
 
 ponytail: the task that added `full-lossy-promotion` allowed an *optional*
@@ -91,8 +90,8 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Draft gate thresholds, per ROADMAP.md D-005 ("Fidelity Gate Thresholds",
-# status OPEN as of this writing). These are the *draft* values agreed
+# Draft fidelity-gate thresholds. The project's final downstream-quality
+# thresholds are still an open decision. These are the *draft* values agreed
 # pre-Phase 2; final values are set after Phase 2 accuracy@ratio data is
 # collected against a live judge. Until then, this bootstrap gate applies
 # the Balanced-mode-equivalent draft numbers:
@@ -130,8 +129,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = SCRIPT_DIR / "tasks" / "smoke"
 FULL_LOSSY_FIXTURES_DIR = SCRIPT_DIR / "tasks" / "full_lossy"
 # full-lossy-promotion only gates the two transforms still behind
-# --experimental (roadmap.md Task 9); json_minify/schema_compaction were
-# already promoted in Phase 2 and aren't re-litigated here.
+# --experimental; json_minify and schema_compaction were already promoted
+# in Phase 2 and aren't re-litigated here.
 FULL_LOSSY_TRANSFORMS = ("log_compaction", "diff_compaction")
 
 
@@ -179,7 +178,7 @@ def _contrastive_failure_proxy(
     `original` is defined to "pass" trivially (critical tokens are always
     authored to exist verbatim in `original`; see eval/tasks/FIXTURES.md).
     `compressed` "fails" - a contrastive failure, the headline safety KPI
-    from plan.md's ACON-style framing - when either a critical token no
+    from the ACON-style framing - when either a critical token no
     longer survives, or the lexical-overlap proxy drops below
     `CONTRASTIVE_QUALITY_FLOOR` (too little surrounding context plausibly
     remains). Still a bootstrap proxy, not a live judge - see module
@@ -302,8 +301,8 @@ def run_full_lossy_promotion_gate(profile: str) -> int:
         gate's `critical_token_survival_rate`, just over a larger, more
         varied fixture set)
 
-    Promotion out of `--experimental` (roadmap.md Task 9) requires each
-    transform to *individually* clear the D-005 draft Balanced thresholds -
+    Promotion out of `--experimental` requires each transform to
+    *individually* clear the draft Balanced thresholds defined above -
     a transform-blended average can't be used to promote both together,
     since one transform passing cleanly could otherwise mask the other
     failing. `per_transform` in the artifact carries that breakdown; the
@@ -312,8 +311,8 @@ def run_full_lossy_promotion_gate(profile: str) -> int:
 
     `diff_compaction` additionally has two behaviorally distinct forms
     selected by `task_scope` (see `pipeline.rs`'s
-    `keep_line_bodies = policy.task_scope != TaskScope::ChangeSummary` and
-    F-013 in roadmap.md): the default, body-preserving form (any task scope
+    `keep_line_bodies = policy.task_scope != TaskScope::ChangeSummary`):
+    the default, body-preserving form (any task scope
     other than `ChangeSummary`) and the header-only form (`TaskScope::
     ChangeSummary` only, an explicit opt-in to a lossier tradeoff). Blending
     both into one `per_transform["diff_compaction"]` average conflates "is
@@ -493,8 +492,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Gate profile to run: 'smoke-first-consumer' or "
-            "'full-lossy-promotion' (see ENGINEERING.md 'Fidelity Tests' for "
-            "the full profile table)."
+            "'full-lossy-promotion' (see this module's docstring for what "
+            "each profile covers)."
         ),
     )
     return parser

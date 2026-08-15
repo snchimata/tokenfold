@@ -32,7 +32,7 @@ reason = "PCRE/backtracking regex is forbidden in token/redaction paths."
 
 [[bans.deny]]
 name = "native-tls"
-reason = "tokenfold-proxy uses ureq's rustls backend so upstream TLS never depends on system OpenSSL — required for the static/musl binary story (R-009). Do not reintroduce native-tls."
+reason = "tokenfold-proxy uses ureq's rustls backend so upstream TLS never depends on system OpenSSL — required for the static/musl binary story: a cross-compiled static build must not need a system TLS toolchain. Do not reintroduce native-tls."
 
 [[bans.deny]]
 name = "openssl-sys"

@@ -1,4 +1,4 @@
-//! F-046 CLI glue for `stats`/`gain`/`session`: ad-hoc report-glob expansion, report-file ->
+//! CLI glue for `stats`/`gain`/`session`: ad-hoc report-glob expansion, report-file ->
 //! `LedgerRecord` conversion, and JSON/CSV/human printing. The actual aggregation logic lives in
 //! `tokenfold_core::stats::aggregate` — this module only feeds it and renders its output.
 

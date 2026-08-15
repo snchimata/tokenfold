@@ -1,5 +1,5 @@
-//! Black-box tests against the compiled `tokenfold-proxy` binary, covering ROADMAP.md's Phase 5
-//! proxy exit criterion: compression on provider passthrough, unbuffered SSE, conflicting-framing
+//! Black-box tests against the compiled `tokenfold-proxy` binary, covering the proxy's four
+//! release criteria: compression on provider passthrough, unbuffered SSE, conflicting-framing
 //! rejection, and no credential leakage into logs.
 
 use std::io::{BufRead, BufReader, Read, Write};

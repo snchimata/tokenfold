@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""v0.4-alpha learned-selector *baseline* harness (F-057, shadow-only).
+"""v0.4-alpha learned-selector *baseline* harness (shadow-only).
 
-This is the "baselines first" stage of the v0.4 research plan in
-`docs/solution-design/model-research.md`: before any model is trained, it runs a set of
+This is the "baselines first" stage of the v0.4 learned-selector research plan:
+before any model is trained, it runs a set of
 deterministic keep/drop selectors over paired downstream tasks at *exact provider-token
 ceilings* and reports an achieved-token / task-score curve. There is no ML here and nothing
 is written to any served path — a learned selector will later plug in as just another entry
@@ -17,8 +17,8 @@ Selectors: keep_all, forced_only, recency, frequency, bm25, llmlingua_style (a p
 self-information proxy). Compressor baselines: deterministic-tokenfold (Rust CLI).
 
 Deliberately deferred (documented, not hidden — see `eval/tasks/v04/README.md`):
-  - RTK and RTK+tokenfold (external tool) and the unmodified Headroom Kompress-v2 achieved-token
-    sweep (needs the ML checkpoint) as additional baselines.
+  - RTK and RTK+tokenfold (external tool) as additional baselines, plus an achieved-token sweep
+    of a third-party content-aware compressor.
   - Real Tier-B public-repo corpora and project-disjoint train/test splits.
   - Structural (diff-hunk / JSON-container / AST) segmentation; v0.4-alpha segments by line.
   - An LLM judge for task success (the current scorer is a deterministic containment proxy).
@@ -74,7 +74,7 @@ def forced_indices(units: list[str], critical_atoms: list[str]) -> set[int]:
     """Units containing any declared critical atom are force-kept, regardless of the selector.
 
     This is the deterministic layer that makes 100% critical-atom survival a *structural*
-    guarantee (a hard gate in model-research.md) rather than something a learned model must get
+    guarantee (a hard gate `--gate` asserts) rather than something a learned model must get
     right. A learned selector only ever ranks the *remaining* units."""
     return {
         i
@@ -157,7 +157,7 @@ def sel_llmlingua_style(units: list[str], query: str) -> list[float]:
     redundant ones. Scores each unit by mean per-token self-information (surprisal,
     `-log2 P(token)`) under a unigram model estimated from the document itself — a deterministic
     stand-in for LLMLingua's small-LM token perplexity (the real method needs an LM at inference,
-    deferred: model-research.md keeps ML off the default path). Query-independent like `frequency`,
+    deferred: ML stays off this harness's default path). Query-independent like `frequency`,
     but an information-theoretic surprisal rather than a `1/df` heuristic, so boilerplate lines of
     common tokens rank low and lines carrying rare/surprising content rank high."""
     counts: dict[str, int] = {}
@@ -198,7 +198,7 @@ DETERMINISTIC_SELECTORS = tuple(SELECTORS)
 # change. Its code + weights live in a *gitignored* local module ($TOKENFOLD_LEARNED_MODULE,
 # default `learned.selector`, under eval/) that owns the torch/transformers imports, so when the
 # ML stack or the local module is absent the import fails and the selector is cleanly skipped,
-# exactly like tiktoken and the tokenfold CLI above. Contract (model-research.md): the module
+# exactly like tiktoken and the tokenfold CLI above. Contract: the module
 # exposes LEARNED_SELECTORS: dict[str, callable], each callable (units, query) -> list[float]
 # emitting *scores only*; the harness's deterministic critical-atom forcing + ceiling allocator +
 # byte-copy assembly still own the output (so 100% critical-atom survival stays structural, and
@@ -401,7 +401,7 @@ def allocate(
     """Force critical units, then greedily add the highest-scored eligible units whose inclusion
     keeps the *re-tokenized full candidate* within `budget_tokens`.
 
-    Per model-research.md the ceiling is checked on the assembled candidate, not by summing
+    The ceiling is checked on the assembled candidate, not by summing
     per-unit estimates (subword merges make per-unit costs non-additive) -- `cost()` below still
     does that exact full re-tokenize and remains the one thing that can ever accept a candidate
     the shortcuts below aren't sure about.
@@ -483,8 +483,8 @@ def _ws_strip(text: str) -> str:
 
 def score_task(kept_text: str, fixture: dict) -> dict:
     """Deterministic proxy for downstream task success: every critical atom present AND the gold
-    answer span present in the retained context. Not an LLM judge (which model-research.md
-    reserves for diagnosing failures, never for satisfying a gate).
+    answer span present in the retained context. Not an LLM judge (an LLM judge is
+    reserved for diagnosing failures, never for satisfying a gate).
 
     Containment is whitespace-insensitive so a lossless reformat (e.g. a compressor minifying
     `"max_results": 25` to `"max_results":25`) still counts as surviving. Selector baselines keep
@@ -827,8 +827,8 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
             # 4. Compressor baselines stay best-effort on budget/ratio (a real CLI subprocess,
             # not gated the way the pure-Python selectors above are), but critical-content
             # survival is a real data-safety property, not a ratio nicety, and a lossy
-            # compressor specifically has real ways to violate it (see
-            # docs/solution-design/lossy-json-compression.md's post-implementation corrections)
+            # compressor specifically has real ways to violate it (recoverable array pruning
+            # can drop the very records a downstream task needs)
             # -- so it IS gated here, for every compressor, whenever the binary is available.
             results = {}
             for name in COMPRESSORS:

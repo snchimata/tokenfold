@@ -1,4 +1,4 @@
-//! F-054 / F-055 integration tests for `wrap --rtk` composition.
+//! Integration tests for `wrap --rtk` composition.
 //!
 //! RTK is faked with a tiny script the test writes and points `TOKENFOLD_RTK_BIN` at, driven by
 //! env vars (`FAKE_RTK_VERSION`, `FAKE_RTK_STDOUT`, `FAKE_RTK_EXIT`, `FAKE_RTK_TEE`) that the

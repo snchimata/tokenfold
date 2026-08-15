@@ -79,11 +79,11 @@ enum Command {
         /// Routes to the same code path as `inspect`: no stdout payload, report only.
         #[arg(long)]
         dry_run: bool,
-        /// F-045: persist the original payload to the reversible evidence store, keyed by its
+        /// Persist the original payload to the reversible evidence store, keyed by its
         /// SHA-256 hash, unless it contains secret-shaped content.
         #[arg(long = "store-originals")]
         store_originals: bool,
-        /// F-045: namespace stored originals are keyed under (see `tokenfold retrieve`).
+        /// Namespace stored originals are keyed under (see `tokenfold retrieve`).
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
         /// Opt-in LOSSY JSON array-item selection — drops array items to hit a token budget
@@ -92,8 +92,8 @@ enum Command {
         /// disables `json_field_fold`/`json_value_dict` regardless of `--disable`, since both
         /// restructure arrays before this stage runs and would otherwise silently move a
         /// `--lossy-preserve` path off the array it names. Only applies to generic JSON — never
-        /// runs on OpenAI/Anthropic message payloads. See
-        /// docs/solution-design/lossy-json-compression.md.
+        /// runs on OpenAI/Anthropic message payloads. See the "Recoverable lossy pruning"
+        /// section of README.md for worked examples.
         #[arg(long)]
         lossy: Option<LossyArg>,
         /// BEST-EFFORT selection hint, not a budget: how aggressively to prune, expressed as the
@@ -118,17 +118,17 @@ enum Command {
     /// Run a command and compress its captured output. `shell` is a visible alias.
     #[command(visible_alias = "shell", alias = "exec")]
     Wrap {
-        /// F-045: persist the captured output to the reversible evidence store.
+        /// Persist the captured output to the reversible evidence store.
         #[arg(long = "store-originals")]
         store_originals: bool,
-        /// F-045: namespace stored originals are keyed under (see `tokenfold retrieve`).
+        /// Namespace stored originals are keyed under (see `tokenfold retrieve`).
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
-        /// F-054: route command output through an external RTK before tokenfold's generic
+        /// Route command output through an external RTK before tokenfold's generic
         /// pipeline. Falls open to the tokenfold-only path if RTK is missing/incompatible.
         #[arg(long = "rtk")]
         rtk: bool,
-        /// F-055: opt into CCR — hand RTK a permission-restricted per-run tee dir, ingest the
+        /// Opt into CCR — hand RTK a permission-restricted per-run tee dir, ingest the
         /// pre-RTK raw capture through redaction/persistence, then delete it. Requires `--rtk`.
         #[arg(long = "rtk-capture-raw", requires = "rtk")]
         rtk_capture_raw: bool,
@@ -163,7 +163,7 @@ enum Command {
         #[command(subcommand)]
         action: McpAction,
     },
-    /// F-045: restore an original payload stored via `--store-originals`.
+    /// Restore an original payload stored via `--store-originals`.
     Retrieve {
         /// A raw hex SHA-256 hash, a `[tokenfold:retrieve ...]` marker, or a path to a
         /// `CompressionReport` JSON file.
@@ -173,7 +173,7 @@ enum Command {
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
     },
-    /// F-046: aggregate ad-hoc `CompressionReport` JSON files and/or the local ledger.
+    /// Aggregate ad-hoc `CompressionReport` JSON files and/or the local ledger.
     Stats {
         /// Glob(s) matching `CompressionReport` JSON files (e.g. `reports/*.json`). A bare
         /// existing file path also works. Aggregation always additionally includes the local
@@ -189,7 +189,7 @@ enum Command {
         #[arg(long)]
         ledger: Option<PathBuf>,
     },
-    /// F-046: realized token/cost savings summary from the local ledger.
+    /// Realized token/cost savings summary from the local ledger.
     Gain {
         #[arg(long)]
         scope: Option<String>,
@@ -199,12 +199,12 @@ enum Command {
         #[arg(long)]
         csv: bool,
     },
-    /// F-046: host-session command-wrapping coverage from the local ledger.
+    /// Host-session command-wrapping coverage from the local ledger.
     Session {
         #[arg(long)]
         recent: Option<usize>,
     },
-    /// F-047: declarative command-output filter registry.
+    /// Declarative command-output filter registry.
     Filters {
         #[command(subcommand)]
         action: FiltersAction,
@@ -229,7 +229,7 @@ enum Command {
 
 #[derive(Subcommand)]
 enum McpAction {
-    /// Start the MCP stdio server (blocks until stdin closes); see INTERFACES.md §4.
+    /// Start the MCP stdio server: newline-delimited JSON-RPC 2.0, blocking until stdin closes.
     Serve,
 }
 
@@ -239,7 +239,7 @@ enum FiltersAction {
     List,
     /// Validate schema, regex safety, and inline fixtures for every discovered filter pack.
     Verify {
-        /// CI contract (INTERFACES.md §7.3): any failure becomes a non-zero exit.
+        /// CI contract: any failure becomes a non-zero exit (without it, failures still exit 0).
         #[arg(long = "require-all")]
         require_all: bool,
     },
@@ -568,8 +568,8 @@ fn cmd_inspect(
         return Ok(0);
     }
 
-    // `inspect` never stores originals: it's a dry-run preview, and per INTERFACES.md
-    // `tokenfold_inspect` also defaults `store_originals` to false. `policy.preview = true` is
+    // `inspect` never stores originals: it's a dry-run preview, and the MCP `tokenfold_inspect`
+    // tool defaults `store_originals` to false for the same reason. `policy.preview = true` is
     // the actual enforcement of that for the lossy path -- it's what stops
     // pipeline::apply_lossy_reduction from performing real RetrievalStore writes even though
     // `--lossy` forces store_originals-equivalent behavior on for a real compress run.
@@ -664,7 +664,7 @@ fn cmd_compress(
 
     write_payload(output_path.as_deref(), &output.bytes)?;
 
-    // F-046: record redacted ledger metadata for this run, best-effort (see `record_to_ledger`).
+    // Record redacted ledger metadata for this run, best-effort (see `record_to_ledger`).
     let input_path = match &input {
         Input::Path(p) => Some(p.as_path()),
         Input::Stdin => None,
@@ -937,7 +937,7 @@ struct BuildPipeline<'a> {
     report: &'a tokenfold_core::report::CompressionReport,
 }
 
-/// F-055: assemble the staged `raw -> RTK -> tokenfold` receipt. RTK's savings live only in the
+/// Assembles the staged `raw -> RTK -> tokenfold` receipt. RTK's savings live only in the
 /// RTK stage and in `total_saved_tokens`; they are never folded into the top-level
 /// `saved_tokens`, which stays scoped to tokenfold_core.
 fn build_pipeline_report(p: BuildPipeline) -> PipelineReport {
@@ -1070,7 +1070,7 @@ fn cmd_wrap(
     let policy = build_policy(&resolved.effective, None, None, &[], false)?;
 
     // --- Stage 1: acquire command output, RTK-composed or direct. ---
-    // F-054: RTK preflight runs *before* the child. If RTK is missing/incompatible we fail open
+    // RTK preflight runs *before* the child. If RTK is missing/incompatible we fail open
     // to the tokenfold-only path here, before any side-effectful command has started. Once RTK
     // (or the child) has been spawned we never rerun it — its output and exit code are final.
     let mut rtk_ran = false;
@@ -1102,9 +1102,9 @@ fn cmd_wrap(
         run_child(program, args)?
     };
 
-    // F-047: check for a trusted filter pack matching the invoked argv *before* the generic
-    // compress() pipeline runs. Composition choice (see ROADMAP.md F-047, "runs before or
-    // alongside generic log_compaction"): the filter stage-pipeline runs first, its own
+    // Check for a trusted filter pack matching the invoked argv *before* the generic
+    // compress() pipeline runs. Composition choice (a command filter may run either before
+    // or alongside generic log_compaction): the filter stage-pipeline runs first, its own
     // never_worse guard ensures it never hands compress() anything worse than the true raw
     // bytes, and its (possibly reduced) output is simply what compress() then sees as its
     // input — no special bypass path in `pipeline.rs`. One side effect of this choice:
@@ -1112,7 +1112,7 @@ fn cmd_wrap(
     // compress(), not the true pre-filter raw size — `CommandReport.raw_output_bytes` below
     // still reports the true raw byte count for that visibility.
     //
-    // F-054 double-filtering avoidance: when RTK ran, it already owns command-specific
+    // Double-filtering avoidance: when RTK ran, it already owns command-specific
     // filtering, so tokenfold's overlapping filter pack is skipped. Mandatory redaction,
     // generic compression, safety rollback, and the compress-level never_worse guard still run
     // (they live inside compress()).
@@ -1160,7 +1160,7 @@ fn cmd_wrap(
     }
     let never_worse_applied = filter_never_worse_reverted || compress_never_worse;
 
-    // --- Stage 2 accounting: CCR raw-capture ingestion (F-055). ---
+    // --- Stage 2 accounting: CCR raw-capture ingestion. ---
     // The transient tee file was already deleted by rtk::run's RAII guard once its bytes were
     // read into memory; here we only persist those in-memory bytes through the normal
     // redaction/persistence gate. `RetrievalStore::store` refuses secret-matched bytes, so a
@@ -1251,7 +1251,7 @@ fn cmd_wrap(
 
     write_payload(None, &output.bytes)?;
 
-    // F-046: record redacted ledger metadata for this run, best-effort (see `record_to_ledger`).
+    // Record redacted ledger metadata for this run, best-effort (see `record_to_ledger`).
     // Wrapped commands have no file-path attribution to hash, hence the "wrap" placeholder.
     record_to_ledger(&resolved.effective, &output.report, None, "wrap");
 
@@ -1331,7 +1331,7 @@ fn cmd_benchmark(
     Ok(0)
 }
 
-// ponytail: no v0.1 agent host has been chosen yet (roadmap.md D-002/D-004 leave the "first
+// ponytail: no v0.1 agent host has been chosen yet (the v0.1 scope decisions left the "first
 // supported agent host" undecided), so every `--agent` value is honestly reported as
 // unsupported rather than pretending to patch a host config that doesn't exist. Add real
 // host integrations here once a first host is picked.
@@ -1371,7 +1371,7 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
             Err(e) => (None, Some(e.to_string())),
         };
 
-    // F-054: additive RTK health. RTK is optional, so `missing` is a warning, never a failure.
+    // Additive RTK health. RTK is optional, so `missing` is a warning, never a failure.
     let rtk = rtk::doctor_probe();
 
     if global.json {
@@ -1424,7 +1424,7 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
     Ok(if config_error.is_some() { 5 } else { 0 })
 }
 
-/// F-045: `tokenfold retrieve <hash-or-marker-or-report-path>`.
+/// `tokenfold retrieve <hash-or-marker-or-report-path>`.
 fn cmd_retrieve(
     global: &GlobalFlags,
     reference: String,
@@ -1513,7 +1513,7 @@ fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
-/// F-046: appends redacted ledger metadata for one successful compress/wrap run when
+/// Appends redacted ledger metadata for one successful compress/wrap run when
 /// `[analytics].enabled` is true. Best-effort — a ledger write failure must never fail the
 /// command it's recording, so errors are silently dropped here (the compression itself already
 /// succeeded by the time this is called).
@@ -1568,7 +1568,7 @@ fn project_attribution(
     }
 }
 
-/// F-046: `tokenfold stats [report-glob...] [--json|--csv] [--scope] [--window]`. Aggregates
+/// `tokenfold stats [report-glob...] [--json|--csv] [--scope] [--window]`. Aggregates
 /// ad-hoc `CompressionReport` JSON files matched by `report_globs` plus the local ledger (when
 /// `[analytics].enabled`), through the one shared `tokenfold_core::stats::aggregate` path.
 fn cmd_stats(
@@ -1612,7 +1612,7 @@ fn cmd_stats(
     Ok(0)
 }
 
-/// F-046: `tokenfold gain [--scope project|user] [--since 30d] [--json|--csv]`. Summarizes
+/// `tokenfold gain [--scope project|user] [--since 30d] [--json|--csv]`. Summarizes
 /// realized token savings from the local ledger over a recency window.
 fn cmd_gain(
     global: &GlobalFlags,
@@ -1645,7 +1645,7 @@ fn cmd_gain(
     Ok(0)
 }
 
-/// F-046: `tokenfold session [--recent N] [--json]`. Host-session command-wrapping coverage:
+/// `tokenfold session [--recent N] [--json]`. Host-session command-wrapping coverage:
 /// total/wrapped/raw commands, bypasses, and `coverage_pct`.
 fn cmd_session(global: &GlobalFlags, recent: Option<usize>) -> Result<i32, TokenFoldError> {
     let overrides = overrides_for(global, None, None, None, Vec::new(), false, None);
@@ -1670,7 +1670,7 @@ fn cmd_session(global: &GlobalFlags, recent: Option<usize>) -> Result<i32, Token
     Ok(0)
 }
 
-/// F-047: `tokenfold filters list|verify|trust`.
+/// `tokenfold filters list|verify|trust`.
 fn cmd_filters(global: &GlobalFlags, action: FiltersAction) -> Result<i32, TokenFoldError> {
     let overrides = overrides_for(global, None, None, None, Vec::new(), false, None);
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
@@ -1803,9 +1803,9 @@ fn cmd_filters_list(
 }
 
 /// Validates schema + regex safety + inline fixtures for every discovered filter pack
-/// (built-in, project, user — regardless of trust: `verify` is the pre-trust CI check per
-/// INTERFACES.md §7.3, not a report on what's currently applied). `--require-all` is the
-/// documented CI contract: any failure becomes a non-zero exit; without it, failures are still
+/// (built-in, project, user — regardless of trust: `verify` is the pre-trust CI check, not a
+/// report on what's currently applied). `--require-all` is the CI contract: any
+/// failure becomes a non-zero exit; without it, failures are still
 /// reported but the command exits `0`.
 fn cmd_filters_verify(
     global: &GlobalFlags,

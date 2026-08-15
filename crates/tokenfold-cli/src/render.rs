@@ -1,4 +1,8 @@
-//! Human-readable report rendering per PLAN.md "CLI Output & UX Spec" and INTERFACES.md §1.7.
+//! Human-readable report rendering: a verdict line, the transform table, a totals row, and a
+//! severity-sorted warnings block. Color and glyphs key off status — green `✓ reachable` when the
+//! target is met, yellow `~`/`!` for best-effort/unreachable, dim for passthrough and skipped
+//! rows, and red/yellow/blue for critical/warn/info warnings. Color is suppressed by `NO_COLOR`,
+//! `--no-color`, or a non-tty stream. Transform names truncate at 22 chars unless `--no-truncate`.
 
 use std::io::IsTerminal;
 

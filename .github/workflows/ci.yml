@@ -20,6 +20,19 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Tracked source must not cite the untracked design docs or their opaque
+      # F-/D-/R- identifiers: neither resolves in a clone, so the reference is
+      # dead for everyone but the author. CHANGELOG.md is exempt as released
+      # history; eval/tasks/*.json are byte-exact fixtures whose synthetic
+      # content legitimately contains id-shaped strings.
+      - name: no references to untracked design docs
+        run: |
+          if git grep -nE 'docs/solution-design|\b(INTERFACES|ENGINEERING|ROADMAP|PLAN|ARCHITECTURE|TOUCHPOINTS)\.md|\b(roadmap|plan|interfaces|engineering|model-research|architecture|touchpoints|compression-ideas|lossy-json-compression)\.md|\b[FDR]-[0-9]{3}\b' \
+               -- $(git ls-files) ':!CHANGELOG.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!eval/tasks/**/*.json'; then
+            echo "::error::Found a reference to an untracked design document or an opaque F-/D-/R- id."
+            echo "Replace it with prose describing the behaviour, or point at a tracked file."
+            exit 1
+          fi
 
   test:
     name: test
@@ -79,20 +92,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked -- golden
 
-  # ENGINEERING.md Part 2: advisory on PR, blocking on push to main.
+  # CI gate policy: advisory on PR, blocking on push to main.
   security:
     name: security
     runs-on: ubuntu-latest
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: the secret scan below is only meaningful if it can see
+          # every commit, not just the tip.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-audit
       - uses: taiki-e/install-action@cargo-deny
       - run: cargo audit
       - run: cargo deny check advisories bans licenses sources
+      # This repo publishes to crates.io, PyPI, npm and GitHub Releases, so a
+      # leaked token is a four-registry problem. Scans full history, not just
+      # the diff, and is blocking on push to main like the rest of this job.
+      - name: secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_ENABLE_SUMMARY: true
 
-  # ENGINEERING.md Part 2: advisory on merge (gross-regression check only; bench-regression on a
+  # CI gate policy: advisory on merge (gross-regression check only; bench-regression on a
   # dedicated runner is the release-blocking gate — see release.yml).
   bench-smoke:
     name: bench-smoke
@@ -104,7 +130,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo bench --workspace --locked
 
-  # ENGINEERING.md Part 2: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
+  # CI gate policy: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
   # / API key needed yet — see eval/tasks/FIXTURES.md), so this can safely run on every PR too.
   fidelity-smoke:
     name: fidelity-smoke

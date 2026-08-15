@@ -1,8 +1,8 @@
 //! Minimal MCP (Model Context Protocol) stdio server: `tokenfold mcp serve`.
 //!
-//! Implements INTERFACES.md §4's `tokenfold_compress`, `tokenfold_inspect`, `tokenfold_retrieve`,
+//! Implements the `tokenfold_compress`, `tokenfold_inspect`, `tokenfold_retrieve`,
 //! and `tokenfold_stats` tools. The backing stores for the latter two now exist
-//! (`tokenfold_core::retrieval_store`/`tokenfold_core::stats`, F-045/F-046), so they're wired
+//! (`tokenfold_core::retrieval_store`/`tokenfold_core::stats`), so they're wired
 //! here rather than omitted as before. `tokenfold_retrieve`'s `source` is always `"local_mcp"`
 //! (this is the local retrieval store, not a proxy-side one). `tokenfold_read` is still optional
 //! and off-by-default per spec, so it remains deferred.
@@ -17,8 +17,8 @@
 //! Scope cut: `tokenfold_compress`/`tokenfold_inspect`'s own `store_originals` argument still has
 //! no effect (see `tool_input_schema`) — wiring per-request storage into those two tools is
 //! deferred to a future pass. Only the proxy's `/v1/compress` and provider-passthrough routes got
-//! that wiring this pass (`X-TokenFold-Store-Originals`/`X-TokenFold-Retrieve-Store`,
-//! INTERFACES.md §3.1).
+//! that wiring this pass (via the `X-TokenFold-Store-Originals`/`X-TokenFold-Retrieve-Store`
+//! request headers).
 //!
 //! Transport is newline-delimited JSON-RPC 2.0 over stdio, the standard MCP stdio framing: one
 //! JSON object per line in, one per line out. stdout carries only JSON-RPC messages; logs (none
@@ -132,7 +132,7 @@ fn tool_input_schema() -> Value {
             "target_tokens": {"type": "integer", "minimum": 0},
             "store_originals": {
                 "type": "boolean",
-                "description": "F-045 local retrieval store now exists (see `tokenfold_retrieve`), but this tool doesn't persist to it yet; currently has no effect here.",
+                "description": "The local retrieval store now exists (see `tokenfold_retrieve`), but this tool doesn't persist to it yet; currently has no effect here.",
             },
         },
     })
@@ -296,7 +296,7 @@ fn build_policy(arguments: &Value) -> Result<CompressionPolicy, String> {
     builder.build().map_err(|e| e.to_string())
 }
 
-/// F-045: opens the local retrieval store `tokenfold_retrieve` reads from. This file never
+/// Opens the local retrieval store `tokenfold_retrieve` reads from. This file never
 /// parses `tokenfold.toml` (see the top-of-file doc comment), so — consistently with that
 /// existing scope cut — only the same-named environment overrides `tokenfold-cli::config`
 /// already documents are honored here, defaulting to the standard filesystem store.
@@ -364,8 +364,8 @@ fn retrieve_outcome_to_value(outcome: RetrievalOutcome) -> Value {
     }
 }
 
-/// Extracts `field=<value>` from a `[tokenfold:retrieve ...]` marker string (INTERFACES.md's
-/// Retrieval Marker Grammar), stopping at the next whitespace or `]`.
+/// Extracts `field=<value>` from a `[tokenfold:retrieve hash=<hex> alg=sha256 namespace=<ns>
+/// bytes=<n> ttl=<seconds>]` marker string, stopping at the next whitespace or `]`.
 fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
     let needle = format!("{field}=");
     let start = marker.find(&needle)? + needle.len();
@@ -383,7 +383,7 @@ fn call_stats(arguments: &Value) -> Value {
     }
 }
 
-/// F-046: aggregates the local ledger (no ad-hoc report-glob support here — the tool schema is
+/// Aggregates the local ledger (no ad-hoc report-glob support here — the tool schema is
 /// just `{ scope?, window? }`) through the one shared `tokenfold_core::stats::aggregate` path.
 /// Never touches raw payload bytes: `StatsSummary` structurally carries none.
 fn run_stats(arguments: &Value) -> Result<Value, String> {

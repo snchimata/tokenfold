@@ -1,11 +1,11 @@
-//! Black-box tests against the compiled `tokenfold` binary, covering ROADMAP.md's Phase 3
-//! exit criteria: stream routing, exit codes, `--disable secret_redaction` rejection, and
+//! Black-box tests against the compiled `tokenfold` binary, covering the v0.1 CLI contract:
+//! stream routing, exit codes, `--disable secret_redaction` rejection, and
 //! stdin handling.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-/// Every test spawns the real `tokenfold` binary as a child process; since F-046, a plain
+/// Every test spawns the real `tokenfold` binary as a child process, and a plain
 /// `compress`/`wrap` run appends to the local analytics ledger by default
 /// (`[analytics].enabled = true`). Without this, every test in this file would silently write a
 /// real `ledger.db` under the *developer's actual home directory* (`$XDG_DATA_HOME` /
@@ -420,8 +420,7 @@ fn wrap_without_a_command_is_a_clear_invalid_input_error() {
 #[test]
 fn enable_without_experimental_is_rejected() {
     // diff_compaction stays --experimental after the 2026-07-12 fidelity re-investigation
-    // (log_compaction was promoted out of --experimental and no longer exercises this path;
-    // see roadmap.md Phase 5's promotion bullet).
+    // (log_compaction was promoted out of --experimental and no longer exercises this path).
     let out = Command::new(bin())
         .args([
             "compress",
@@ -629,7 +628,7 @@ fn diff_renders_a_compression_aware_header_and_body() {
     std::fs::remove_file(&compressed).ok();
 }
 
-// --- F-046: savings ledger, stats, gain, session ------------------------------------------
+// --- savings ledger, stats, gain, session -------------------------------------------------
 
 fn analytics_config(body: &str) -> std::path::PathBuf {
     let path = unique_temp_dir("analytics_config").with_extension("toml");
@@ -901,7 +900,7 @@ fn session_reports_wrap_coverage_and_respects_recent_limit() {
     std::fs::remove_file(&ledger_path).ok();
 }
 
-// --- F-047: declarative command filter registry -------------------------------------------
+// --- declarative command filter registry --------------------------------------------------
 
 fn filters_config(body: &str) -> std::path::PathBuf {
     let path = unique_temp_dir("filters_config").with_extension("toml");

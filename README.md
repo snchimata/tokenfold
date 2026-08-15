@@ -8,7 +8,7 @@
 
 CLI · Python · TypeScript · Rust · proxy · MCP · local-first · provider-neutral
 
-[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=coverage&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=npm&logo=npm&style=flat-square)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=coverage&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![GitHub Release](https://img.shields.io/github/v/release/snchimata/tokenfold?logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/releases/latest) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=npm&logo=npm&style=flat-square)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
 
 [Measured results](#measured-results) · [Platform](#one-platform-two-engines) · [Quick start](#quick-start) · [Lossy pruning](#recoverable-lossy-pruning) · [Select model](#tokenfold-select) · [Reproduce](#reproduce-the-results)
 
@@ -286,8 +286,8 @@ cargo run --release --locked -p tokenfold-cli -- \
 ```
 
 The small bundled API response reports 382 → 206 tokens, a **46.1% lossless
-reduction**. Benchmark sources and thresholds live in [CHANGELOG.md](CHANGELOG.md)
-and [`crates/tokenfold-core/benches/THRESHOLDS.toml`](crates/tokenfold-core/benches/THRESHOLDS.toml).
+reduction**. Benchmark sources and thresholds live in [CHANGELOG.md](https://github.com/snchimata/tokenfold/blob/main/CHANGELOG.md)
+and [`crates/tokenfold-core/benches/THRESHOLDS.toml`](https://github.com/snchimata/tokenfold/blob/main/crates/tokenfold-core/benches/THRESHOLDS.toml).
 
 ## Contributing
 
@@ -304,7 +304,7 @@ cd packages/tokenfold && npm ci && npm test
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
 
 ---
 

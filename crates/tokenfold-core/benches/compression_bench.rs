@@ -1,6 +1,6 @@
-//! Task 7 benchmark suite (ROADMAP.md Phase 4 / ENGINEERING.md "Benchmark Tests").
+//! Benchmark suite for `compress`: a p95-latency and bytes-allocated regression gate.
 //!
-//! ponytail: ENGINEERING.md names `criterion` + `divan` as the tools here. Both pull in real
+//! ponytail: the conventional picks here are `criterion` + `divan`. Both pull in real
 //! dependency trees (criterion: plotting/serde chain; divan: its own harness+macros) for what
 //! this project actually needs: a p95-latency and bytes-allocated regression gate against a
 //! checked-in threshold file. `std::time::Instant` + a custom counting `GlobalAlloc` do the same

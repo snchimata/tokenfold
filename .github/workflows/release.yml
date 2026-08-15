@@ -1,14 +1,15 @@
 name: Release
 
-# ROADMAP.md Phase 4 / ENGINEERING.md Part 2 "cross-compile" + "sbom" + "publish" jobs, reconciled
-# to GitHub Releases (ROADMAP.md's own Phase 0 note: the plan's "internal Artifactory" references
+# Phase 4 release automation: the "cross-compile" + "sbom" + "publish" jobs, reconciled to
+# GitHub Releases (the original plan's "internal Artifactory" references
 # need reconciling to GitHub Releases/crates.io for a solo/open-source project — this is that
 # reconciliation). Does NOT run `cargo publish` to crates.io: publishing a crate is a one-way
 # door, so it stays a manual step until explicitly wanted.
 #
-# ponytail: no signing key exists yet (D-007 is unresolved), so this produces SHA-256 checksums
-# only, not detached signatures. Add a signing step (e.g. `cosign` / `minisign`) once D-007 picks
-# a key management approach; until then the release notes must say "checksummed, not signed."
+# ponytail: no signing key exists yet (the cross-compile / release-runner strategy, key management
+# included, is still an open decision), so this produces SHA-256 checksums only, not detached
+# signatures. Add a signing step (e.g. `cosign` / `minisign`) once a key management approach is
+# picked; until then the release notes must say "checksummed, not signed."
 #
 # Pushing a `v*.*.*` tag builds and publishes the matching GitHub Release.
 
@@ -65,9 +66,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked -- golden
 
-  # ENGINEERING.md's "dedicated benchmark runner with consistent hardware" (R-014) doesn't exist
-  # for a solo project; this runs on a shared GitHub-hosted runner instead, which the same risk
-  # note (R-014) already flags as a source of latency-threshold variance. Treat a failure here as
+  # A dedicated benchmark runner with consistent hardware doesn't exist for a solo project; this
+  # runs on a shared GitHub-hosted runner instead, where variable CPU scheduling is a known
+  # source of latency-threshold variance that can mask real regressions. Treat a failure here as
   # a signal to investigate, not an automatic release blocker, until a dedicated runner exists.
   bench-regression:
     name: bench-regression
