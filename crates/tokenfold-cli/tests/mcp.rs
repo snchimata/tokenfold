@@ -1,4 +1,4 @@
-//! Black-box contract tests for `tokenfold mcp serve` per INTERFACES.md §4: newline-delimited
+//! Black-box contract tests for `tokenfold mcp serve`: newline-delimited
 //! JSON-RPC 2.0 over stdio, `initialize`/`tools/list`/`tools/call` for `tokenfold_compress` and
 //! `tokenfold_inspect`, and notifications (no `id`) never getting a response.
 
@@ -83,8 +83,7 @@ fn initialize_and_tools_list_contract() {
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"tokenfold_compress"));
     assert!(names.contains(&"tokenfold_inspect"));
-    // The retrieval store and stats ledger now exist, so both are wired and listed (INTERFACES.md
-    // §4).
+    // The retrieval store and stats ledger now exist, so both are wired and listed.
     assert!(names.contains(&"tokenfold_retrieve"));
     assert!(names.contains(&"tokenfold_stats"));
 }

@@ -1,7 +1,7 @@
-//! F-046: savings ledger, stats aggregation, and JSON/CSV export (`roadmap.md` F-046,
-//! `interfaces.md` §7.1 "Stats and Analytics JSON").
+//! Savings ledger, stats aggregation, and JSON/CSV export backing the CLI's
+//! `stats`/`gain`/`session` subcommands.
 //!
-//! `StatsSummary`/`LedgerRecord` mirror `interfaces.md`'s documented JSON shapes exactly.
+//! `StatsSummary`/`LedgerRecord` are the crate's stable machine-readable JSON shapes.
 //! `aggregate()` is the one pure aggregation path shared by the CLI's `stats`/`gain`/`session`
 //! subcommands (each just calls it and then tweaks framing fields like `scope`/`window`).
 //!
@@ -18,8 +18,8 @@
 //! codebase), `retrieval.hits`/`misses`/`expired` (only store-time marker counts are tracked,
 //! not later retrieval-attempt outcomes), `latency` (no per-request timing is threaded through
 //! `CompressionReport`/`LedgerRecord` yet — every `TransformReport.elapsed_micros` in this
-//! codebase is already always `None`), and `untrusted_filter_count` (the F-047 filter registry
-//! doesn't exist yet).
+//! codebase is already always `None`), and `untrusted_filter_count` (no count of skipped
+//! untrusted filter packs is threaded through to the ledger yet).
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -52,7 +52,7 @@ pub struct LatencyStats {
     pub p95_ms: f64,
 }
 
-/// Matches `interfaces.md` §7.1's full `StatsSummary` JSON shape verbatim.
+/// The stable `StatsSummary` JSON shape shared by `tokenfold stats`, `gain`, and `session`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StatsSummary {
     pub schema_version: String,
@@ -77,7 +77,7 @@ pub struct StatsSummary {
     pub recent_requests: Vec<LedgerRecord>,
 }
 
-/// Matches `interfaces.md` §7.1's redacted `recent_requests[]` item shape verbatim. This is
+/// The redacted `recent_requests[]` item shape of [`StatsSummary`]. This is
 /// also the exact shape persisted (one per line, as JSON) by [`LedgerStore`] — there is no
 /// separate "storage" representation, so no raw prompt/response/command-arg/path/header bytes
 /// can ever end up on disk through this type.
@@ -148,9 +148,9 @@ pub fn record_from_report(
     .to_string();
 
     // A wrap invocation whose `never_worse` guard fell back to raw output is a genuine,
-    // already-recorded "why compression didn't apply here" reason; `report.bypass` (F-047) is
-    // the future general-purpose source once the filter registry exists, but nothing sets it
-    // yet, so this `or_else` currently never fires.
+    // already-recorded "why compression didn't apply here" reason; `report.bypass` is the future
+    // general-purpose source once something records filter-registry bypasses, but nothing sets
+    // it yet, so this `or_else` currently never fires.
     let bypass_reason = report
         .command
         .as_ref()
@@ -210,8 +210,8 @@ pub fn aggregate(records: &[LedgerRecord]) -> StatsSummary {
     // estimated_lost_tokens/coverage_pct: extrapolated from the measured average savings ratio
     // of wrapped (actually-compressed) commands, applied to raw (bypassed / never-worse
     // fallback) commands' own token counts. This is the honest "straightforward" computation
-    // available today per ROADMAP.md's F-046 note: there is no filter registry (F-047) yet to
-    // report *why* coverage is incomplete, only that it is.
+    // available today: nothing records *why* coverage is incomplete for a given command, only
+    // that it is.
     let wrapped_raw_tokens: usize = records
         .iter()
         .filter(is_wrap)
@@ -263,7 +263,8 @@ pub fn aggregate(records: &[LedgerRecord]) -> StatsSummary {
         savings_pct,
         estimated_lost_tokens,
         coverage_pct,
-        // ponytail: no filter registry exists yet (ROADMAP.md F-047); real counts land with it.
+        // ponytail: nothing reports skipped untrusted filter packs here yet; real counts land
+        // when the filter registry's trust outcomes are threaded into the ledger.
         untrusted_filter_count: 0,
         // ponytail: no historical record of individual `tokenfold retrieve` outcomes exists —
         // `RetrievalReport` only carries store-time marker counts, not later hit/miss/expiry —
@@ -470,7 +471,7 @@ fn parse_timestamp_to_unix(ts: &str) -> Option<u64> {
     Some(days as u64 * 86_400 + hour * 3_600 + minute * 60 + second)
 }
 
-/// F-046's optional local ledger: appends/reads/garbage-collects redacted `LedgerRecord`
+/// The optional local savings ledger: appends/reads/garbage-collects redacted `LedgerRecord`
 /// metadata at a JSONL file path (see the module doc for the `.db`-named-but-JSONL decision).
 pub struct LedgerStore {
     path: PathBuf,
@@ -746,7 +747,7 @@ mod tests {
         assert_eq!(record.bypass_reason, Some("env".to_string()));
     }
 
-    // --- aggregate: engineering.md "stats.rs (v0.2 parity surface)" bullets ----------------
+    // --- aggregate: the v0.2 stats parity surface -------------------------------------------
 
     #[test]
     fn aggregates_fixture_reports_by_transform_format_estimator_status_and_project() {

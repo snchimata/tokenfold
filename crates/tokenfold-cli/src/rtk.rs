@@ -1,8 +1,10 @@
-//! F-054 / F-055: external RTK composition, preflight, and secure raw capture.
+//! External RTK composition, preflight, and secure raw capture.
 //!
 //! RTK is an *external, optional* executable. tokenfold never bundles it, never edits the
 //! user's RTK configuration, and always falls open to the tokenfold-only path when RTK is
-//! missing or incompatible. See INTERFACES.md §1.9 and ENGINEERING.md "v0.3 RTK Composition".
+//! missing or incompatible. Preflight resolves the executable, inspects its version, and verifies
+//! the selected raw-capture strategy before the child launches; a preflight failure falls back to
+//! the tokenfold-only wrapper and records an RTK stage of `"unavailable"`/`"incompatible"`.
 //!
 //! The invocation contract is `rtk <child argv...>`: RTK runs the child, performs its own
 //! command-specific filtering, and writes the filtered result to stdout. tokenfold then treats
@@ -193,7 +195,7 @@ fn make_capture_dir() -> Result<PathBuf, TokenFoldError> {
 }
 
 /// RAII guard that removes the transient capture directory no matter how the run exits — the
-/// transient tee must never outlive the run (INTERFACES.md §1.9).
+/// per-run tee directory tokenfold hands RTK must never outlive the run.
 struct CaptureDir(PathBuf);
 
 impl Drop for CaptureDir {

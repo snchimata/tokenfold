@@ -45,12 +45,12 @@ pub fn compress_with_estimator(
     let target = policy.target_tokens;
     let estimator_info = estimator.info();
 
-    // F-045: whole-payload evidence store, best-effort. Runs against the full pre-transform
+    // Whole-payload reversible evidence store, best-effort. Runs against the full pre-transform
     // input regardless of which status path below is taken, so it must be computed up front.
     let retrieval = maybe_store_originals(&input.bytes, input.format, policy);
 
-    // Passthrough is checked before any transform (including redaction) runs: F-001 requires
-    // input bytes to stay byte-for-byte unchanged in this case.
+    // Passthrough is checked before any transform (including redaction) runs: the budget planner
+    // contract requires input bytes to stay byte-for-byte unchanged when the input already fits.
     if let Some(t) = target
         && original_tokens <= t
     {
@@ -79,7 +79,7 @@ pub fn compress_with_estimator(
     apply_transforms(input, policy, estimator, original_tokens, target, retrieval)
 }
 
-/// F-045: when `policy.store_originals` is set, persists the full pre-transform input to the
+/// When `policy.store_originals` is set, persists the full pre-transform input to the
 /// configured reversible evidence store (`policy.retrieval_backend`/`retrieval_store_path`)
 /// under its SHA-256 hash, unless it contains secret-shaped content (`RetrievalStore::store`'s
 /// own unconditional gate — never bypassable from here). Best-effort: any storage failure
@@ -247,7 +247,7 @@ fn apply_transforms(
     }
 
     // Step 2: mode-matrix-selected transforms, in canonical order, stopping early once the
-    // target is met (INTERFACES.md Part 2 "Early Exit").
+    // target is met (the pipeline's "early exit" rule).
     //
     // When `--lossy` is set, `json_field_fold`/`json_value_dict` are DEFERRED past the lossy
     // stage rather than run in place -- both restructure an eligible array (columnar folding /
@@ -299,9 +299,9 @@ fn apply_transforms(
         );
     }
 
-    // Terminal, opt-in lossy stage (design doc §4) — strictly after the lossless loop above and
-    // its own safety gates, never gated by `modes.rs`/`ALL_ENTRIES`. `retrieval` may already
-    // hold the whole-payload F-045 report computed up front; lossy's own per-item stores merge
+    // Terminal, opt-in lossy stage — strictly after the lossless loop above and its own safety
+    // gates, never gated by `modes.rs`/`ALL_ENTRIES`. `retrieval` may already hold the
+    // whole-payload evidence-store report computed up front; lossy's own per-item stores merge
     // into it rather than replacing it.
     //
     // Both branches are computed and the better one adopted. Merely deferring the two array-
@@ -336,7 +336,7 @@ fn apply_transforms(
             );
         }
 
-        // INTERFACES.md Part 2 "Early Exit" applies to the lossy stage too, and it is where the
+        // The "early exit" rule applies to the lossy stage too, and it is where the
         // rule matters most: every other transform is checked against the target before it runs
         // (`run_transform_entry`), but this one used to run unconditionally, so a target the
         // LOSSLESS pipeline could already hit still cost the caller real data. Measured: with
@@ -417,7 +417,7 @@ fn apply_transforms(
         protected_floor: floor,
         achieved_tokens: current_tokens,
     });
-    // INTERFACES.md §"`quality` presence rule": `None` iff no lossy transform ran, `Some` with a
+    // The `quality` presence rule: `None` iff no lossy transform ran, `Some` with a
     // `validated_ratio_band: None` / metrics-absent body when one did but no fidelity-gate data
     // was baked in at build time. Phase 1 is exactly that second case — there is no baked gate
     // for `json_prune` yet — so the honest report is "a lossy transform ran, and nothing here has
@@ -554,8 +554,8 @@ fn apply_single_transform(
         }
         TransformId::SchemaCompaction => {
             // ponytail: a fixed example cap for now; per-mode example counts are a future
-            // config knob (F-011 acceptance criteria only requires the count be configurable,
-            // not that Phase 2 ship distinct values per mode).
+            // config knob (schema compaction only requires the kept-example count be
+            // controlled by mode config, not that distinct values ship per mode yet).
             transforms::schema::compact_schema(bytes, 1).map_err(|e| e.to_string())
         }
         TransformId::LogFieldFold => {
@@ -1159,7 +1159,7 @@ mod tests {
 
     #[test]
     fn log_compaction_applies_by_default_after_promotion() {
-        // log_compaction was promoted out of --experimental (roadmap.md Phase 5 Task 9,
+        // log_compaction was promoted out of --experimental (Phase 5 fidelity gate,
         // 2026-07-12): it now applies under the default Balanced mode with no --experimental
         // flag needed, unlike diff_compaction below (which stays gated). Ten adjacent repeats
         // of a realistic log line (not a two-byte "a") so the collapsed evidence marker is a
@@ -1488,8 +1488,8 @@ mod tests {
             .expect("json_prune report present");
         assert_ne!(prune.status, TransformStatus::Applied);
         // Nothing pruned was adopted, so no `$tf_ref` may survive into the output. (The report's
-        // `retrieval.marker_count` is still 1 here: that is F-045's whole-payload receipt, which
-        // every lossy run on a supported format gets regardless of what pruning decided -- a
+        // `retrieval.marker_count` is still 1 here: that is the whole-payload evidence-store
+        // receipt, which every lossy run on a supported format gets regardless of pruning -- a
         // different thing from a per-item marker. `lossy_rollback_never_reports_retrieval_markers_
         // absent_from_the_output` covers the per-item accounting.)
         assert!(!String::from_utf8_lossy(&lossy.bytes).contains("$tf_ref"));
@@ -1606,7 +1606,7 @@ mod tests {
         assert_eq!(prune.status, TransformStatus::RolledBack);
 
         // Whatever is physically on disk must equal what the report says was persisted. Only the
-        // whole-payload F-045 receipt is legitimate here; every per-item blob would be an orphan.
+        // whole-payload evidence receipt is legitimate here; every per-item blob would be orphaned.
         let blobs = std::fs::read_dir(store_dir.join("default"))
             .map(|rd| {
                 rd.filter_map(|e| e.ok())
@@ -1700,7 +1700,7 @@ mod tests {
             std::env::set_var("XDG_DATA_HOME", &dir);
         }
 
-        // INTERFACES.md's `quality` presence rule: `Some(...)` once a lossy transform really ran,
+        // The `quality` presence rule: `Some(...)` once a lossy transform really ran,
         // with `validated_ratio_band: None` and absent metrics while no fidelity gate is baked in.
         // It used to stay `None` after a successful prune, leaving a JSON caller no field at all
         // to distinguish a pruned payload from a lossless one.
@@ -1905,7 +1905,7 @@ mod tests {
         );
         // The core regression this guards against: json_prune's own per-item drops must not be
         // reported once the output has reverted to plain (marker-free) content. Note `--lossy`
-        // also forces the separate F-045 whole-payload backup (`maybe_store_originals`), which
+        // also forces the separate whole-payload evidence backup (`maybe_store_originals`), which
         // legitimately succeeds regardless of json_prune's own rollback -- so the correct
         // expectation is "exactly that one whole-payload marker, nothing extra from json_prune's
         // own (discarded) per-item drops", not "zero markers total".
@@ -1918,10 +1918,10 @@ mod tests {
             .report
             .retrieval
             .as_ref()
-            .expect("F-045 whole-payload backup is forced on whenever lossy is set");
+            .expect("the whole-payload backup is forced on whenever lossy is set");
         assert_eq!(
             r.marker_count, 1,
-            "only the F-045 whole-payload marker should be reported, not any of json_prune's own"
+            "only the whole-payload marker should be reported, not any of json_prune's own"
         );
         assert_eq!(
             r.persisted_original_bytes,
@@ -2075,8 +2075,8 @@ mod tests {
     fn lossy_preview_shows_projected_savings_without_any_real_storage_write() {
         // Regression test: `compress --dry-run`/`inspect` route through `policy.preview = true`.
         // A preview must show accurate projected lossy savings (so it's actually useful as a
-        // preview) while performing ZERO real RetrievalStore writes -- neither the F-045
-        // whole-payload backup nor json_prune's own per-item stores.
+        // preview) while performing ZERO real RetrievalStore writes -- neither the whole-payload
+        // evidence backup nor json_prune's own per-item stores.
         let _g = lock_retrieval_env();
         let dir = std::env::temp_dir().join(format!(
             "tokenfold_pipeline_test_lossy_preview_{}",

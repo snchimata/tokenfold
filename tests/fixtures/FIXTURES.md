@@ -1,10 +1,9 @@
 # Fixture Registry — `tests/fixtures/` and `tests/golden/`
 
-This is the fixture-policy approval record required by `ENGINEERING.md`
-("Fidelity Tests" → Fixture policy) and `ROADMAP.md` (Phase 4 exit checklist:
-"Every fixture in `tests/fixtures/**` and `eval/tasks/**` has: data
+This file is the fixture-policy approval record for this corpus. Every
+fixture in `tests/fixtures/**` and `eval/tasks/**` must have: data
 classification, license/source note, PII scan result, retention owner,
-approval record"). `eval/tasks/**` has its own record at
+approval record. `eval/tasks/**` has its own record at
 `eval/tasks/FIXTURES.md`; this file covers `tests/fixtures/**` plus
 `tests/golden/**` (byte-exact golden fixtures, listed in
 `tests/golden/MANIFEST.toml`), which are covered here for completeness even

@@ -1,5 +1,5 @@
-//! Phase 6 "discover"/"learn" policy mining (`roadmap.md`: "`discover`/`learn` proposes policy
-//! changes without silently changing defaults").
+//! `discover`/`learn` policy mining: proposes policy changes without ever silently changing
+//! defaults.
 //!
 //! This crate is pure data-in/data-out: [`propose_policy_changes`] takes a slice of
 //! [`tokenfold_core::stats::LedgerRecord`] (the only durable history tokenfold keeps — see

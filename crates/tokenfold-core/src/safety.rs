@@ -1,4 +1,6 @@
-//! Fail-closed safety invariants (INTERFACES.md Part 2 "Safety Invariants on Order"). The
+//! Fail-closed safety invariants: JSON validity, object key-order preservation, protected
+//! content survival, and no redaction bypass — the four properties every transform in the
+//! pipeline must leave intact regardless of which transforms ran before it. The
 //! pipeline checks these after every transform; a violation rolls that transform back
 //! (pre-transform bytes restored) rather than shipping a corrupted or unsafe output.
 

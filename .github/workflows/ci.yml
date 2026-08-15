@@ -79,7 +79,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked -- golden
 
-  # ENGINEERING.md Part 2: advisory on PR, blocking on push to main.
+  # CI gate policy: advisory on PR, blocking on push to main.
   security:
     name: security
     runs-on: ubuntu-latest
@@ -92,7 +92,7 @@ jobs:
       - run: cargo audit
       - run: cargo deny check advisories bans licenses sources
 
-  # ENGINEERING.md Part 2: advisory on merge (gross-regression check only; bench-regression on a
+  # CI gate policy: advisory on merge (gross-regression check only; bench-regression on a
   # dedicated runner is the release-blocking gate — see release.yml).
   bench-smoke:
     name: bench-smoke
@@ -104,7 +104,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo bench --workspace --locked
 
-  # ENGINEERING.md Part 2: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
+  # CI gate policy: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
   # / API key needed yet — see eval/tasks/FIXTURES.md), so this can safely run on every PR too.
   fidelity-smoke:
     name: fidelity-smoke

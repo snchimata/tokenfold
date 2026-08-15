@@ -1,19 +1,17 @@
 //! Request handling for `tokenfold-proxy`.
 //!
-//! Scope is the Phase 5 exit criterion (ROADMAP.md F-040): compress provider-shaped JSON
-//! requests before forwarding upstream, pass SSE responses through unbuffered, reject
-//! conflicting-framing (CL.TE/TE.CL) requests before any upstream call, and never log a
-//! credential header value. The full route table in INTERFACES.md §3.0 also documents
-//! `/v1/retrieve`, `/v1/retrieve/{hash}`, `/v1/retrieve/stats`, and `/stats` — those now exist
-//! below, backed by the same `tokenfold_core::retrieval_store`/`tokenfold_core::stats` modules
-//! the CLI uses (F-045/F-046).
+//! Scope: compress provider-shaped JSON requests before forwarding upstream, pass SSE responses
+//! through unbuffered, reject conflicting-framing (CL.TE/TE.CL) requests before any upstream
+//! call, and never log a credential header value. Alongside those provider-facing duties the
+//! proxy serves the tokenfold-native control routes `/v1/retrieve`, `/v1/retrieve/{hash}`,
+//! `/v1/retrieve/stats`, and `/stats`, backed by the same
+//! `tokenfold_core::retrieval_store`/`tokenfold_core::stats` modules the CLI uses.
 //!
 //! Deliberately still deferred (see `handle`'s route dispatch): `/stats-history`, `/metrics`
 //! (Prometheus), `/dashboard`, `/stats/reset`, `/cache/clear`, and the `/admin/*`/`/debug/*` dev
-//! surfaces. These are observability/ops extras beyond the Phase 5 exit criteria's core ask
-//! ("proxy contract complete and accurate", not "every route implemented") — a Prometheus
-//! exporter, a static dashboard, and an admin-auth surface are materially more scope than what
-//! those two exit criteria require.
+//! surfaces. These are observability/ops extras beyond what makes the proxy contract complete
+//! and accurate — a Prometheus exporter, a static dashboard, and an admin-auth surface are
+//! each materially more scope than compressing, forwarding, and reporting honestly requires.
 
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
@@ -36,10 +34,10 @@ pub struct ProxyConfig {
     pub compress: bool,
     pub mode: CompressionMode,
     pub target_tokens: Option<usize>,
-    /// F-045: backend passed to `RetrievalStore::open` for `/v1/retrieve*` and
+    /// Retrieval-store backend passed to `RetrievalStore::open` for `/v1/retrieve*` and
     /// `X-TokenFold-Store-Originals`-triggered storage on `/v1/compress`/passthrough.
     pub retrieval_backend: String,
-    /// F-045: filesystem backend root override; `None` means `retrieval_store::default_store_path()`.
+    /// Retrieval-store filesystem root override; `None` means `retrieval_store::default_store_path()`.
     pub retrieval_store_path: Option<PathBuf>,
 }
 
@@ -194,8 +192,8 @@ fn run_compress(
     }
 }
 
-/// Same `content`/`messages` shape as the MCP `tokenfold_compress` tool (INTERFACES.md §4), so
-/// callers get identical semantics across both surfaces.
+/// Same `content`/`messages` shape as the MCP `tokenfold_compress` tool — exactly one of the two
+/// is required — so callers get identical semantics across both surfaces.
 fn build_input(value: &Value) -> Result<(CompressionInput, bool), String> {
     let content_present = value.get("content").is_some_and(|v| !v.is_null());
     let messages_present = value.get("messages").is_some_and(|v| !v.is_null());
@@ -263,9 +261,10 @@ fn build_policy(
     builder.build().map_err(|e| e.to_string())
 }
 
-/// Wires `X-TokenFold-Store-Originals`/`X-TokenFold-Retrieve-Store` (INTERFACES.md §3.1) into a
-/// policy builder, so a per-request opt-in to the F-045 retrieval store works on both
-/// `/v1/compress` (via `build_policy`) and provider passthrough (`handle_passthrough`).
+/// Wires the `X-TokenFold-Store-Originals` (enable storage) and `X-TokenFold-Retrieve-Store`
+/// (namespace/scope) request headers into a policy builder, so a per-request opt-in to the
+/// retrieval store works on both `/v1/compress` (via `build_policy`) and provider passthrough
+/// (`handle_passthrough`).
 fn apply_retrieval_overrides(
     mut builder: CompressionPolicyBuilder,
     config: &ProxyConfig,
@@ -523,8 +522,9 @@ fn resolve_retrieve_reference(
     Err("exactly one of `marker`, `hash`, or `report_ref` is required".to_string())
 }
 
-/// Extracts `field=<value>` from a `[tokenfold:retrieve ...]` marker string (INTERFACES.md's
-/// Retrieval Marker Grammar), stopping at the next whitespace or `]`.
+/// Extracts `field=<value>` from a retrieval marker of the form
+/// `[tokenfold:retrieve hash=<hex> alg=<alg> namespace=<ns> bytes=<n> ttl=<seconds>]`,
+/// stopping at the next whitespace or `]`.
 fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
     let needle = format!("{field}=");
     let start = marker.find(&needle)? + needle.len();

@@ -1,13 +1,13 @@
 # v0.4-alpha paired-task baseline corpus
 
 Fixtures for `eval/run_baselines.py` — the "baselines first" stage of the v0.4 learned-selector
-research (`docs/solution-design/model-research.md`). Everything here is **shadow-only**: it
+research. Everything here is **shadow-only**: it
 measures deterministic keep/drop selectors against downstream tasks; no model is involved and
 nothing reaches a served path.
 
 ## Coverage (77 Tier-A fixtures across 11 families)
 
-Spanning the required slices from model-research.md §Prerequisites: `log_qa`, `log_multi_service`
+Spanning the required content slices: `log_qa`, `log_multi_service`
 (logs/tool QA), `diff_review`, `code_patch` (diff review / change localization), `code_build_error`
 (build/test failures), `json_schema`, `tool_call_json` (JSON/schema + tool calls),
 `long_context_needle` (long mixed context with an id/hash/path needle), `ccr_marker` (CCR
@@ -32,8 +32,8 @@ so the report is discriminating rather than trivially 1.0 everywhere).
 ```
 
 - **`critical_atoms`** are force-kept by deterministic logic (units containing them are never
-  dropped), so 100% critical-atom survival is a structural guarantee — a hard gate in
-  model-research.md — not something a selector must learn. Put audit/CCR-critical ids, hashes,
+  dropped), so 100% critical-atom survival is a structural guarantee — a hard gate that
+  `--gate` asserts — not something a selector must learn. Put audit/CCR-critical ids, hashes,
   and paths here.
 - **`gold_answer`** should live in a unit that is *not* a critical atom, so whether the task is
   answerable genuinely depends on the selector + token budget. That is what differentiates the
@@ -42,7 +42,7 @@ so the report is discriminating rather than trivially 1.0 everywhere).
   fixture — which selectors are expected to fail the task at tight ceilings and why. The harness
   ignores it; it exists for humans auditing/extending the corpus.
 
-## Governance tiers (model-research.md §Prerequisites and Data)
+## Governance tiers
 
 | Tier | Source | v0.4 use |
 | --- | --- | --- |

@@ -17,11 +17,11 @@
 //! [`AdapterFormat::AnthropicMessages`] directly, matching whichever wire shape that framework
 //! actually emits underneath.
 //!
-//! This scope boundary is `roadmap.md`'s Phase 6 ("Optional Framework Adapter Extensions") exit
-//! criterion "Framework adapters pass provider-shape parity tests for scoped SDKs/frameworks",
-//! constrained by D-014 ("Optional Adapter Extension Boundary"): adapters cover wire shapes,
-//! not every framework name, so the framework/agent layers above stay out of this crate's surface
-//! until they emit a shape of their own.
+//! The scope boundary is deliberate. What this crate owes is provider-shape parity for the wire
+//! shapes it actually adapts, and an optional extension crate like this one must not grow a
+//! provider SDK dependency per framework name. Adapters therefore cover wire shapes, not every
+//! framework name, so the framework/agent layers above stay out of this crate's surface until
+//! they emit a shape of their own.
 
 use tokenfold_core::{CompressionInput, CompressionOutput, CompressionPolicy, TokenFoldError};
 

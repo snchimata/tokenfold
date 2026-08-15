@@ -1,11 +1,10 @@
 //! `diff_compaction` (canonical id: `"diff_compaction"`, v1.0.0).
 //!
 //! Lossy-with-evidence transform operating on unified-diff text such as the output of
-//! `git diff`. Ships behind `--experimental` until the fidelity gate is green for this
-//! transform (see F-013 / F-016 in roadmap.md).
+//! `git diff`. Ships behind `--experimental` until the eval harness's fidelity gate is green
+//! for this transform (see `crate::modes::ALL_ENTRIES`).
 //!
-//! This module is not yet wired into the crate (no `mod transforms;` declaration exists in
-//! `lib.rs`); it implements the mechanical line-classification behavior only. The policy
+//! This module implements the mechanical line-classification behavior only. The policy
 //! decision of *when* the header-only form (`keep_line_bodies = false`) is allowed to run
 //! (only for `TaskScope::ChangeSummary`) is made by the caller, not by this module.
 
@@ -52,8 +51,7 @@ fn flush_dropped_run(out: &mut Vec<String>, dropped_run: &mut usize, marker_noun
     }
 }
 
-/// Compacts unified-diff text (e.g. `git diff` output) per the `diff_compaction` (F-013)
-/// contract.
+/// Compacts unified-diff text (e.g. `git diff` output) per the `diff_compaction` contract.
 ///
 /// Processes `input` line by line (via [`str::lines`]) and classifies each line:
 ///

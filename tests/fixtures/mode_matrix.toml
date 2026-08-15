@@ -1,11 +1,11 @@
 # Mirror of crates/tokenfold-core/src/modes.rs ALL_ENTRIES.
-# CLI, proxy, and Python-binding tests assert against this file (INTERFACES.md Part 2).
+# CLI, proxy, and Python-binding tests assert against this file.
 #
 # secret_redaction is not listed here: it runs unconditionally before the pipeline and
 # cannot be disabled (see crates/tokenfold-core/src/budget.rs CompressionPolicyBuilder::build).
 #
-# table_compaction is intentionally omitted: the First Consumer worksheet (plan.md) doesn't
-# name tables as a dominant payload type, so F-019 stays out of scope for now.
+# table_compaction is intentionally omitted: the first-consumer worksheet doesn't name
+# tables as a dominant payload type, so table compaction stays out of scope for now.
 
 [[transforms]]
 id = "json_minify"
@@ -85,7 +85,7 @@ applicable_formats = ["plain_text", "command_output"]
 id = "log_compaction"
 version = "1.0.0"
 # Promoted out of --experimental 2026-07-12: full-lossy-promotion gate clears every
-# D-005 draft threshold cleanly (quality_retention=1.0, contrastive_failure_rate=0.0,
+# draft fidelity threshold cleanly (quality_retention=1.0, contrastive_failure_rate=0.0,
 # critical_token_survival_rate=1.0).
 conservative_enabled = false
 balanced_enabled = true
@@ -101,7 +101,7 @@ applicable_formats = ["plain_text", "command_output"]
 id = "diff_compaction"
 version = "1.0.0"
 # Stays --experimental 2026-07-12: per_variant gate breakdown shows BOTH the default
-# (body-preserving) and header-only (change_summary) forms miss the D-005 draft
+# (body-preserving) and header-only (change_summary) forms miss the draft fidelity
 # thresholds on their own — see eval/tasks/FIXTURES.md "Scorer status".
 conservative_enabled = false
 balanced_enabled = false

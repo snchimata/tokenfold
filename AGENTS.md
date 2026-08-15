@@ -21,7 +21,7 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 - `tests/`: shared fixtures and byte-exact golden cases.
 - `python-tests/`: tests for the built Python extension.
 - `eval/`: Python fidelity harness and transform evaluation.
-- `docs/solution-design/`: architecture, interfaces, testing policy, and roadmap decisions.
+- Design notes (architecture, interfaces, testing policy, roadmap decisions) are kept untracked and are not part of a clone; treat the code, tests, and `CHANGELOG.md` as the authoritative record.
 
 ## Implementation conventions
 

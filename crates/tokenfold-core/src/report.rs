@@ -16,7 +16,7 @@ pub struct CompressionReport {
     pub format: String,
     pub task_scope: String,
     pub request_id: Option<String>,
-    /// F-055: staged `raw -> RTK -> tokenfold` accounting. `None` for the common
+    /// Staged `raw -> RTK -> tokenfold` accounting. `None` for the common
     /// single-stage path; populated only by RTK-composed `wrap --rtk` runs.
     #[serde(default)]
     pub pipeline: Option<PipelineReport>,
@@ -87,10 +87,10 @@ pub struct EstimatorInfo {
     pub is_exact: bool,
 }
 
-/// F-055: separates savings and recoverability across composed stages (RTK then
+/// Separates savings and recoverability across composed stages (RTK then
 /// tokenfold) so RTK's savings are never credited to tokenfold. The top-level
 /// `original_tokens` keeps its v1 meaning — tokens *entering* `tokenfold_core`,
-/// which is the post-RTK count when composed. See INTERFACES.md §1.9 / §2.
+/// which is the post-RTK count when composed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PipelineReport {
     /// Pre-RTK byte count. `Some` only when a complete raw capture was observed.
@@ -109,7 +109,7 @@ pub struct PipelineReport {
     pub stages: Vec<PipelineStageReport>,
 }
 
-/// F-055: one composed stage. Count fields are nullable because an unavailable
+/// One composed stage. Count fields are nullable because an unavailable
 /// stage or missing pre-stage capture cannot be measured honestly.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PipelineStageReport {
@@ -147,7 +147,7 @@ pub struct QualityReport {
     pub task_scope: String,
     pub validated_ratio_band: Option<String>,
     /// `None` when a lossy transform ran but no fidelity-gate data was baked in at build time —
-    /// `interfaces.md`'s explicit "early dev builds before Phase 2" state. These were plain
+    /// the documented "early dev build, before any gate data exists" state. These were plain
     /// `f64` before, which forced that state to be reported as a fabricated `0.0` ("nothing was
     /// retained") — indistinguishable from a real, measured total-loss result. Absent data must
     /// read as absent, not as a measurement.

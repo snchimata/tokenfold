@@ -7,12 +7,13 @@ use clap::Parser;
 use tokenfold_core::CompressionMode;
 
 /// HTTP proxy that compresses provider-shaped JSON requests before forwarding them upstream.
-/// Scope: ROADMAP.md F-040 (Phase 5). Not a CLI subcommand — a separate binary per spec.
+/// Deliberately a separate binary rather than a `tokenfold` subcommand, so the HTTP server and
+/// its network surface stay out of the CLI.
 #[derive(Parser)]
 #[command(name = "tokenfold-proxy", version, about)]
 struct Cli {
-    /// Upstream base URL (e.g. https://api.openai.com). Fixed at process start; there is no
-    /// per-request override (SSRF invariant — see INTERFACES.md §3.2).
+    /// Upstream base URL (e.g. https://api.openai.com). Fixed at process start; no request
+    /// header or body field can redirect it (SSRF invariant).
     #[arg(long)]
     upstream: String,
     /// Address to bind. Defaults to loopback; use --allow-non-loopback-bind to change that.
@@ -37,10 +38,10 @@ struct Cli {
     /// Always rejected: secret redaction cannot be disabled in proxy mode.
     #[arg(long = "unsafe-disable-redaction", hide = true)]
     unsafe_disable_redaction: bool,
-    /// F-045 retrieval-store backend used by `/v1/retrieve*` and `X-TokenFold-Store-Originals`.
+    /// Retrieval-store backend used by `/v1/retrieve*` and `X-TokenFold-Store-Originals`.
     #[arg(long, default_value = "filesystem")]
     retrieval_backend: String,
-    /// F-045 filesystem backend root override; defaults to the standard XDG-based path.
+    /// Retrieval-store filesystem root override; defaults to the standard XDG-based path.
     #[arg(long)]
     retrieval_store_path: Option<PathBuf>,
 }

@@ -5,8 +5,7 @@
 //! see `pipeline::apply_lossy_reduction`, which only runs it when `policy.lossy.is_some()`, as a
 //! terminal stage strictly after the normal lossless transform loop.
 //!
-//! Full design/rationale: `docs/solution-design/lossy-json-compression.md` (gitignored,
-//! local-only). Summary of the algorithm implemented here:
+//! The algorithm implemented here:
 //!
 //! - **Explicit preserve, not inferred force-keep**: an array survives untouched iff its path is
 //!   listed in `LossyOptions.preserve_paths`. There is no generic "this row is important"

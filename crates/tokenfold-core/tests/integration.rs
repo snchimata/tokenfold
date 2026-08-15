@@ -1,4 +1,4 @@
-//! End-to-end pipeline scenarios (ENGINEERING.md "Integration Tests"). Unlike `golden.rs`
+//! End-to-end pipeline scenarios. Unlike `golden.rs`
 //! (byte-exact single-transform fixtures) and the inline unit tests (isolated module
 //! behavior), these exercise `compress`/`compress_with_estimator` as a whole.
 

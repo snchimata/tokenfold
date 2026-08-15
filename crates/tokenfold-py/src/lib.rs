@@ -1,6 +1,6 @@
-//! Python binding for `tokenfold-core`, per `INTERFACES.md` §5 ("Python Binding API").
+//! Python binding for `tokenfold-core`.
 //!
-//! Naming convention (INTERFACES.md §5.4): Python-facing enum variant names use
+//! Naming convention: Python-facing enum variant names use
 //! `ALL_CAPS` (e.g. `CompressionMode.BALANCED`), while the underlying Rust enums
 //! (`tokenfold_core::CompressionMode`, etc.) keep Rust's `PascalCase` convention
 //! (`CompressionMode::Balanced`). The `#[pyo3(name = "...")]` attributes below are what
@@ -30,8 +30,9 @@ use tokenfold_core::{
 };
 
 // ---------------------------------------------------------------------------------------
-// Error hierarchy (INTERFACES.md §5.5, mapped exactly per roadmap.md F-003's error
-// taxonomy table).
+// Error hierarchy: `TokenFoldError` is the catch-all base; each subclass below mirrors one
+// `tokenfold_core::TokenFoldError` variant, so `except TokenFoldError:` catches everything
+// while callers can still handle a specific failure.
 // ---------------------------------------------------------------------------------------
 
 create_exception!(tokenfold, TokenFoldError, PyException);
@@ -42,7 +43,8 @@ create_exception!(tokenfold, ConfigError, TokenFoldError);
 create_exception!(tokenfold, InternalError, TokenFoldError);
 
 /// Maps `tokenfold_core::TokenFoldError` to the Python exception hierarchy above. `Io`
-/// maps to the builtin `OSError`, not `InternalError` -- see roadmap.md F-003's table.
+/// maps to the builtin `OSError`, not `InternalError`: an I/O failure is the caller's
+/// environment misbehaving, not an unexpected panic out of the Rust core.
 fn map_err(err: CoreError) -> PyErr {
     match err {
         CoreError::InvalidInput(msg) => InvalidInputError::new_err(msg),
@@ -174,8 +176,8 @@ impl From<CoreStatus> for PyStatus {
     }
 }
 
-/// Accepts either the `CompressionMode` enum or a (case-insensitive) string, per
-/// INTERFACES.md §5.1's `mode: CompressionMode | str` signature.
+/// Accepts either the `CompressionMode` enum or a (case-insensitive) string, matching the
+/// public `mode: CompressionMode | str` signature.
 #[derive(FromPyObject)]
 enum ModeArg {
     Enum(PyCompressionMode),
@@ -191,8 +193,8 @@ impl ModeArg {
     }
 }
 
-/// Accepts either the `InputFormat` enum or a (case-insensitive) string, per
-/// INTERFACES.md §5.1's `format: InputFormat | str` signature.
+/// Accepts either the `InputFormat` enum or a (case-insensitive) string, matching the
+/// public `format: InputFormat | str` signature.
 #[derive(FromPyObject)]
 enum FormatArg {
     Enum(PyInputFormat),
@@ -208,7 +210,8 @@ impl FormatArg {
     }
 }
 
-/// `str` input is UTF-8 encoded to bytes; `bytes` input is used as-is (INTERFACES.md §5.1).
+/// `str` input is UTF-8 encoded to bytes; `bytes` input is used as-is. The core API is
+/// bytes-first, so `CompressionResult.payload` always comes back as `bytes`.
 #[derive(FromPyObject)]
 enum PayloadArg {
     Bytes(Vec<u8>),
@@ -225,8 +228,8 @@ impl PayloadArg {
 }
 
 // ---------------------------------------------------------------------------------------
-// CompressionPolicy (INTERFACES.md §5.3: "optional convenience dataclass mirroring the
-// Rust policy")
+// CompressionPolicy: an optional convenience type mirroring the Rust policy, so callers can
+// build one policy object once instead of repeating keyword arguments per call.
 // ---------------------------------------------------------------------------------------
 
 #[pyclass(name = "CompressionPolicy", from_py_object)]
@@ -319,7 +322,7 @@ impl PyCompressionPolicy {
 }
 
 // ---------------------------------------------------------------------------------------
-// CompressionReport / EstimatorInfo (INTERFACES.md §5.3)
+// CompressionReport / EstimatorInfo
 // ---------------------------------------------------------------------------------------
 
 #[pyclass(name = "EstimatorInfo", from_py_object)]
@@ -359,10 +362,10 @@ pub struct PyCompressionReport {
     task_scope: String,
     #[pyo3(get)]
     warnings: Vec<String>,
-    /// Full report, structurally converted to a plain Python dict (INTERFACES.md §5.3
-    /// only requires `saved_tokens`/`estimator`/`status` as first-class attributes;
+    /// Full report, structurally converted to a plain Python dict. The fields above are
+    /// the subset promoted to first-class attributes;
     /// everything else -- `quality`, `budget`, `cache`, `retrieval`, `transforms`, etc. --
-    /// is available here rather than modeled as another dozen pyclasses).
+    /// is available here rather than modeled as another dozen pyclasses.
     #[pyo3(get)]
     raw: Py<PyAny>,
 }
@@ -403,7 +406,8 @@ fn report_to_py(
 }
 
 // ---------------------------------------------------------------------------------------
-// CompressionResult (INTERFACES.md §5.3)
+// CompressionResult: a named return type rather than a `(payload, report)` tuple, so adding
+// a field later doesn't break callers that unpack.
 // ---------------------------------------------------------------------------------------
 
 #[pyclass(name = "CompressionResult")]
@@ -512,8 +516,8 @@ fn py_to_json(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
 
 // ---------------------------------------------------------------------------------------
 // Policy resolution: merges an optional `CompressionPolicy` with per-call keyword
-// arguments, explicit keyword arguments winning (INTERFACES.md §5.3 "explicit keyword
-// arguments win, matching CLI precedence rules").
+// arguments, explicit keyword arguments winning -- the same precedence the CLI applies
+// when a flag and a config file disagree.
 // ---------------------------------------------------------------------------------------
 
 fn effective_policy(
@@ -564,8 +568,9 @@ fn effective_policy(
     builder.build().map_err(map_err)
 }
 
-/// F-002's "fails closed for budget decisions OR proceeds with `--allow-heuristic-budget`"
-/// criterion, implemented at this binding's boundary: `tokenfold_core::compress` doesn't
+/// A budget-constrained call must fail closed when only an inexact (heuristic) token
+/// estimator is available, unless the caller opts in with `allow_heuristic_budget=True`.
+/// That rule is enforced at this binding's boundary: `tokenfold_core::compress` doesn't
 /// itself gate on this (its default build always has the `tiktoken` feature on, so this is
 /// effectively a defense against a non-default build), but the Python signature documents
 /// the parameter, so it's honored here.
@@ -624,7 +629,7 @@ fn run_compress(
 }
 
 // ---------------------------------------------------------------------------------------
-// Public functions (INTERFACES.md §5.1)
+// Public functions
 // ---------------------------------------------------------------------------------------
 
 #[pyfunction]
@@ -737,7 +742,7 @@ fn compress_anthropic_payload(
 }
 
 // ---------------------------------------------------------------------------------------
-// compress_messages (INTERFACES.md §5.2)
+// compress_messages: the message-oriented wrapper over the bytes-first core API.
 // ---------------------------------------------------------------------------------------
 
 #[pyclass(name = "MessagesCompressionResult")]
@@ -767,7 +772,7 @@ pub struct PyMessagesCompressionResult {
 fn compress_messages(
     py: Python<'_>,
     messages: &Bound<'_, PyList>,
-    // `model` is accepted for API compatibility with INTERFACES.md §5.2, but
+    // `model` is accepted for API compatibility with the documented signature, but
     // `tokenfold_core::compress` doesn't yet route estimator choice by model name (it
     // always tries `o200k_base` when the `tiktoken` feature is compiled in) -- recorded
     // honestly rather than faking model-specific tokenization.
@@ -833,8 +838,8 @@ fn compress_messages(
         tokens_saved,
         savings_pct,
         transforms_applied,
-        // RetrievalReport carries no per-entry content hash yet (see INTERFACES.md §4's
-        // "Implementation status (v0.2)" note on `tokenfold_retrieve`), so this is always
+        // RetrievalReport carries no per-entry content hash yet -- the same gap that stops
+        // `tokenfold_retrieve` from resolving a bare report reference -- so this is always
         // empty rather than fabricated.
         retrieval_hashes: Vec::new(),
     })

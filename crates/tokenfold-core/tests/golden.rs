@@ -1,4 +1,6 @@
-//! Cross-platform byte-exact golden tests (ENGINEERING.md "Golden Tests"). Fixtures live at
+//! Cross-platform byte-exact golden tests: the same named input must produce byte-identical
+//! output on every CI target, so any silent change in transform output shows up as a diff
+//! and has to be justified alongside a version bump. Fixtures live at
 //! the repo root under `tests/golden/{transform_id}/` so CLI/proxy/Python surfaces can share
 //! them later; this file is the Rust runner against `tokenfold-core`'s transform functions.
 

@@ -1,10 +1,9 @@
 # Fixture Registry — `eval/tasks/`
 
-This file is the fixture-policy approval record required by `ENGINEERING.md`
-("Fidelity Tests" → Fixture policy) and `ROADMAP.md` (Phase 2 exit checklist:
-"Every fixture in `tests/fixtures/**` and `eval/tasks/**` has: data
+This file is the fixture-policy approval record for this corpus. Every
+fixture in `tests/fixtures/**` and `eval/tasks/**` must have: data
 classification, license/source note, PII scan result, retention owner,
-approval record").
+approval record.
 
 ## Fixture set: `eval/tasks/smoke/`
 
@@ -32,8 +31,7 @@ Each fixture is a JSON object:
 ```
 
 - `original` / `compressed` are short (a few lines each), hand-authored
-  illustrations of that transform's documented behavior (see `PLAN.md`'s
-  transform table and `ENGINEERING.md`'s ML-contributor prototyping guide),
+  illustrations of that transform's documented behavior,
   not output captured from the real Rust transforms.
 - `critical_tokens` are 1-3 short substrings (a unique error code, file
   path, request/order ID, or schema field name) that must survive verbatim
@@ -63,7 +61,7 @@ Each fixture is a JSON object:
 ## Fixture set: `eval/tasks/full_lossy/`
 
 16 hand-authored fixtures (`flp_001.json` – `flp_016.json`) backing the
-`full-lossy-promotion` gate profile (ROADMAP.md Task 9): an accuracy@ratio
+`full-lossy-promotion` gate profile: an accuracy@ratio
 sweep, the contrastive KPI, and critical-token needle-survival for the two
 transforms still behind `--experimental`, across all four content types in
 scope for that profile (command output, git diff, JSON, prose).
@@ -158,7 +156,7 @@ Both `eval/run_fidelity.py` profiles score every fixture with a
 between `original` and `compressed`) instead of a real downstream-task
 quality judgment, because no live model judge is wired up yet (no
 `ANTHROPIC_API_KEY` is configured, and the real thresholds are still an open
-decision — see `ROADMAP.md` § D-005, status OPEN). `smoke-first-consumer`
+decision, so the gate's current numbers are drafts). `smoke-first-consumer`
 hardcodes `contrastive_failure_rate` to `0.0` for every fixture (no
 contrastive check is attempted there at all); `full-lossy-promotion`
 computes a less trivial, but still deterministic and still not
@@ -166,14 +164,14 @@ live-judged, contrastive proxy (see `run_fidelity.py`'s
 `_contrastive_failure_proxy`). Upgrading to a real LLM-judged accuracy@ratio
 harness — with a pinned model version and live credentials, producing
 genuine `quality_retention` and `contrastive_failure_rate` numbers against
-real downstream tasks — is tracked as future work, to be done once D-005's
+real downstream tasks — is tracked as future work, to be done once the
 fidelity thresholds are finalized. Until then, a passing gate here proves
 the harness mechanism (and, for `full-lossy-promotion`, a real if crude
 lexical signal) works — it does not certify that any transform meets the
 real fidelity bar a live judge would apply.
 
-Note on `full-lossy-promotion`'s measured result (see `ROADMAP.md` Task 9,
-2026-07-12 re-investigation): the lexical-overlap proxy is known to
+Note on `full-lossy-promotion`'s measured result (2026-07-12
+re-investigation): the lexical-overlap proxy is known to
 underscore transforms that deliberately drop unchanged context on the
 theory that context is recoverable (a live judge could recognize that; this
 proxy just counts missing words). That alone was the original hypothesis
@@ -201,7 +199,7 @@ The full explanation has two parts:
 Measured 2026-07-12 (after both the `per_variant` split and the fixture
 correction): `diff_compaction`'s default form (`task_scope=code_review`)
 scores `quality_retention=0.362`, `contrastive_failure_rate=0.5`,
-`critical_token_survival_rate=0.5` — all three miss the D-005 draft
+`critical_token_survival_rate=0.5` — all three miss the draft
 Balanced thresholds (`>=0.95` / `<=0.005` / `>=0.99`), and the header-only
 `change_summary` form scores worse still (`quality_retention=0.211`,
 `contrastive_failure_rate=0.75`, `critical_token_survival_rate=0.5`).
@@ -209,5 +207,6 @@ Per this task's "do not fudge the numbers" instruction, `diff_compaction`
 stays `--experimental` in its entirety — neither form clears the bar on its
 own — while `log_compaction` (whose behavior doesn't branch on
 `task_scope` and clears every threshold at `1.0`/`0.0`/`1.0`) is promoted.
-See `ROADMAP.md`'s Phase 5 fidelity-harness and promotion bullets for the
-final disposition.
+The resulting disposition is recorded in `tests/fixtures/mode_matrix.toml`
+(and mirrored in `crates/tokenfold-core/src/modes.rs`): `log_compaction`
+`experimental = false`, `diff_compaction` `experimental = true`.

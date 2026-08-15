@@ -1,8 +1,8 @@
 //! Deterministic Okapi BM25 retrieval over in-memory text chunks.
 //!
-//! This is the default, dependency-free retrieval path for tokenfold's RAG/vector extension
-//! (see plan.md's RAG/vector scope note: "deterministic BM25/TF-IDF default, vector runtime
-//! opt-in"). It never paraphrases or truncates chunk text: retrieved text is always
+//! This is the default, dependency-free retrieval path for tokenfold's RAG/vector extension:
+//! a deterministic BM25/TF-IDF index is the default and any vector runtime is opt-in (see
+//! [`crate::vector`]). It never paraphrases or truncates chunk text: retrieved text is always
 //! byte-identical to the original [`Chunk::text`] it was built from, which is required for
 //! citation-grounding fidelity.
 

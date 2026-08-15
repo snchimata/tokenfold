@@ -1,6 +1,6 @@
 """Tests for the `tokenfold` Python binding (crates/tokenfold-py).
 
-Covers roadmap.md F-041's acceptance criteria:
+Covers the Python binding's acceptance criteria:
   - `compress_openai_payload(payload, policy=...)` works from Python >= 3.9
   - `CompressionPolicy(target_tokens=..., mode=CompressionMode.BALANCED)` constructor
   - `result.report.saved_tokens`, `.estimator`, `.status` accessible
@@ -174,7 +174,7 @@ def test_compress_messages_returns_message_oriented_fields():
 
 
 # ---------------------------------------------------------------------------
-# Enum ALL_CAPS naming (INTERFACES.md section 5.4)
+# Enum ALL_CAPS naming (public API contract: no PascalCase leakage)
 # ---------------------------------------------------------------------------
 
 
@@ -201,7 +201,7 @@ def test_enum_variant_names_are_all_caps():
 
 
 # ---------------------------------------------------------------------------
-# Error hierarchy (INTERFACES.md section 5.5 / roadmap.md F-003)
+# Error hierarchy (every error variant subclasses TokenFoldError)
 # ---------------------------------------------------------------------------
 
 

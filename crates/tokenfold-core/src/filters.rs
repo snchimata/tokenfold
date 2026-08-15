@@ -1,5 +1,5 @@
-//! F-047: declarative command-output filter registry (`roadmap.md` F-047, `interfaces.md`
-//! §7.2 "Filter Pack Contract" and §7.3 "Filter Trust Contract").
+//! Declarative command-output filter registry: the filter-pack schema, its stage-execution
+//! engine, and the trust store that gates project- and user-authored packs.
 //!
 //! Filter packs are TOML documents describing an ordered list of pure text-transform "stages"
 //! (`strip_ansi`, `replace`, `keep_lines`, `strip_lines`, `head`, `tail`, `max_lines`,
@@ -218,7 +218,7 @@ impl FixtureCheck {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Regex complexity guard (R-017 defense-in-depth; see module doc)
+// Regex complexity guard (defense-in-depth against hostile filter patterns; see module doc)
 // ---------------------------------------------------------------------------------------------
 
 fn check_pattern_safety(pattern: &str) -> Result<(), TokenFoldError> {
@@ -407,7 +407,7 @@ pub fn never_worse(raw: &[u8], filtered: &[u8]) -> NeverWorseOutcome {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Trust store (interfaces.md §7.3)
+// Trust store
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -541,7 +541,7 @@ pub struct FilterLookup<'a> {
     pub project_filters_path: Option<&'a Path>,
     pub user_filters_path: Option<&'a Path>,
     pub trust_store_path: &'a Path,
-    /// `TOKENFOLD_TRUST_PROJECT_FILTERS=1` (interfaces.md §7.3): bypasses the trust-store check
+    /// `TOKENFOLD_TRUST_PROJECT_FILTERS=1`: bypasses the trust-store check
     /// for the *project* tier only (its literal name is the documented CI override, not a
     /// generic "trust everything" switch) — user-tier filters always require an explicit
     /// `filters trust` regardless of this flag.
@@ -642,10 +642,10 @@ pub fn parse_pack_file(path: &Path) -> Result<FilterPack, TokenFoldError> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Built-ins (D-002 dogfooding scope: git diff, git status, cargo build/test log framing)
+// Built-ins (solo-dogfooding scope: git diff, git status, cargo build/test log framing)
 // ---------------------------------------------------------------------------------------------
 
-/// D-002's resolved first consumer is solo dogfooding (git diffs, build/test logs, agent
+/// This project's first consumer is solo dogfooding (git diffs, build/test logs, agent
 /// tool-call JSON) — these three built-ins deliberately cover only that, not a broad command
 /// library. Encoded as Rust struct literals rather than parsed TOML strings: for packs this
 /// small, embedding multi-line fixture text in Rust raw strings and building the structs
@@ -785,7 +785,7 @@ fn build_test_log_pack() -> FilterPack {
             version: "1.0.0".to_string(),
         },
         filters: vec![Filter {
-            // Generic cargo build/test log filter (D-002 dogfooding scope: this repo's own
+            // Generic cargo build/test log filter (dogfooding scope: this repo's own
             // `cargo test`/`cargo build`); `match_command = ["cargo"]` fires on any cargo
             // subcommand rather than one filter per subcommand, keeping this a single built-in.
             id: "cargo-build-test-log".to_string(),

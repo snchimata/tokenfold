@@ -17,7 +17,12 @@ pub enum TokenFoldError {
 }
 
 impl TokenFoldError {
-    /// CLI exit code per the Error Taxonomy table (PLAN.md / INTERFACES.md §1.4).
+    /// Stable CLI exit code for this error: 2 invalid input, 3 safety/redaction violation,
+    /// 4 estimator failure, 5 bad configuration, 6 internal or I/O failure. Every successful
+    /// [`crate::Status`] outcome — including `UnreachableTarget`, which is a typed result and
+    /// not an error — exits 0. The proxy's HTTP status mapping and the Python binding's
+    /// exception hierarchy are derived from these same buckets, so the numbering is a public
+    /// contract; `exit_codes_match_error_taxonomy_table` below pins it.
     pub fn exit_code(&self) -> i32 {
         match self {
             TokenFoldError::InvalidInput(_) => 2,
