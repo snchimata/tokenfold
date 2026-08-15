@@ -154,6 +154,7 @@ fn skipped_reason_label(r: &SkippedReason) -> &'static str {
         SkippedReason::TargetAlreadyMet => "target_already_met",
         SkippedReason::NotApplicableToFormat => "not_applicable_to_format",
         SkippedReason::NotEnabledInMode => "not_enabled_in_mode",
+        SkippedReason::IncompatibleWithLossy => "incompatible_with_lossy",
         SkippedReason::ExperimentalFlagRequired => "experimental_flag_required",
         SkippedReason::DisabledByUser => "disabled_by_user",
         SkippedReason::WouldIncreaseTokens => "would_increase_tokens",

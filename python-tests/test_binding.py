@@ -247,3 +247,28 @@ def test_module_exports_the_full_error_hierarchy():
         "InternalError",
     ):
         assert hasattr(tokenfold, name)
+
+
+# ---------------------------------------------------------------------------
+# inspect(): side-effect-free for real, not merely in what it returns
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_never_writes_to_the_retrieval_store(tmp_path, monkeypatch):
+    """Round-5 external review: `inspect()` substituted the original payload back into the
+    result but ran core compression under the ordinary persistence policy, so inspecting with
+    `store_originals=True` still wrote the full payload to disk. `dry_run` now sets
+    `policy.preview`, which is what actually stops the write inside core."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    policy = CompressionPolicy(store_originals=True, retrieval_backend="filesystem")
+
+    result = inspect(OPENAI_PAYLOAD, policy=policy, format=InputFormat.OPENAI_JSON)
+
+    assert result.payload == OPENAI_PAYLOAD
+    assert result.report.raw["retrieval"] is None, "a preview must not claim a persist happened"
+    assert not any(tmp_path.rglob("*.bin")), "a preview must not persist anything to disk"
+
+    # Control: the same policy on the real `compress()` path DOES persist -- otherwise the
+    # assertions above would pass for the wrong reason (nothing being stored under any path).
+    compress(OPENAI_PAYLOAD, policy=policy, format=InputFormat.OPENAI_JSON)
+    assert any(tmp_path.rglob("*.bin")), "store_originals must still work on a real run"

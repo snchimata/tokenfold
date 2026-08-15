@@ -14,7 +14,7 @@ use tokenfold_core::report::{CommandReport, EstimatorInfo, PipelineReport, Pipel
 use tokenfold_core::token_estimator::{ByteHeuristicEstimator, TiktokenEstimator, TokenEstimator};
 use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, TokenFoldError};
 
-use args::{Input, ModeArg, TaskScopeArg};
+use args::{Input, LossyArg, ModeArg, TaskScopeArg};
 use config::CliOverrides;
 use format::FormatArg;
 
@@ -86,6 +86,32 @@ enum Command {
         /// F-045: namespace stored originals are keyed under (see `tokenfold retrieve`).
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
+        /// Opt-in LOSSY JSON array-item selection — drops array items to hit a token budget
+        /// instead of only structurally reshaping them. Forces `--store-originals` on; dropped
+        /// items are recoverable via `tokenfold retrieve <hash>`, never silently destroyed. Also
+        /// disables `json_field_fold`/`json_value_dict` regardless of `--disable`, since both
+        /// restructure arrays before this stage runs and would otherwise silently move a
+        /// `--lossy-preserve` path off the array it names. Only applies to generic JSON — never
+        /// runs on OpenAI/Anthropic message payloads. See
+        /// docs/solution-design/lossy-json-compression.md.
+        #[arg(long)]
+        lossy: Option<LossyArg>,
+        /// BEST-EFFORT selection hint, not a budget: how aggressively to prune, expressed as the
+        /// fraction (0.0..=1.0) of the prunable pool's own estimated token cost to keep. It steers
+        /// the item-selection walk and nothing more — the final document is NOT re-checked against
+        /// it, and the achieved ratio will differ, because the pool excludes preserved arrays,
+        /// non-array content, and items cheaper than the `$tf_ref` marker replacing them, and
+        /// because a whole prune is rolled back if it fails to beat the lossless pipeline. Use
+        /// `--target-tokens` for a real, enforced token ceiling. Requires `--lossy`.
+        #[arg(long = "lossy-ratio", requires = "lossy")]
+        lossy_ratio: Option<f64>,
+        /// Dot-separated path (e.g. `items` or `data.results`) whose array must never be
+        /// pruned; repeatable. Requires `--lossy`. Pruning never looks inside an array it's
+        /// already decided to consider, so a path naming something INSIDE another prunable
+        /// array (e.g. `groups.users` when `groups` itself has 2+ items) protects the nearest
+        /// enclosing array (`groups`) rather than matching nothing.
+        #[arg(long = "lossy-preserve", requires = "lossy")]
+        lossy_preserve: Vec<String>,
     },
     /// Compression-aware diff of two payloads.
     Diff { raw: Input, compressed: Input },
@@ -259,7 +285,19 @@ fn main() {
             target_tokens,
             mode,
             list_transforms,
-        } => cmd_inspect(&global, input, format, target_tokens, mode, list_transforms),
+        } => cmd_inspect(
+            &global,
+            input,
+            format,
+            target_tokens,
+            mode,
+            list_transforms,
+            None,
+            None,
+            &[],
+            Vec::new(),
+            None,
+        ),
         Command::Compress {
             input,
             output,
@@ -270,9 +308,24 @@ fn main() {
             dry_run,
             store_originals,
             retrieve_namespace,
+            lossy,
+            lossy_ratio,
+            lossy_preserve,
         } => {
             if dry_run {
-                cmd_inspect(&global, input, format, target_tokens, mode, false)
+                cmd_inspect(
+                    &global,
+                    input,
+                    format,
+                    target_tokens,
+                    mode,
+                    false,
+                    lossy,
+                    lossy_ratio,
+                    &lossy_preserve,
+                    disable,
+                    retrieve_namespace,
+                )
             } else {
                 cmd_compress(
                     &global,
@@ -284,6 +337,9 @@ fn main() {
                     disable,
                     store_originals,
                     retrieve_namespace,
+                    lossy,
+                    lossy_ratio,
+                    lossy_preserve,
                 )
             }
         }
@@ -384,8 +440,21 @@ fn validate_enable_requires_experimental(
     Ok(())
 }
 
-fn build_policy(effective: &config::Effective) -> Result<CompressionPolicy, TokenFoldError> {
+/// `lossy`/`lossy_ratio`/`lossy_preserve` are CLI-only for now (unlike every other field here,
+/// which flows through `config::resolve`'s flag/env/`tokenfold.toml` precedence chain) —
+/// deliberately a smaller surface for a brand-new, still-Phase-1 feature; `dry_run` is the
+/// existing precedent for a `Compress`-only flag that skips the config layer entirely. Extend
+/// `config.rs` with a `[lossy]` section if/when this graduates the same way `[retrieval]` did.
+#[allow(clippy::too_many_arguments)]
+fn build_policy(
+    effective: &config::Effective,
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: &[String],
+    preview: bool,
+) -> Result<CompressionPolicy, TokenFoldError> {
     let mut builder = CompressionPolicy::builder()
+        .preview(preview)
         .mode(effective.mode)
         .task_scope(effective.task_scope)
         .preserve_latest_user_message(effective.preserve_latest_user_message)
@@ -404,6 +473,15 @@ fn build_policy(effective: &config::Effective) -> Result<CompressionPolicy, Toke
     }
     for id in &effective.enable {
         builder = builder.enable(id.clone());
+    }
+    if let Some(lossy) = lossy {
+        builder = builder.lossy(lossy.to_core());
+    }
+    if let Some(ratio) = lossy_ratio {
+        builder = builder.lossy_ratio(ratio);
+    }
+    for path in lossy_preserve {
+        builder = builder.lossy_preserve(path.clone());
     }
     builder.build()
 }
@@ -464,6 +542,7 @@ fn read_input(input: &Input, label: &str) -> Result<Vec<u8>, TokenFoldError> {
         .map_err(|e| TokenFoldError::InvalidInput(format!("failed to read {label}: {e}")))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_inspect(
     global: &GlobalFlags,
     input: Input,
@@ -471,6 +550,11 @@ fn cmd_inspect(
     target_tokens: Option<usize>,
     mode: Option<ModeArg>,
     list_transforms: bool,
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: &[String],
+    disable: Vec<String>,
+    retrieve_namespace: Option<String>,
 ) -> Result<i32, TokenFoldError> {
     if list_transforms {
         if global.json {
@@ -485,11 +569,32 @@ fn cmd_inspect(
     }
 
     // `inspect` never stores originals: it's a dry-run preview, and per INTERFACES.md
-    // `tokenfold_inspect` also defaults `store_originals` to false.
-    let overrides = overrides_for(global, mode, target_tokens, format, Vec::new(), false, None);
+    // `tokenfold_inspect` also defaults `store_originals` to false. `policy.preview = true` is
+    // the actual enforcement of that for the lossy path -- it's what stops
+    // pipeline::apply_lossy_reduction from performing real RetrievalStore writes even though
+    // `--lossy` forces store_originals-equivalent behavior on for a real compress run.
+    // `disable`/`retrieve_namespace` DO still flow through, though (unlike `store_originals`,
+    // which inspect always forces off) -- `compress --dry-run` must preview the SAME set of
+    // active transforms and the SAME namespace a real run with the same flags would use, or the
+    // preview isn't actually previewing what `compress` would do.
+    let overrides = overrides_for(
+        global,
+        mode,
+        target_tokens,
+        format,
+        disable,
+        false,
+        retrieve_namespace,
+    );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
     validate_enable_requires_experimental(&resolved.effective)?;
-    let policy = build_policy(&resolved.effective)?;
+    let policy = build_policy(
+        &resolved.effective,
+        lossy,
+        lossy_ratio,
+        lossy_preserve,
+        true,
+    )?;
 
     let bytes = read_input(&input, "input")?;
     let resolved_format = resolve_format(resolved.effective.format, &bytes, false);
@@ -525,6 +630,9 @@ fn cmd_compress(
     disable: Vec<String>,
     store_originals: bool,
     retrieve_namespace: Option<String>,
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Vec<String>,
 ) -> Result<i32, TokenFoldError> {
     let overrides = overrides_for(
         global,
@@ -537,7 +645,13 @@ fn cmd_compress(
     );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
     validate_enable_requires_experimental(&resolved.effective)?;
-    let policy = build_policy(&resolved.effective)?;
+    let policy = build_policy(
+        &resolved.effective,
+        lossy,
+        lossy_ratio,
+        &lossy_preserve,
+        false,
+    )?;
 
     let bytes = read_input(&input, "input")?;
     let resolved_format = resolve_format(resolved.effective.format, &bytes, false);
@@ -953,7 +1067,7 @@ fn cmd_wrap(
     );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
     validate_enable_requires_experimental(&resolved.effective)?;
-    let policy = build_policy(&resolved.effective)?;
+    let policy = build_policy(&resolved.effective, None, None, &[], false)?;
 
     // --- Stage 1: acquire command output, RTK-composed or direct. ---
     // F-054: RTK preflight runs *before* the child. If RTK is missing/incompatible we fail open

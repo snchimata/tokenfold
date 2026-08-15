@@ -4,7 +4,14 @@ use crate::errors::TokenFoldError;
 use crate::input::{CompressionInput, InputFormat};
 use crate::token_estimator::TokenEstimator;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Placeholder floor for `retrieval_ttl_seconds` whenever `lossy` is set — see
+/// `CompressionPolicyBuilder::build`'s lossy validation. The design doc lists the exact policy
+/// as an open owner decision (docs/solution-design/lossy-json-compression.md §8), not yet
+/// confirmed; this value only needs to be "clearly more than instant," not final.
+const MIN_LOSSY_TTL_SECONDS: u64 = 86_400;
+
+// NOT Eq: `lossy_ratio` holds an f64 (same precedent as `CompressionOutput`/`CompressionReport`).
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompressionPolicy {
     pub target_tokens: Option<usize>,
     pub reserve_output_tokens: usize,
@@ -40,6 +47,38 @@ pub struct CompressionPolicy {
     /// F-045: filesystem backend root override. `None` means
     /// `retrieval_store::default_store_path()`.
     pub retrieval_store_path: Option<PathBuf>,
+    /// Opt-in lossy JSON array-item selection (`docs/solution-design/lossy-json-compression.md`,
+    /// local-only). `None` (the default) means the lossless pipeline is untouched — this field
+    /// is set only by an explicit CLI flag, never derived from `mode`/`experimental`, and is
+    /// deliberately NOT part of `modes.rs`/`ALL_ENTRIES`: it is a fundamentally different
+    /// category (data-lossy, not just structurally-lossy-but-reversible) from every other
+    /// transform in this crate. See `pipeline::apply_lossy_reduction`.
+    pub lossy: Option<LossyPath>,
+    /// BEST-EFFORT selection hint, not an enforced budget: how aggressively to prune, as the
+    /// fraction (0.0..=1.0) of the prunable pool's own estimated token cost to keep when `lossy`
+    /// is set. It parameterizes `transforms::json_prune`'s selection walk and is deliberately
+    /// never re-checked against the final serialized document — the achieved whole-document ratio
+    /// will differ, since the pool excludes preserved arrays, all non-array content, and items
+    /// cheaper than the `$tf_ref` marker that would replace them, and since
+    /// `pipeline::apply_lossy_reduction` discards a whole prune that fails to beat the lossless
+    /// pipeline. `target_tokens` is the enforced ceiling; this is not. Ignored when `lossy` is
+    /// `None`.
+    pub lossy_ratio: f64,
+    /// Dot-separated paths (see `transforms::json_prune::LossyOptions::preserve_paths`) whose
+    /// arrays must never be pruned. Ignored when `lossy` is `None`.
+    pub lossy_preserve: Vec<String>,
+    /// True for a side-effect-free preview (`tokenfold inspect` / `compress --dry-run`): the
+    /// projected output/savings are computed exactly as a real run would, but
+    /// `pipeline::maybe_store_originals`/`apply_lossy_reduction` must not perform any real
+    /// `RetrievalStore` write.
+    ///
+    /// `pub(crate)`, settable only via [`CompressionPolicyBuilder::preview`]. It was a plain
+    /// `pub` field, which made it a footgun for library callers: a preview run's output can carry
+    /// `$tf_ref` markers whose targets were deliberately never persisted, so flipping this on an
+    /// otherwise ordinary policy and feeding `CompressionOutput::bytes` to a model yields
+    /// references that resolve to nothing. Callers who want the projection must ask for it by
+    /// name and are told, right here, that the bytes are a projection to measure — not to ship.
+    pub(crate) preview: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +86,15 @@ pub enum CompressionMode {
     Conservative,
     Balanced,
     Aggressive,
+}
+
+/// Selection backend for opt-in lossy JSON pruning. `Heuristic` is the only Phase 1
+/// implementation; a future `Select` (Tokenfold Select as the scorer) is Phase 2 and not
+/// implemented — deliberately a single-variant enum for now rather than a bare `bool`, since the
+/// CLI already speaks of this as choosing an algorithm (`--lossy heuristic`), not toggling a flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LossyPath {
+    Heuristic,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +120,48 @@ impl CompressionPolicy {
     pub fn builder() -> CompressionPolicyBuilder {
         CompressionPolicyBuilder::default()
     }
+
+    /// Re-checks the same invariants `CompressionPolicyBuilder::build` enforces, against the
+    /// concrete built struct rather than the builder's `Option` fields. Every field here is
+    /// `pub`, so a caller can construct or mutate a `CompressionPolicy` directly without ever
+    /// going through the builder -- `pipeline::compress_with_estimator` calls this on every
+    /// policy it receives so a hand-built policy can't silently skip the same fail-closed
+    /// guarantees a builder-built one gets for free.
+    pub fn validate(&self) -> Result<(), TokenFoldError> {
+        if self.disabled.iter().any(|id| id == "secret_redaction") {
+            return Err(TokenFoldError::ConfigError(
+                "secret_redaction cannot be disabled via CompressionPolicy.disabled".to_string(),
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.lossy_ratio) {
+            return Err(TokenFoldError::ConfigError(format!(
+                "lossy_ratio must be between 0.0 and 1.0, got {}",
+                self.lossy_ratio
+            )));
+        }
+        if self.lossy.is_some() {
+            // Design doc §4/§8: "must refuse to run when retrieval_backend == Memory or the TTL
+            // is below a floor" -- a lossy run with no durable receipt is real data loss, not
+            // "lossy but recoverable".
+            if self.retrieval_backend != "filesystem" {
+                return Err(TokenFoldError::ConfigError(format!(
+                    "lossy pruning requires a durable retrieval backend (\"filesystem\"); \
+                     {:?} would make dropped items unrecoverable",
+                    self.retrieval_backend
+                )));
+            }
+            let effective_ttl = self
+                .retrieval_ttl_seconds
+                .unwrap_or(crate::retrieval_store::DEFAULT_TTL_SECONDS);
+            if effective_ttl < MIN_LOSSY_TTL_SECONDS {
+                return Err(TokenFoldError::ConfigError(format!(
+                    "lossy pruning requires retrieval_ttl_seconds >= {MIN_LOSSY_TTL_SECONDS} \
+                     (got {effective_ttl}); a near-immediate expiry has no real recoverability"
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -91,6 +181,10 @@ pub struct CompressionPolicyBuilder {
     retrieval_ttl_seconds: Option<u64>,
     retrieval_backend: Option<String>,
     retrieval_store_path: Option<PathBuf>,
+    lossy: Option<LossyPath>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Vec<String>,
+    preview: bool,
 }
 
 impl CompressionPolicyBuilder {
@@ -169,13 +263,33 @@ impl CompressionPolicyBuilder {
         self
     }
 
+    pub fn lossy(mut self, lossy: LossyPath) -> Self {
+        self.lossy = Some(lossy);
+        self
+    }
+
+    pub fn lossy_ratio(mut self, ratio: f64) -> Self {
+        self.lossy_ratio = Some(ratio);
+        self
+    }
+
+    pub fn lossy_preserve(mut self, path: impl Into<String>) -> Self {
+        self.lossy_preserve.push(path.into());
+        self
+    }
+
+    /// Opt into a side-effect-free preview: no real `RetrievalStore` write happens anywhere in
+    /// the pipeline. The returned `CompressionOutput::bytes` are a PROJECTION of what a real run
+    /// would emit — with a lossy policy they can contain `$tf_ref` markers pointing at content
+    /// that was deliberately never stored, so they are for measuring savings, never for sending
+    /// to a model. See `CompressionPolicy::preview`.
+    pub fn preview(mut self, preview: bool) -> Self {
+        self.preview = preview;
+        self
+    }
+
     pub fn build(self) -> Result<CompressionPolicy, TokenFoldError> {
-        if self.disabled.iter().any(|id| id == "secret_redaction") {
-            return Err(TokenFoldError::ConfigError(
-                "secret_redaction cannot be disabled via CompressionPolicy.disabled".to_string(),
-            ));
-        }
-        Ok(CompressionPolicy {
+        let policy = CompressionPolicy {
             target_tokens: self.target_tokens,
             reserve_output_tokens: self.reserve_output_tokens.unwrap_or(0),
             mode: self.mode.unwrap_or(CompressionMode::Balanced),
@@ -195,7 +309,13 @@ impl CompressionPolicyBuilder {
                 .retrieval_backend
                 .unwrap_or_else(|| "filesystem".to_string()),
             retrieval_store_path: self.retrieval_store_path,
-        })
+            lossy: self.lossy,
+            lossy_ratio: self.lossy_ratio.unwrap_or(0.3),
+            lossy_preserve: self.lossy_preserve,
+            preview: self.preview,
+        };
+        policy.validate()?;
+        Ok(policy)
     }
 }
 
@@ -263,8 +383,18 @@ fn extract_anthropic_protected(bytes: &[u8], policy: &CompressionPolicy) -> Vec<
     };
 
     let mut segments = Vec::new();
-    if let Some(system) = value.get("system").and_then(|s| s.as_str()) {
-        segments.push(system.as_bytes().to_vec());
+    // Anthropic's `system` field is either a plain string OR a structured array of content
+    // blocks (`[{"type":"text","text":"..."}, ...]`) -- the structured shape used to fall
+    // through `.as_str()` as `None` and get zero protection. Mirrors `message_content_bytes`'s
+    // existing string-or-structured handling for message `content`.
+    match value.get("system") {
+        Some(serde_json::Value::String(text)) => segments.push(text.as_bytes().to_vec()),
+        Some(structured @ serde_json::Value::Array(_)) => {
+            if let Ok(bytes) = serde_json::to_vec(structured) {
+                segments.push(bytes);
+            }
+        }
+        _ => {}
     }
     if policy.preserve_latest_user_message
         && let Some(last_user) =
@@ -445,6 +575,39 @@ mod tests {
     }
 
     #[test]
+    fn floor_covers_structured_anthropic_system_content_not_just_a_plain_string() {
+        // Round-4 external review: Anthropic's `system` field can be a structured array of
+        // content blocks (`[{"type":"text","text":"..."}]`), not just a plain string --
+        // `.as_str()` alone returned `None` for that shape, so a structured system prompt got
+        // ZERO protection (silently prunable/rewritable like any other content).
+        let payload = serde_json::json!({
+            "system": [{"type": "text", "text": "structured system prompt"}],
+            "messages": [
+                {"role": "user", "content": "first"},
+            ]
+        });
+        let input = CompressionInput::anthropic_json(serde_json::to_vec(&payload).unwrap());
+        let policy = CompressionPolicy::builder()
+            .preserve_latest_user_message(false)
+            .build()
+            .unwrap();
+        let floor = protected_floor(&input, &policy, &ByteHeuristicEstimator);
+        assert!(
+            floor > 0,
+            "a structured Anthropic `system` array must contribute to the protected floor"
+        );
+        let segments = protected_segments(&input, &policy);
+        let system_bytes = serde_json::to_vec(
+            &serde_json::json!([{"type": "text", "text": "structured system prompt"}]),
+        )
+        .unwrap();
+        assert!(
+            segments.contains(&system_bytes),
+            "the structured system content must be a protected segment, byte-for-byte"
+        );
+    }
+
+    #[test]
     fn floor_keeps_diff_headers_and_hunk_markers_only() {
         let diff =
             b"diff --git a/f.rs b/f.rs\n--- a/f.rs\n+++ b/f.rs\n@@ -1,2 +1,2 @@\n-old\n+new\n";
@@ -453,6 +616,73 @@ mod tests {
         let floor = protected_floor(&input, &policy, &ByteHeuristicEstimator);
         assert!(floor > 0);
         assert!(floor < ByteHeuristicEstimator.count_bytes(diff));
+    }
+
+    #[test]
+    fn lossy_defaults_to_disabled_with_a_default_ratio() {
+        let policy = CompressionPolicy::builder().build().unwrap();
+        assert_eq!(policy.lossy, None);
+        assert_eq!(policy.lossy_ratio, 0.3);
+        assert!(policy.lossy_preserve.is_empty());
+    }
+
+    #[test]
+    fn lossy_is_settable_via_the_builder() {
+        let policy = CompressionPolicy::builder()
+            .lossy(LossyPath::Heuristic)
+            .lossy_ratio(0.5)
+            .lossy_preserve("items")
+            .lossy_preserve("data.results")
+            .build()
+            .unwrap();
+        assert_eq!(policy.lossy, Some(LossyPath::Heuristic));
+        assert_eq!(policy.lossy_ratio, 0.5);
+        assert_eq!(policy.lossy_preserve, vec!["items", "data.results"]);
+    }
+
+    #[test]
+    fn lossy_refuses_memory_retrieval_backend() {
+        let err = CompressionPolicy::builder()
+            .lossy(LossyPath::Heuristic)
+            .retrieval_backend("memory")
+            .build()
+            .unwrap_err();
+        assert!(matches!(err, TokenFoldError::ConfigError(_)));
+    }
+
+    #[test]
+    fn lossy_refuses_a_ttl_below_the_floor() {
+        let err = CompressionPolicy::builder()
+            .lossy(LossyPath::Heuristic)
+            .retrieval_ttl_seconds(Some(60))
+            .build()
+            .unwrap_err();
+        assert!(matches!(err, TokenFoldError::ConfigError(_)));
+    }
+
+    #[test]
+    fn lossy_with_default_retrieval_settings_is_accepted() {
+        // Defaults (filesystem backend, 7-day TTL) already clear the floor -- a user shouldn't
+        // need to configure retrieval explicitly just to use --lossy.
+        let policy = CompressionPolicy::builder()
+            .lossy(LossyPath::Heuristic)
+            .build()
+            .unwrap();
+        assert_eq!(policy.lossy, Some(LossyPath::Heuristic));
+    }
+
+    #[test]
+    fn lossy_ratio_outside_unit_interval_is_rejected() {
+        let err = CompressionPolicy::builder()
+            .lossy_ratio(1.5)
+            .build()
+            .unwrap_err();
+        assert!(matches!(err, TokenFoldError::ConfigError(_)));
+        let err = CompressionPolicy::builder()
+            .lossy_ratio(-0.1)
+            .build()
+            .unwrap_err();
+        assert!(matches!(err, TokenFoldError::ConfigError(_)));
     }
 
     #[test]

@@ -1,0 +1,407 @@
+{
+  "service": "search-platform",
+  "window": "2026-08-15T00:00Z/PT4H",
+  "events": [
+    {
+      "seq": 0,
+      "ts": "2026-08-15T00:00:11Z",
+      "subsystem": "ingest-gateway",
+      "event": "http_request",
+      "route": "/v2/ingest-gateway/status",
+      "status_code": 200,
+      "duration_ms": 90,
+      "bytes_out": 1200,
+      "detail": "ingest-gateway completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 1,
+      "ts": "2026-08-15T00:01:11Z",
+      "subsystem": "index-writer",
+      "event": "cache",
+      "hit_ratio": 0.91,
+      "evictions": 1,
+      "detail": "index-writer observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 2,
+      "ts": "2026-08-15T00:02:11Z",
+      "subsystem": "shard-router",
+      "event": "replication",
+      "lag_ms": 66,
+      "success": true,
+      "peer": "shard-router-replica-2",
+      "detail": "shard-router re-registered with service discovery after the routine deploy and passed every readiness probe"
+    },
+    {
+      "seq": 3,
+      "ts": "2026-08-15T00:03:11Z",
+      "subsystem": "cache-tier",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 155,
+      "retries": 0,
+      "detail": "cache-tier rotated its short-lived credentials and re-established upstream sessions without interruption"
+    },
+    {
+      "seq": 4,
+      "ts": "2026-08-15T00:04:11Z",
+      "subsystem": "replica-sync",
+      "event": "http_request",
+      "route": "/v2/replica-sync/status",
+      "status_code": 200,
+      "duration_ms": 118,
+      "bytes_out": 1324,
+      "detail": "replica-sync observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 5,
+      "ts": "2026-08-15T00:05:11Z",
+      "subsystem": "auth-broker",
+      "event": "cache",
+      "hit_ratio": 0.95,
+      "evictions": 0,
+      "detail": "auth-broker completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 6,
+      "ts": "2026-08-15T00:06:11Z",
+      "subsystem": "metrics-collector",
+      "event": "replication",
+      "lag_ms": 118,
+      "success": true,
+      "peer": "metrics-collector-replica-0",
+      "detail": "metrics-collector verified segment checksums across every replica and found all of them byte-identical"
+    },
+    {
+      "seq": 7,
+      "ts": "2026-08-15T00:07:11Z",
+      "subsystem": "object-store",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 191,
+      "retries": 0,
+      "detail": "object-store compacted its oldest generation of segments and released the reclaimed space back to the pool"
+    },
+    {
+      "seq": 8,
+      "ts": "2026-08-15T00:08:11Z",
+      "subsystem": "query-planner",
+      "event": "http_request",
+      "route": "/v2/query-planner/status",
+      "status_code": 200,
+      "duration_ms": 146,
+      "bytes_out": 1448,
+      "detail": "query-planner completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 9,
+      "ts": "2026-08-15T00:09:11Z",
+      "subsystem": "stream-fanout",
+      "event": "cache",
+      "hit_ratio": 0.9,
+      "evictions": 4,
+      "detail": "stream-fanout observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 10,
+      "ts": "2026-08-15T01:10:11Z",
+      "subsystem": "ingest-gateway",
+      "event": "replication",
+      "lag_ms": 170,
+      "success": true,
+      "peer": "ingest-gateway-replica-1",
+      "detail": "ingest-gateway re-registered with service discovery after the routine deploy and passed every readiness probe"
+    },
+    {
+      "seq": 11,
+      "ts": "2026-08-15T01:11:11Z",
+      "subsystem": "index-writer",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 227,
+      "retries": 0,
+      "detail": "index-writer rotated its short-lived credentials and re-established upstream sessions without interruption"
+    },
+    {
+      "seq": 12,
+      "ts": "2026-08-15T01:12:11Z",
+      "subsystem": "shard-router",
+      "event": "http_request",
+      "route": "/v2/shard-router/status",
+      "status_code": 200,
+      "duration_ms": 114,
+      "bytes_out": 1572,
+      "detail": "shard-router observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 13,
+      "ts": "2026-08-15T01:13:11Z",
+      "subsystem": "cache-tier",
+      "event": "cache",
+      "hit_ratio": 0.94,
+      "evictions": 3,
+      "detail": "cache-tier completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 14,
+      "ts": "2026-08-15T01:14:11Z",
+      "subsystem": "replica-sync",
+      "event": "replication",
+      "lag_ms": 222,
+      "success": true,
+      "peer": "replica-sync-replica-2",
+      "detail": "replica-sync verified segment checksums across every replica and found all of them byte-identical"
+    },
+    {
+      "seq": 15,
+      "ts": "2026-08-15T01:15:11Z",
+      "subsystem": "auth-broker",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 263,
+      "retries": 0,
+      "detail": "auth-broker compacted its oldest generation of segments and released the reclaimed space back to the pool"
+    },
+    {
+      "seq": 16,
+      "ts": "2026-08-15T01:16:11Z",
+      "subsystem": "metrics-collector",
+      "event": "http_request",
+      "route": "/v2/metrics-collector/status",
+      "status_code": 200,
+      "duration_ms": 142,
+      "bytes_out": 1696,
+      "detail": "metrics-collector completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 17,
+      "ts": "2026-08-15T01:17:11Z",
+      "subsystem": "object-store",
+      "event": "cache",
+      "hit_ratio": 0.98,
+      "evictions": 2,
+      "detail": "object-store observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 18,
+      "ts": "2026-08-15T01:18:11Z",
+      "subsystem": "query-planner",
+      "event": "replication",
+      "lag_ms": 74,
+      "success": true,
+      "peer": "query-planner-replica-0",
+      "detail": "query-planner re-registered with service discovery after the routine deploy and passed every readiness probe"
+    },
+    {
+      "seq": 19,
+      "ts": "2026-08-15T01:19:11Z",
+      "subsystem": "stream-fanout",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 299,
+      "retries": 0,
+      "detail": "stream-fanout rotated its short-lived credentials and re-established upstream sessions without interruption"
+    },
+    {
+      "seq": 20,
+      "ts": "2026-08-15T02:20:11Z",
+      "subsystem": "ingest-gateway",
+      "event": "http_request",
+      "route": "/v2/ingest-gateway/status",
+      "status_code": 200,
+      "duration_ms": 110,
+      "bytes_out": 1820,
+      "detail": "ingest-gateway observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 21,
+      "ts": "2026-08-15T02:21:11Z",
+      "subsystem": "index-writer",
+      "event": "cache",
+      "hit_ratio": 0.93,
+      "evictions": 1,
+      "detail": "index-writer completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 22,
+      "ts": "2026-08-15T02:22:11Z",
+      "subsystem": "shard-router",
+      "event": "replication",
+      "lag_ms": 126,
+      "success": true,
+      "peer": "shard-router-replica-1",
+      "detail": "shard-router verified segment checksums across every replica and found all of them byte-identical"
+    },
+    {
+      "seq": 23,
+      "ts": "2026-08-15T02:23:11Z",
+      "subsystem": "object-store",
+      "event": "incident",
+      "status_code": 503,
+      "success": false,
+      "retries": 7,
+      "duration_ms": 31804,
+      "detail": "object-store connection pool exhausted; the writer could not acquire a lease before the deadline and the batch was abandoned, incident-id INC-4417"
+    },
+    {
+      "seq": 24,
+      "ts": "2026-08-15T02:24:11Z",
+      "subsystem": "replica-sync",
+      "event": "http_request",
+      "route": "/v2/replica-sync/status",
+      "status_code": 200,
+      "duration_ms": 138,
+      "bytes_out": 1944,
+      "detail": "replica-sync completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 25,
+      "ts": "2026-08-15T02:25:11Z",
+      "subsystem": "auth-broker",
+      "event": "cache",
+      "hit_ratio": 0.97,
+      "evictions": 0,
+      "detail": "auth-broker observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 26,
+      "ts": "2026-08-15T02:26:11Z",
+      "subsystem": "metrics-collector",
+      "event": "replication",
+      "lag_ms": 178,
+      "success": true,
+      "peer": "metrics-collector-replica-2",
+      "detail": "metrics-collector re-registered with service discovery after the routine deploy and passed every readiness probe"
+    },
+    {
+      "seq": 27,
+      "ts": "2026-08-15T02:27:11Z",
+      "subsystem": "object-store",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 371,
+      "retries": 0,
+      "detail": "object-store rotated its short-lived credentials and re-established upstream sessions without interruption"
+    },
+    {
+      "seq": 28,
+      "ts": "2026-08-15T02:28:11Z",
+      "subsystem": "query-planner",
+      "event": "http_request",
+      "route": "/v2/query-planner/status",
+      "status_code": 200,
+      "duration_ms": 106,
+      "bytes_out": 2068,
+      "detail": "query-planner observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 29,
+      "ts": "2026-08-15T02:29:11Z",
+      "subsystem": "stream-fanout",
+      "event": "cache",
+      "hit_ratio": 0.92,
+      "evictions": 4,
+      "detail": "stream-fanout completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 30,
+      "ts": "2026-08-15T03:30:11Z",
+      "subsystem": "ingest-gateway",
+      "event": "replication",
+      "lag_ms": 230,
+      "success": true,
+      "peer": "ingest-gateway-replica-0",
+      "detail": "ingest-gateway verified segment checksums across every replica and found all of them byte-identical"
+    },
+    {
+      "seq": 31,
+      "ts": "2026-08-15T03:31:11Z",
+      "subsystem": "index-writer",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 407,
+      "retries": 0,
+      "detail": "index-writer compacted its oldest generation of segments and released the reclaimed space back to the pool"
+    },
+    {
+      "seq": 32,
+      "ts": "2026-08-15T03:32:11Z",
+      "subsystem": "shard-router",
+      "event": "http_request",
+      "route": "/v2/shard-router/status",
+      "status_code": 200,
+      "duration_ms": 134,
+      "bytes_out": 2192,
+      "detail": "shard-router completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 33,
+      "ts": "2026-08-15T03:33:11Z",
+      "subsystem": "cache-tier",
+      "event": "cache",
+      "hit_ratio": 0.96,
+      "evictions": 3,
+      "detail": "cache-tier observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 34,
+      "ts": "2026-08-15T03:34:11Z",
+      "subsystem": "replica-sync",
+      "event": "replication",
+      "lag_ms": 82,
+      "success": true,
+      "peer": "replica-sync-replica-1",
+      "detail": "replica-sync re-registered with service discovery after the routine deploy and passed every readiness probe"
+    },
+    {
+      "seq": 35,
+      "ts": "2026-08-15T03:35:11Z",
+      "subsystem": "auth-broker",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 443,
+      "retries": 0,
+      "detail": "auth-broker rotated its short-lived credentials and re-established upstream sessions without interruption"
+    },
+    {
+      "seq": 36,
+      "ts": "2026-08-15T03:36:11Z",
+      "subsystem": "metrics-collector",
+      "event": "http_request",
+      "route": "/v2/metrics-collector/status",
+      "status_code": 200,
+      "duration_ms": 102,
+      "bytes_out": 2316,
+      "detail": "metrics-collector observed replication lag well inside the configured tolerance for the whole interval"
+    },
+    {
+      "seq": 37,
+      "ts": "2026-08-15T03:37:11Z",
+      "subsystem": "object-store",
+      "event": "cache",
+      "hit_ratio": 0.91,
+      "evictions": 2,
+      "detail": "object-store completed its scheduled reconciliation pass and reported no drift against the desired state"
+    },
+    {
+      "seq": 38,
+      "ts": "2026-08-15T03:38:11Z",
+      "subsystem": "query-planner",
+      "event": "replication",
+      "lag_ms": 134,
+      "success": true,
+      "peer": "query-planner-replica-2",
+      "detail": "query-planner verified segment checksums across every replica and found all of them byte-identical"
+    },
+    {
+      "seq": 39,
+      "ts": "2026-08-15T03:39:11Z",
+      "subsystem": "stream-fanout",
+      "event": "maintenance",
+      "task": "segment_compaction",
+      "reclaimed_mb": 479,
+      "retries": 0,
+      "detail": "stream-fanout compacted its oldest generation of segments and released the reclaimed space back to the pool"
+    }
+  ]
+}

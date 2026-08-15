@@ -1,6 +1,6 @@
 use clap::ValueEnum;
 use serde::Deserialize;
-use tokenfold_core::{CompressionMode, TaskScope};
+use tokenfold_core::{CompressionMode, LossyPath, TaskScope};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -56,6 +56,22 @@ impl TaskScopeArg {
 
     pub fn parse(s: &str) -> Result<Self, String> {
         <TaskScopeArg as ValueEnum>::from_str(s, true)
+    }
+}
+
+/// Opt-in lossy JSON array-item selection (`docs/solution-design/lossy-json-compression.md`,
+/// local-only). `Heuristic` is the only Phase 1 backend; a future `Select` backend is Phase 2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum LossyArg {
+    Heuristic,
+}
+
+impl LossyArg {
+    pub fn to_core(self) -> LossyPath {
+        match self {
+            LossyArg::Heuristic => LossyPath::Heuristic,
+        }
     }
 }
 

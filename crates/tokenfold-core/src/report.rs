@@ -146,8 +146,15 @@ pub struct QualityReport {
     pub eval_profile_id: String,
     pub task_scope: String,
     pub validated_ratio_band: Option<String>,
-    pub quality_retention: f64,
-    pub contrastive_failure_rate: f64,
+    /// `None` when a lossy transform ran but no fidelity-gate data was baked in at build time —
+    /// `interfaces.md`'s explicit "early dev builds before Phase 2" state. These were plain
+    /// `f64` before, which forced that state to be reported as a fabricated `0.0` ("nothing was
+    /// retained") — indistinguishable from a real, measured total-loss result. Absent data must
+    /// read as absent, not as a measurement.
+    #[serde(default)]
+    pub quality_retention: Option<f64>,
+    #[serde(default)]
+    pub contrastive_failure_rate: Option<f64>,
     pub gate_passed: bool,
 }
 
@@ -180,6 +187,11 @@ pub enum SkippedReason {
     TargetAlreadyMet,
     NotApplicableToFormat,
     NotEnabledInMode,
+    /// The transform is enabled for this mode/format, but a lossy run (`policy.lossy`) actually
+    /// pruned the payload, and this transform restructures arrays in a way that would move a
+    /// `lossy_preserve` path off the array it names. See `pipeline::apply_transforms`, which
+    /// defers these until after the lossy stage and only skips them when pruning really applied.
+    IncompatibleWithLossy,
     ExperimentalFlagRequired,
     DisabledByUser,
     WouldIncreaseTokens,
@@ -368,12 +380,31 @@ mod tests {
             eval_profile_id: "smoke-first-consumer".to_string(),
             task_scope: "code_review".to_string(),
             validated_ratio_band: Some("0.6-0.8".to_string()),
-            quality_retention: 0.975,
-            contrastive_failure_rate: 0.0,
+            quality_retention: Some(0.975),
+            contrastive_failure_rate: Some(0.0),
             gate_passed: true,
         };
         let json = serde_json::to_string(&quality).unwrap();
         let back: QualityReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(quality, back);
+    }
+
+    #[test]
+    fn quality_report_without_baked_in_gate_data_round_trips_as_absent_not_zero() {
+        let quality = QualityReport {
+            eval_profile_id: "unvalidated".to_string(),
+            task_scope: "all".to_string(),
+            validated_ratio_band: None,
+            quality_retention: None,
+            contrastive_failure_rate: None,
+            gate_passed: false,
+        };
+        let json = serde_json::to_value(&quality).unwrap();
+        assert!(
+            json["quality_retention"].is_null(),
+            "absent must not serialize as 0.0"
+        );
+        let back: QualityReport = serde_json::from_value(json).unwrap();
         assert_eq!(quality, back);
     }
 }

@@ -6,6 +6,7 @@ pub mod diff;
 pub mod json;
 pub mod json_dict;
 pub mod json_fold;
+pub mod json_prune;
 pub mod log_fold;
 pub mod logs;
 pub mod redaction;

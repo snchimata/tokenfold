@@ -521,9 +521,10 @@ fn effective_policy(
     mode: Option<ModeArg>,
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
+    preview: bool,
 ) -> PyResult<CorePolicy> {
     let base = policy.map(|p| &p.0);
-    let mut builder = CorePolicy::builder();
+    let mut builder = CorePolicy::builder().preview(preview);
 
     let resolved_mode = match mode {
         Some(m) => m.resolve()?,
@@ -596,7 +597,14 @@ fn run_compress(
     dry_run: bool,
 ) -> PyResult<PyCompressionResult> {
     let bytes = payload.into_bytes();
-    let resolved_policy = effective_policy(policy, mode, target_tokens, disable)?;
+    // `dry_run` (i.e. `inspect()`) must be side-effect-free for real, not merely in what it
+    // RETURNS. Substituting the original payload back into the result afterwards -- the old
+    // behavior -- left the underlying core run using the ordinary persistence policy, so an
+    // `inspect()` against a `store_originals=True` policy still wrote the full payload to the
+    // retrieval store. `preview` is the switch that actually stops the write, in core, before it
+    // happens; the payload substitution below stays as the presentation half of the same
+    // contract.
+    let resolved_policy = effective_policy(policy, mode, target_tokens, disable, dry_run)?;
     let input = CompressionInput {
         format,
         bytes: bytes.clone(),

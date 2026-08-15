@@ -156,6 +156,250 @@ fn compress_json_keeps_payload_on_stdout_and_report_on_stderr() {
     assert_eq!(report["schema_version"], "1.0");
 }
 
+/// Regression test for a bug an adversarial review caught: `--dry-run` routes to the same code
+/// path as `inspect`, which used to hardcode `lossy: None` regardless of what the user passed,
+/// silently making `--dry-run --lossy ...` preview nothing about the lossy stage at all.
+#[test]
+fn compress_dry_run_with_lossy_previews_json_prune_in_the_transform_table() {
+    let dir = unique_temp_dir("dry_run_lossy");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    let items: Vec<serde_json::Value> = (0..40)
+        .map(|i| {
+            serde_json::json!({
+                "id": i,
+                "note": "x".repeat(200),
+            })
+        })
+        .collect();
+    std::fs::write(
+        &payload_path,
+        serde_json::to_vec(&serde_json::json!({"items": items})).unwrap(),
+    )
+    .unwrap();
+
+    let out = Command::new(bin())
+        .args([
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "json",
+            "--dry-run",
+            "--lossy",
+            "heuristic",
+            "--lossy-ratio",
+            "0.1",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let report: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("stdout must be the report JSON");
+    let transforms = report["transforms"].as_array().expect("transforms array");
+    assert!(
+        transforms.iter().any(|t| t["id"] == "json_prune"),
+        "--dry-run --lossy must preview the json_prune stage, got transforms: {transforms:?}"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Regression test for a real, confirmed bug: `--dry-run --lossy` (routing through `cmd_inspect`)
+/// used to physically write to the retrieval store even though `inspect`/`--dry-run` is
+/// documented as a side-effect-free preview -- forwarding the lossy flags into `cmd_inspect`
+/// (the fix for the test above) reintroduced a real disk-write side effect that didn't exist
+/// before lossy did. Uses an isolated `--config`-specified store path (not the shared
+/// process-wide `XDG_DATA_HOME` from `bin()`) so this assertion can't be polluted by other tests
+/// running concurrently.
+#[test]
+fn compress_dry_run_with_lossy_never_writes_to_the_retrieval_store() {
+    let dir = unique_temp_dir("dry_run_lossy_no_write");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    let store_dir = dir.join("store");
+    let config_path = dir.join("config.toml");
+
+    // The real CLI uses tiktoken by default, which compresses a repeated-character string (e.g.
+    // "x".repeat(N)) far better than a random-looking marker hash -- varied, natural-language-ish
+    // padding is needed here so items are actually worth dropping under a real tokenizer, same
+    // lesson learned earlier this session benchmarking json_prune directly. Each item also gets
+    // a uniquely-named extra field, which breaks fold's same-key-set homogeneity requirement
+    // structurally, so the array is never folded regardless of `--disable` (kept this way so the
+    // test doesn't depend on `--disable` forwarding, which is covered by its own test below).
+    let words = [
+        "processed",
+        "batch",
+        "successfully",
+        "no",
+        "anomalies",
+        "detected",
+        "in",
+        "shard",
+        "cache",
+        "warm",
+        "hit",
+        "ratio",
+        "nominal",
+        "replication",
+        "lag",
+        "within",
+        "tolerance",
+        "checksum",
+        "verified",
+        "for",
+        "segment",
+        "worker",
+        "completed",
+        "cycle",
+        "queue",
+        "drain",
+        "normal",
+    ];
+    let items: Vec<serde_json::Value> = (0..20)
+        .map(|i| {
+            // Prefixed with `i`, and long enough (120 words) to comfortably clear a $tf_ref
+            // marker's own fixed overhead under a real tokenizer -- otherwise json_value_dict
+            // would dictionary-reference repeated word sequences (shrinking items to nothing
+            // before json_prune runs), or items would simply be too small to ever be worth
+            // dropping in the first place, same lessons learned earlier this session.
+            let note = format!(
+                "item {i}: {}",
+                (0..120)
+                    .map(|j| words[(i * 11 + j * 5 + (j * j) % 13) % words.len()])
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+            let mut obj = serde_json::Map::new();
+            obj.insert("id".to_string(), serde_json::json!(i));
+            obj.insert("note".to_string(), serde_json::json!(note));
+            obj.insert(format!("unique_{i}"), serde_json::json!(true));
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+    std::fs::write(
+        &payload_path,
+        serde_json::to_vec(&serde_json::json!({"items": items})).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        &config_path,
+        format!(
+            "[retrieval]\nbackend = \"filesystem\"\nstore_path = {:?}\n",
+            store_dir.to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+
+    let out = Command::new(bin())
+        .args([
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "json",
+            "--dry-run",
+            "--lossy",
+            "heuristic",
+            "--lossy-ratio",
+            "0.2",
+            "--json",
+            "--config",
+        ])
+        .arg(&config_path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("stdout must be the report JSON");
+    let jp = report["transforms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == "json_prune")
+        .expect("json_prune report present");
+    assert_eq!(
+        jp["status"], "applied",
+        "preview must still show projected savings"
+    );
+    assert!(
+        report["retrieval"].is_null(),
+        "a preview must not claim anything was persisted, got: {:?}",
+        report["retrieval"]
+    );
+    assert!(
+        !store_dir.exists(),
+        "a dry-run preview must never create the retrieval store directory at all"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Regression test for a real, confirmed bug: `compress --dry-run` routes to `cmd_inspect`,
+/// which used to build its own overrides from scratch and hardcode `disable: []` regardless of
+/// what the user actually passed to `--disable` -- a real run and its own `--dry-run` preview of
+/// the SAME flags could show different active transforms, defeating the point of a preview.
+#[test]
+fn compress_dry_run_forwards_disable_so_the_preview_matches_a_real_run() {
+    // A disabled transform is filtered out of the mode pipeline entirely (`modes::pipeline_for`)
+    // before the transform loop runs, so it never appears in `transforms` at all -- the
+    // regression this guards is `--disable` not reaching `--dry-run`'s preview, which would show
+    // json_minify running (present in `transforms`) even though a real run with the same flag
+    // wouldn't include it.
+    let dir = unique_temp_dir("dry_run_disable_forwarded");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    std::fs::write(&payload_path, br#"{"a":1,   "b":2}"#).unwrap();
+
+    let run = |disable: bool| -> serde_json::Value {
+        let mut args = vec![
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "json",
+            "--dry-run",
+        ];
+        if disable {
+            args.push("--disable");
+            args.push("json_minify");
+        }
+        args.push("--json");
+        let out = Command::new(bin()).args(&args).output().unwrap();
+        assert!(
+            out.status.success(),
+            "stderr was: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).expect("stdout must be the report JSON")
+    };
+
+    let without_disable = run(false);
+    assert!(
+        without_disable["transforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["id"] == "json_minify"),
+        "json_minify must run by default, got {without_disable:#?}"
+    );
+
+    let with_disable = run(true);
+    assert!(
+        !with_disable["transforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["id"] == "json_minify"),
+        "--dry-run --disable json_minify must preview it as disabled, matching a real run; \
+         got {with_disable:#?}"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 #[test]
 fn wrap_runs_a_command_and_compresses_its_output() {
     let out = Command::new(bin())
@@ -811,4 +1055,247 @@ fn wrap_leaves_filter_pack_id_null_when_no_filter_matches() {
     assert!(out.status.success());
     let report: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert!(report["command"]["filter_pack_id"].is_null());
+}
+
+/// Round-5 external review, measured live: `--lossy-ratio 0.25` over a payload whose rows are all
+/// too small to be worth replacing with a `$tf_ref` marker emitted 1,834 bytes where a plain
+/// lossless run emitted 644 -- ~3x WORSE while dropping nothing -- because `--lossy`
+/// unconditionally switched `json_field_fold`/`json_value_dict` off up front for a pruning stage
+/// that then never applied. They are deferred past the lossy stage now, not disabled.
+#[test]
+fn lossy_that_prunes_nothing_falls_back_to_the_lossless_output() {
+    let dir = unique_temp_dir("lossy_noop_fallback");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    let config_path = dir.join("config.toml");
+    // Identical short rows: nothing here can profitably become a marker, but `json_field_fold`
+    // and `json_value_dict` both have plenty of work to do.
+    let events: Vec<serde_json::Value> = (0..15)
+        .map(|i| {
+            serde_json::json!({
+                "seq": i,
+                "retries": 0,
+                "note": "queue drain cycle completed normally with no backpressure observed",
+            })
+        })
+        .collect();
+    std::fs::write(
+        &payload_path,
+        serde_json::to_vec(&serde_json::json!({"events": events})).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        &config_path,
+        format!(
+            "[retrieval]\nbackend = \"filesystem\"\nstore_path = {:?}\n",
+            dir.join("store").to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "json",
+            "--quiet",
+        ];
+        args.extend_from_slice(extra);
+        let out = Command::new(bin())
+            .args(&args)
+            .arg("--config")
+            .arg(&config_path)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "stderr was: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+
+    let lossless = run(&[]);
+    let lossy = run(&["--lossy", "heuristic", "--lossy-ratio", "0.25"]);
+    assert_eq!(
+        String::from_utf8_lossy(&lossy),
+        String::from_utf8_lossy(&lossless),
+        "a --lossy run that pruned nothing must not be worse than the plain lossless run"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Round-5 external review, measured live: an eligible ROOT array has path `""`, and the
+/// nearest-eligible-ancestor preserve rule was written as `starts_with("{path}.")`, which no path
+/// can satisfy when the path is empty. `--lossy-preserve users` on a top-level array left 20
+/// `$tf_ref` markers in the output -- the safety flag silently protected nothing.
+#[test]
+fn lossy_preserve_protects_a_top_level_array() {
+    let dir = unique_temp_dir("lossy_preserve_root");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    let config_path = dir.join("config.toml");
+
+    let words = [
+        "processed",
+        "batch",
+        "successfully",
+        "no",
+        "anomalies",
+        "detected",
+        "in",
+        "shard",
+        "cache",
+        "warm",
+        "hit",
+        "ratio",
+        "nominal",
+        "replication",
+        "lag",
+        "within",
+        "tolerance",
+        "checksum",
+        "verified",
+        "for",
+        "segment",
+        "worker",
+        "completed",
+        "cycle",
+        "queue",
+        "drain",
+        "normal",
+    ];
+    // A bare top-level array, each row big enough under a real tokenizer to be worth dropping.
+    let rows: Vec<serde_json::Value> = (0..20)
+        .map(|i| {
+            let note = format!(
+                "row {i}: {}",
+                (0..120)
+                    .map(|j| words[(i * 11 + j * 5 + (j * j) % 13) % words.len()])
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+            serde_json::json!({"users": [1, 2, 3], "id": i, "note": note})
+        })
+        .collect();
+    std::fs::write(&payload_path, serde_json::to_vec(&rows).unwrap()).unwrap();
+    std::fs::write(
+        &config_path,
+        format!(
+            "[retrieval]\nbackend = \"filesystem\"\nstore_path = {:?}\n",
+            dir.join("store").to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "json",
+            "--quiet",
+            "--lossy",
+            "heuristic",
+            "--lossy-ratio",
+            "0",
+        ];
+        args.extend_from_slice(extra);
+        let out = Command::new(bin())
+            .args(&args)
+            .arg("--config")
+            .arg(&config_path)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "stderr was: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    // Control first: without the flag this document really does prune, so a zero-marker result
+    // below can only mean the flag worked.
+    assert!(
+        run(&[]).contains("$tf_ref"),
+        "control: the root array must be prunable without --lossy-preserve"
+    );
+    assert!(
+        !run(&["--lossy-preserve", "users"]).contains("$tf_ref"),
+        "--lossy-preserve must protect an eligible root array, not silently match nothing"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Round-5 external review, measured live: `--lossy` on an OpenAI payload correctly reported
+/// `json_prune: skipped / not_applicable_to_format`, and still wrote 23,487 bytes of the user's
+/// unmodified input to a freshly created retrieval directory. `--lossy` implies a durable receipt
+/// only where the lossy stage can actually run; `--store-originals` is the independent request.
+#[test]
+fn lossy_on_an_unsupported_format_never_persists_the_input() {
+    let dir = unique_temp_dir("lossy_wrong_format_no_store");
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload_path = dir.join("payload.json");
+    let store_dir = dir.join("store");
+    let config_path = dir.join("config.toml");
+
+    let messages: Vec<serde_json::Value> = (0..10)
+        .map(|i| {
+            serde_json::json!({
+                "role": "user",
+                "content": format!("question {i} {}", "lorem ipsum dolor sit amet ".repeat(30)),
+            })
+        })
+        .collect();
+    std::fs::write(
+        &payload_path,
+        serde_json::to_vec(&serde_json::json!({"model": "gpt-4o", "messages": messages})).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        &config_path,
+        format!(
+            "[retrieval]\nbackend = \"filesystem\"\nstore_path = {:?}\n",
+            store_dir.to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+
+    let out = Command::new(bin())
+        .args([
+            "compress",
+            payload_path.to_str().unwrap(),
+            "--format",
+            "openai",
+            "--lossy",
+            "heuristic",
+            "--lossy-ratio",
+            "0.2",
+            "--json",
+            "--config",
+        ])
+        .arg(&config_path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stderr was: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert!(
+        report["retrieval"].is_null(),
+        "nothing may be persisted when the lossy stage cannot run, got: {:?}",
+        report["retrieval"]
+    );
+    assert!(
+        !store_dir.exists(),
+        "no retrieval directory may be created either"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
 }

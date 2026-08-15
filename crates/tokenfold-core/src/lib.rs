@@ -12,7 +12,7 @@ pub mod status;
 pub mod token_estimator;
 pub mod transforms;
 
-pub use budget::{CacheBoundary, CompressionMode, CompressionPolicy, TaskScope};
+pub use budget::{CacheBoundary, CompressionMode, CompressionPolicy, LossyPath, TaskScope};
 pub use errors::TokenFoldError;
 pub use input::{CompressionInput, CompressionOutput, InputFormat};
 pub use modes::TransformId;

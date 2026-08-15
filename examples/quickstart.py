@@ -5,7 +5,7 @@ Install the binding, then run this file:
     pip install tokenfold          # or: maturin develop -m crates/tokenfold-py/Cargo.toml
     python examples/quickstart.py
 
-It shows the two things you'll actually do in an app:
+It shows the three things you'll actually do in an app:
 
   1. compress_messages(...) — hand it your OpenAI-style chat list, get a compressed
      list back plus exact token accounting, ready to send to a model.
@@ -15,6 +15,10 @@ It shows the two things you'll actually do in an app:
 
 Every call returns a typed report: before/after tokens, which transforms ran, and any
 safety warnings. tokenfold never silently drops content — you get receipts.
+
+Everything here is lossless: the Python binding only ever restructures data, never
+discards it. Opt-in lossy array pruning is CLI-only today — see
+`examples/lossy_pruning.py` for that.
 """
 
 import json
@@ -35,8 +39,10 @@ def compress_a_message_list() -> None:
     )
 
     print("== compress_messages ==")
-    print(f"tokens:     {result.tokens_before} -> {result.tokens_after} "
-          f"({result.tokens_saved} saved, {result.savings_pct:.1f}%)")
+    print(
+        f"tokens:     {result.tokens_before} -> {result.tokens_after} "
+        f"({result.tokens_saved} saved, {result.savings_pct:.1f}%)"
+    )
     print(f"transforms: {', '.join(result.transforms_applied) or '(none applied)'}")
 
     # `result.messages` is the compressed list — send it straight to your provider:
@@ -55,8 +61,10 @@ def compress_a_raw_body() -> None:
 
     print("== compress (raw OpenAI body) ==")
     print(f"status:     {report.status}")
-    print(f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
-          f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)")
+    print(
+        f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
+        f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)"
+    )
     print(f"estimator:  {report.estimator.backend} (exact: {report.estimator.is_exact})")
     if report.warnings:
         for w in report.warnings:
@@ -72,8 +80,10 @@ def compress_generic_json_data() -> None:
     report = result.report
 
     print("== compress (generic JSON data) ==")
-    print(f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
-          f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)")
+    print(
+        f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
+        f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)"
+    )
     applied = [t["id"] for t in report.raw["transforms"] if t["status"] == "applied"]
     print(f"transforms: {', '.join(applied)}")
     # result.payload is the compressed JSON (columnar + value dictionary), losslessly
