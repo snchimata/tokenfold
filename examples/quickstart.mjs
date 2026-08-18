@@ -30,9 +30,10 @@
  * `report` carries before/after tokens, which transforms ran, and any safety
  * warnings. tokenfold never silently drops content -- you get receipts.
  *
- * Everything here is lossless: the TypeScript package only ever restructures data,
- * never discards it. Opt-in lossy array pruning is CLI-only today -- see
- * `examples/lossy_pruning.py` for that. Node's standard library only, no extra deps.
+ * Everything here is lossless: these calls only ever restructure data, never discard
+ * it. Lossy array pruning is opt-in and stays off unless you ask for it
+ * (`compress(input, { lossy: "heuristic" })`) -- see `examples/lossy_pruning.py` for
+ * that end to end. Node's standard library only, no extra deps.
  */
 
 import { readFile } from "node:fs/promises";

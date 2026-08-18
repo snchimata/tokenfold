@@ -36,3 +36,6 @@ venv/
 
 # Scratch data.
 /data/
+
+# Local scratch workspace for running examples (venv + copied notebook).
+/tokenfold_run/
