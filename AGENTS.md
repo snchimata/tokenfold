@@ -69,6 +69,13 @@ python eval/run_fidelity.py --gate --profile smoke-first-consumer
 
 If a check cannot run in the current environment, report exactly which check was skipped and why.
 
+## Branches and pull requests
+
+- Never push to `main`. It is protected: every change lands through a pull request with green CI, including release-preparation commits. See [CONTRIBUTING.md](CONTRIBUTING.md).
+- Branch from current `main` using `feat/`, `fix/`, `chore/`, `docs/`, or `release/` prefixes, and keep the branch short-lived.
+- `main` is the only long-lived branch. Do not create environment branches (`develop`, `preprod`, `production`); releases are selected by `vX.Y.Z` tags, not by branches.
+- Released tags are immutable. Never delete or force-move a `v*` tag.
+
 ## Documentation and releases
 
 - Update user-facing documentation when commands, configuration, output, or supported integrations change.
