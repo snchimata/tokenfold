@@ -122,7 +122,7 @@ print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 `tokenfold doctor` verifies it. Trusted filters for Git, build, and test output
 are available through `tokenfold filters list`.
 
-Runnable examples, one per surface:
+Runnable examples, one per surface, all under [`examples/`](examples):
 
 ```bash
 python examples/quickstart.py      # Python: compress messages, request bodies, JSON data
@@ -130,6 +130,9 @@ node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read th
 cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
 python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
 ```
+
+[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the notebook form of the
+Python quickstart, one operation per cell.
 
 ## Recoverable lossy pruning
 

@@ -12,10 +12,10 @@
 
 use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, compress};
 
-// The payloads ship with the repo. Embedding them with include_str! keeps this example
+// The payloads sit beside this file. Embedding them with include_str! keeps this example
 // runnable from any working directory.
-const PAYLOAD: &str = include_str!("../../../examples/openai_payload.json");
-const API_RESPONSE: &str = include_str!("../../../examples/api_response.json");
+const PAYLOAD: &str = include_str!("openai_payload.json");
+const API_RESPONSE: &str = include_str!("api_response.json");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     compress_openai_body()?;

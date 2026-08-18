@@ -28,3 +28,10 @@ tiktoken = ["dep:tiktoken-rs"]
 [[bench]]
 name = "compression_bench"
 harness = false
+
+# The example lives in the repo-root examples/ folder, beside the Python, Node, and
+# CLI ones, so all four surfaces stay in one place. Out-of-root targets are not
+# packaged, which is the point: the example reads fixtures this crate does not ship.
+[[example]]
+name = "quickstart"
+path = "../../examples/quickstart.rs"
