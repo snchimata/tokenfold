@@ -8,6 +8,7 @@ Covers the Python binding's acceptance criteria:
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +22,8 @@ from tokenfold import (
     InputFormat,
     InternalError,
     InvalidInputError,
+    LossyPath,
+    RetrievalError,
     SafetyError,
     Status,
     TokenFoldError,
@@ -29,7 +32,16 @@ from tokenfold import (
     compress_messages,
     compress_openai_payload,
     inspect,
+    retrieve,
 )
+
+# 40 heterogeneous events (different event types carry different fields) plus one planted
+# 503/success:false/retries:7 incident at index 23 -- the same fixture examples/lossy_pruning.py
+# uses. Heterogeneity is deliberate: a uniform array gets folded into columnar form by the
+# lossless pipeline before json_prune ever sees it, which would exercise nothing here.
+INCIDENT_FEED = (
+    Path(__file__).parent.parent / "examples" / "incident_feed.json"
+).read_bytes()
 
 OPENAI_PAYLOAD = json.dumps(
     {
@@ -195,9 +207,12 @@ def test_enum_variant_names_are_all_caps():
     assert Status.BEST_EFFORT is not None
     assert Status.UNREACHABLE_TARGET is not None
 
+    assert LossyPath.HEURISTIC is not None
+
     # No PascalCase leakage.
     assert not hasattr(CompressionMode, "Balanced")
     assert not hasattr(Status, "Compressed")
+    assert not hasattr(LossyPath, "Heuristic")
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +222,7 @@ def test_enum_variant_names_are_all_caps():
 
 @pytest.mark.parametrize(
     "exc_cls",
-    [InvalidInputError, SafetyError, EstimatorError, ConfigError, InternalError],
+    [InvalidInputError, SafetyError, EstimatorError, ConfigError, InternalError, RetrievalError],
 )
 def test_every_subclass_derives_from_tokenfold_error(exc_cls):
     assert issubclass(exc_cls, TokenFoldError)
@@ -245,6 +260,7 @@ def test_module_exports_the_full_error_hierarchy():
         "EstimatorError",
         "ConfigError",
         "InternalError",
+        "RetrievalError",
     ):
         assert hasattr(tokenfold, name)
 
@@ -272,3 +288,138 @@ def test_inspect_never_writes_to_the_retrieval_store(tmp_path, monkeypatch):
     # assertions above would pass for the wrong reason (nothing being stored under any path).
     compress(OPENAI_PAYLOAD, policy=policy, format=InputFormat.OPENAI_JSON)
     assert any(tmp_path.rglob("*.bin")), "store_originals must still work on a real run"
+
+
+# ---------------------------------------------------------------------------
+# Lossy JSON pruning + retrieve()
+# ---------------------------------------------------------------------------
+
+
+def test_compression_policy_accepts_lossy_settings():
+    policy = CompressionPolicy(
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.4,
+        lossy_preserve=["events"],
+    )
+    assert policy.lossy == LossyPath.HEURISTIC
+    assert policy.lossy_ratio == 0.4
+    assert policy.lossy_preserve == ["events"]
+
+
+def test_compression_policy_accepts_lossy_as_a_string():
+    policy = CompressionPolicy(lossy="heuristic")
+    assert policy.lossy == LossyPath.HEURISTIC
+
+
+def test_compression_policy_lossy_defaults_to_none():
+    policy = CompressionPolicy()
+    assert policy.lossy is None
+    assert policy.lossy_ratio == 0.3
+    assert policy.lossy_preserve == []
+
+
+def test_lossy_requires_a_durable_retrieval_backend():
+    """Mirrors budget.rs's `lossy_refuses_memory_retrieval_backend`: a lossy run with no
+    durable receipt is real data loss, not "lossy but recoverable" -- CompressionPolicy's own
+    validate() must refuse this from Python exactly like it does from Rust/the CLI."""
+    with pytest.raises(ConfigError):
+        CompressionPolicy(lossy=LossyPath.HEURISTIC, retrieval_backend="memory")
+
+
+def test_lossy_prunes_the_incident_feed_and_the_planted_incident_survives(tmp_path):
+    policy = CompressionPolicy(
+        retrieval_store_path=str(tmp_path),
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.35,
+    )
+    lossless = compress(INCIDENT_FEED, format=InputFormat.JSON)
+    lossy = compress(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+
+    assert lossy.report.saved_tokens > lossless.report.saved_tokens, (
+        "lossy pruning must save strictly more than the lossless pipeline alone on this "
+        "fixture -- if this regresses, the fixture no longer exercises json_prune (see the "
+        "marker-overhead-vs-item-size lesson in the project's own lossy feature notes)"
+    )
+
+    compressed = json.loads(lossy.payload)
+    events = compressed["events"]
+    dropped = [e for e in events if isinstance(e, dict) and "$tf_ref" in e]
+    kept = [e for e in events if isinstance(e, dict) and "$tf_ref" not in e]
+    assert dropped, "this fixture must exercise lossy pruning"
+
+    incident = [e for e in kept if e.get("status_code") == 503]
+    assert incident, (
+        "the planted incident must survive pruning -- structural failure signal outranks "
+        "position in the selection ranking"
+    )
+
+
+def test_retrieve_recovers_a_dropped_event(tmp_path):
+    policy = CompressionPolicy(
+        retrieval_store_path=str(tmp_path),
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.35,
+    )
+    lossy = compress(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+    compressed = json.loads(lossy.payload)
+    dropped = [e for e in compressed["events"] if isinstance(e, dict) and "$tf_ref" in e]
+    assert dropped, "fixture must produce at least one dropped event to retrieve"
+
+    marker = dropped[0]["$tf_ref"]
+    restored = retrieve(marker["hash"], namespace=marker["namespace"], policy=policy)
+
+    original_events = json.loads(INCIDENT_FEED)["events"]
+    assert json.loads(restored) in original_events, (
+        "retrieved bytes must be one of the original, untouched events"
+    )
+
+
+def test_retrieve_via_policy_matches_explicit_kwargs(tmp_path):
+    """`retrieve()`'s `policy=` is sugar for the same namespace/backend/store_path used to
+    compress -- both call shapes must resolve to the same store and the same bytes."""
+    policy = CompressionPolicy(
+        retrieval_store_path=str(tmp_path),
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.35,
+    )
+    lossy = compress(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+    marker = next(
+        e["$tf_ref"]
+        for e in json.loads(lossy.payload)["events"]
+        if isinstance(e, dict) and "$tf_ref" in e
+    )
+
+    via_policy = retrieve(marker["hash"], namespace=marker["namespace"], policy=policy)
+    via_kwargs = retrieve(
+        marker["hash"],
+        namespace=marker["namespace"],
+        backend="filesystem",
+        retrieval_store_path=str(tmp_path),
+    )
+    assert via_policy == via_kwargs
+
+
+def test_retrieve_raises_for_a_missing_hash(tmp_path):
+    with pytest.raises(RetrievalError):
+        retrieve("0" * 64, namespace="default", retrieval_store_path=str(tmp_path))
+
+
+def test_retrieval_error_is_a_tokenfold_error():
+    assert issubclass(RetrievalError, TokenFoldError)
+
+
+def test_inspect_previews_lossy_without_writing_anything(tmp_path):
+    """Same contract as `test_inspect_never_writes_to_the_retrieval_store`, for the lossy path
+    specifically: a preview must never perform a real `RetrievalStore` write, even when it's
+    the lossy stage (not `store_originals`) driving the persistence."""
+    policy = CompressionPolicy(
+        retrieval_store_path=str(tmp_path),
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.35,
+    )
+    preview = inspect(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+    assert preview.payload == INCIDENT_FEED
+    assert not any(tmp_path.rglob("*.bin")), "a lossy preview must not persist anything to disk"
+
+    compress(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+    assert any(tmp_path.rglob("*.bin")), "the real run must still persist"

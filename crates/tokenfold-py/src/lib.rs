@@ -16,6 +16,8 @@
 #![allow(unsafe_op_in_unsafe_fn, unexpected_cfgs)]
 #![allow(clippy::useless_conversion)]
 
+use std::path::PathBuf;
+
 use pyo3::IntoPyObjectExt;
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyOSError};
@@ -23,10 +25,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
 use tokenfold_core::report::TransformStatus;
+use tokenfold_core::retrieval_store::{RetrievalOutcome, RetrievalStore};
 use tokenfold_core::{
     CompressionInput, CompressionMode as CoreMode, CompressionOutput as CoreOutput,
-    CompressionPolicy as CorePolicy, InputFormat as CoreFormat, Status as CoreStatus,
-    TokenFoldError as CoreError,
+    CompressionPolicy as CorePolicy, InputFormat as CoreFormat, LossyPath as CoreLossyPath,
+    Status as CoreStatus, TokenFoldError as CoreError,
 };
 
 // ---------------------------------------------------------------------------------------
@@ -41,6 +44,11 @@ create_exception!(tokenfold, SafetyError, TokenFoldError);
 create_exception!(tokenfold, EstimatorError, TokenFoldError);
 create_exception!(tokenfold, ConfigError, TokenFoldError);
 create_exception!(tokenfold, InternalError, TokenFoldError);
+// Raised by retrieve() when a hash is not found in the given namespace, or was found but its
+// TTL has elapsed -- the two non-`Found` arms of `retrieval_store::RetrievalOutcome`. A plain
+// `//` comment, not `///`: `create_exception!` doesn't attach outer doc comments to the item
+// it generates, so a doc comment here would just be a `-D warnings`-tripping dead comment.
+create_exception!(tokenfold, RetrievalError, TokenFoldError);
 
 /// Maps `tokenfold_core::TokenFoldError` to the Python exception hierarchy above. `Io`
 /// maps to the builtin `OSError`, not `InternalError`: an I/O failure is the caller's
@@ -176,6 +184,42 @@ impl From<CoreStatus> for PyStatus {
     }
 }
 
+/// Selection backend for opt-in lossy JSON array-item pruning -- see `CompressionPolicy.lossy`.
+/// `HEURISTIC` is the only Phase 1 implementation; deliberately a single-variant enum rather
+/// than a bare `bool`, matching `tokenfold_core::budget::LossyPath`'s own rationale (this
+/// names an algorithm, not a toggle) and the CLI's `--lossy heuristic` shape.
+#[pyclass(name = "LossyPath", eq, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PyLossyPath {
+    #[pyo3(name = "HEURISTIC")]
+    Heuristic,
+}
+
+impl From<PyLossyPath> for CoreLossyPath {
+    fn from(p: PyLossyPath) -> Self {
+        match p {
+            PyLossyPath::Heuristic => CoreLossyPath::Heuristic,
+        }
+    }
+}
+
+impl From<CoreLossyPath> for PyLossyPath {
+    fn from(p: CoreLossyPath) -> Self {
+        match p {
+            CoreLossyPath::Heuristic => PyLossyPath::Heuristic,
+        }
+    }
+}
+
+fn parse_lossy_str(s: &str) -> PyResult<CoreLossyPath> {
+    match s.to_ascii_uppercase().as_str() {
+        "HEURISTIC" => Ok(CoreLossyPath::Heuristic),
+        other => Err(ConfigError::new_err(format!(
+            "unknown LossyPath: {other:?}"
+        ))),
+    }
+}
+
 /// Accepts either the `CompressionMode` enum or a (case-insensitive) string, matching the
 /// public `mode: CompressionMode | str` signature.
 #[derive(FromPyObject)]
@@ -206,6 +250,23 @@ impl FormatArg {
         match self {
             FormatArg::Enum(f) => Ok(f.into()),
             FormatArg::Str(s) => parse_format_str(&s),
+        }
+    }
+}
+
+/// Accepts either the `LossyPath` enum or a (case-insensitive) string, matching the public
+/// `lossy: LossyPath | str | None` signature.
+#[derive(FromPyObject)]
+enum LossyArg {
+    Enum(PyLossyPath),
+    Str(String),
+}
+
+impl LossyArg {
+    fn resolve(self) -> PyResult<CoreLossyPath> {
+        match self {
+            LossyArg::Enum(p) => Ok(p.into()),
+            LossyArg::Str(s) => parse_lossy_str(&s),
         }
     }
 }
@@ -252,6 +313,10 @@ impl PyCompressionPolicy {
         retrieval_namespace=None,
         retrieval_ttl_seconds=None,
         retrieval_backend=None,
+        retrieval_store_path=None,
+        lossy=None,
+        lossy_ratio=None,
+        lossy_preserve=None,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -267,6 +332,10 @@ impl PyCompressionPolicy {
         retrieval_namespace: Option<String>,
         retrieval_ttl_seconds: Option<u64>,
         retrieval_backend: Option<String>,
+        retrieval_store_path: Option<PathBuf>,
+        lossy: Option<LossyArg>,
+        lossy_ratio: Option<f64>,
+        lossy_preserve: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let mut builder = CorePolicy::builder();
         if let Some(t) = target_tokens {
@@ -297,6 +366,16 @@ impl PyCompressionPolicy {
         if let Some(backend) = retrieval_backend {
             builder = builder.retrieval_backend(backend);
         }
+        builder = builder.retrieval_store_path(retrieval_store_path);
+        if let Some(l) = lossy {
+            builder = builder.lossy(l.resolve()?);
+        }
+        if let Some(r) = lossy_ratio {
+            builder = builder.lossy_ratio(r);
+        }
+        for path in lossy_preserve.unwrap_or_default() {
+            builder = builder.lossy_preserve(path);
+        }
         Ok(Self(builder.build().map_err(map_err)?))
     }
 
@@ -318,6 +397,32 @@ impl PyCompressionPolicy {
     #[getter]
     fn store_originals(&self) -> bool {
         self.0.store_originals
+    }
+
+    // Returned as `str`, not `PathBuf`: the storage type is `Option<PathBuf>`, but the
+    // return-direction Python conversion for `PathBuf` is a needless risk to take on for a
+    // getter when `str` is unambiguous and just as usable from the caller's side.
+    #[getter]
+    fn retrieval_store_path(&self) -> Option<String> {
+        self.0
+            .retrieval_store_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+    }
+
+    #[getter]
+    fn lossy(&self) -> Option<PyLossyPath> {
+        self.0.lossy.map(PyLossyPath::from)
+    }
+
+    #[getter]
+    fn lossy_ratio(&self) -> f64 {
+        self.0.lossy_ratio
+    }
+
+    #[getter]
+    fn lossy_preserve(&self) -> Vec<String> {
+        self.0.lossy_preserve.clone()
     }
 }
 
@@ -520,11 +625,15 @@ fn py_to_json(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
 // when a flag and a config file disagree.
 // ---------------------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn effective_policy(
     policy: Option<&PyCompressionPolicy>,
     mode: Option<ModeArg>,
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Option<Vec<String>>,
     preview: bool,
 ) -> PyResult<CorePolicy> {
     let base = policy.map(|p| &p.0);
@@ -545,6 +654,23 @@ fn effective_policy(
         disable.unwrap_or_else(|| base.map(|p| p.disabled.clone()).unwrap_or_default());
     for id in resolved_disable {
         builder = builder.disable(id);
+    }
+
+    let resolved_lossy = match lossy {
+        Some(l) => Some(l.resolve()?),
+        None => base.and_then(|p| p.lossy),
+    };
+    if let Some(l) = resolved_lossy {
+        builder = builder.lossy(l);
+    }
+    let resolved_lossy_ratio = lossy_ratio.or_else(|| base.map(|p| p.lossy_ratio));
+    if let Some(r) = resolved_lossy_ratio {
+        builder = builder.lossy_ratio(r);
+    }
+    let resolved_lossy_preserve = lossy_preserve
+        .unwrap_or_else(|| base.map(|p| p.lossy_preserve.clone()).unwrap_or_default());
+    for path in resolved_lossy_preserve {
+        builder = builder.lossy_preserve(path);
     }
 
     if let Some(p) = base {
@@ -598,6 +724,9 @@ fn run_compress(
     mode: Option<ModeArg>,
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Option<Vec<String>>,
     allow_heuristic_budget: bool,
     dry_run: bool,
 ) -> PyResult<PyCompressionResult> {
@@ -609,7 +738,16 @@ fn run_compress(
     // retrieval store. `preview` is the switch that actually stops the write, in core, before it
     // happens; the payload substitution below stays as the presentation half of the same
     // contract.
-    let resolved_policy = effective_policy(policy, mode, target_tokens, disable, dry_run)?;
+    let resolved_policy = effective_policy(
+        policy,
+        mode,
+        target_tokens,
+        disable,
+        lossy,
+        lossy_ratio,
+        lossy_preserve,
+        dry_run,
+    )?;
     let input = CompressionInput {
         format,
         bytes: bytes.clone(),
@@ -633,7 +771,7 @@ fn run_compress(
 // ---------------------------------------------------------------------------------------
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None, disable=None, allow_heuristic_budget=false))]
+#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None, disable=None, allow_heuristic_budget=false, lossy=None, lossy_ratio=None, lossy_preserve=None))]
 #[allow(clippy::too_many_arguments)]
 fn compress(
     py: Python<'_>,
@@ -644,6 +782,14 @@ fn compress(
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
     allow_heuristic_budget: bool,
+    // Opt-in LOSSY JSON array-item pruning, mirroring the CLI's `--lossy`/`--lossy-ratio`/
+    // `--lossy-preserve` flags. Only ever has an effect when `format` resolves to `JSON` --
+    // core silently no-ops it (`NotApplicableToFormat`) on every other format, exactly as the
+    // CLI does. See `CompressionPolicy.lossy` for the full contract (recoverable via
+    // `retrieve()`, requires a durable `filesystem` retrieval backend).
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Option<Vec<String>>,
 ) -> PyResult<PyCompressionResult> {
     let resolved_format = format
         .map(FormatArg::resolve)
@@ -657,13 +803,17 @@ fn compress(
         mode,
         target_tokens,
         disable,
+        lossy,
+        lossy_ratio,
+        lossy_preserve,
         allow_heuristic_budget,
         false,
     )
 }
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None))]
+#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None, lossy=None, lossy_ratio=None, lossy_preserve=None))]
+#[allow(clippy::too_many_arguments)]
 fn inspect(
     py: Python<'_>,
     payload: PayloadArg,
@@ -671,6 +821,14 @@ fn inspect(
     format: Option<FormatArg>,
     mode: Option<ModeArg>,
     target_tokens: Option<usize>,
+    // Preview what `--lossy` would do without writing anything: `run_compress`'s `dry_run=true`
+    // sets `CompressionPolicy.preview`, which routes every store() call in the pipeline
+    // (including the lossy stage's) through a throwaway in-memory probe instead of the real
+    // retrieval backend -- so a dropped item that a real run would refuse to persist (e.g.
+    // secret-shaped content) gets put back here too, same as a real run would.
+    lossy: Option<LossyArg>,
+    lossy_ratio: Option<f64>,
+    lossy_preserve: Option<Vec<String>>,
 ) -> PyResult<PyCompressionResult> {
     let resolved_format = format
         .map(FormatArg::resolve)
@@ -684,6 +842,9 @@ fn inspect(
         mode,
         target_tokens,
         None,
+        lossy,
+        lossy_ratio,
+        lossy_preserve,
         // inspect() never applies compression, so a fail-closed budget gate would only get
         // in the way of a dry-run preview; always let it through.
         true,
@@ -711,6 +872,12 @@ fn compress_openai_payload(
         mode,
         target_tokens,
         disable,
+        // Lossy pruning only ever applies to generic JSON (core no-ops it on every other
+        // format), so this convenience wrapper doesn't expose it as its own kwarg -- always
+        // None, not a passthrough.
+        None,
+        None,
+        None,
         allow_heuristic_budget,
         false,
     )
@@ -736,6 +903,9 @@ fn compress_anthropic_payload(
         mode,
         target_tokens,
         disable,
+        None,
+        None,
+        None,
         allow_heuristic_budget,
         false,
     )
@@ -846,6 +1016,52 @@ fn compress_messages(
 }
 
 // ---------------------------------------------------------------------------------------
+// retrieve: restores a payload previously persisted by `store_originals=True` or `lossy`,
+// mirroring `tokenfold retrieve <hash>`. Unlike the CLI, this never accepts a text
+// `[tokenfold:retrieve ...]` marker or a CompressionReport file path -- a Python caller
+// working with a `$tf_ref` JSON marker already has it parsed
+// (`marker["$tf_ref"]["hash"]`/`["namespace"]`), so re-implementing the CLI's text-marker
+// grammar here would be redundant, not more convenient.
+// ---------------------------------------------------------------------------------------
+
+#[pyfunction]
+#[pyo3(signature = (hash, *, namespace=None, backend=None, retrieval_store_path=None, policy=None))]
+fn retrieve(
+    py: Python<'_>,
+    hash: String,
+    namespace: Option<String>,
+    backend: Option<String>,
+    retrieval_store_path: Option<PathBuf>,
+    policy: Option<PyRef<'_, PyCompressionPolicy>>,
+) -> PyResult<Py<PyBytes>> {
+    let base = policy.as_deref().map(|p| &p.0);
+    let resolved_namespace = namespace
+        .or_else(|| base.map(|p| p.retrieval_namespace.clone()))
+        .unwrap_or_else(|| "default".to_string());
+    let resolved_backend = backend
+        .or_else(|| base.map(|p| p.retrieval_backend.clone()))
+        .unwrap_or_else(|| "filesystem".to_string());
+    let resolved_store_path =
+        retrieval_store_path.or_else(|| base.and_then(|p| p.retrieval_store_path.clone()));
+
+    // Hash algorithm is hardcoded "sha256" here for the same reason every call site in
+    // tokenfold-core is: it is the only implemented option (`RetrievalStore::open` rejects
+    // "blake3" as a documented, not-yet-built scope cut).
+    let store =
+        RetrievalStore::open(&resolved_backend, "sha256", resolved_store_path).map_err(map_err)?;
+
+    match store.retrieve(&hash, &resolved_namespace) {
+        RetrievalOutcome::Found(bytes) => Ok(PyBytes::new(py, &bytes).unbind()),
+        RetrievalOutcome::Missing => Err(RetrievalError::new_err(format!(
+            "no stored original found for hash {hash:?} in namespace {resolved_namespace:?}"
+        ))),
+        RetrievalOutcome::Expired => Err(RetrievalError::new_err(format!(
+            "stored original for hash {hash:?} in namespace {resolved_namespace:?} has expired"
+        ))),
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // Module registration
 // ---------------------------------------------------------------------------------------
 
@@ -854,6 +1070,7 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCompressionMode>()?;
     m.add_class::<PyInputFormat>()?;
     m.add_class::<PyStatus>()?;
+    m.add_class::<PyLossyPath>()?;
     m.add_class::<PyCompressionPolicy>()?;
     m.add_class::<PyEstimatorInfo>()?;
     m.add_class::<PyCompressionReport>()?;
@@ -866,11 +1083,13 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EstimatorError", py.get_type::<EstimatorError>())?;
     m.add("ConfigError", py.get_type::<ConfigError>())?;
     m.add("InternalError", py.get_type::<InternalError>())?;
+    m.add("RetrievalError", py.get_type::<RetrievalError>())?;
 
     m.add_function(wrap_pyfunction!(compress, m)?)?;
     m.add_function(wrap_pyfunction!(inspect, m)?)?;
     m.add_function(wrap_pyfunction!(compress_openai_payload, m)?)?;
     m.add_function(wrap_pyfunction!(compress_anthropic_payload, m)?)?;
     m.add_function(wrap_pyfunction!(compress_messages, m)?)?;
+    m.add_function(wrap_pyfunction!(retrieve, m)?)?;
     Ok(())
 }
