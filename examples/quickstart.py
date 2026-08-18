@@ -60,6 +60,8 @@ def compress_a_raw_body() -> None:
     report = result.report
 
     print("== compress (raw OpenAI body) ==")
+    # `best_effort` here means "no target_tokens to confirm against", not a failure:
+    # `compressed` is reserved for runs that provably met a target you asked for.
     print(f"status:     {report.status}")
     print(
         f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
