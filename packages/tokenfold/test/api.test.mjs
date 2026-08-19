@@ -14,7 +14,7 @@ import {
 } from "../dist/index.js";
 
 const testBinary = process.env.TOKENFOLD_TEST_BINARY;
-if (!testBinary) throw new Error("TOKENFOLD_TEST_BINARY must point to a tokenfold 0.4.0 binary");
+if (!testBinary) throw new Error("TOKENFOLD_TEST_BINARY must point to a tokenfold 0.4.1 binary");
 process.env.TOKENFOLD_BINARY_PATH = testBinary;
 
 // A heterogeneous incident feed: lossless folding has a ceiling on it, so lossy pruning
@@ -56,7 +56,7 @@ test("resolves an explicit binary and reports its version", async () => {
   assert.equal(binaryPath(), testBinary);
   const result = await run(["--version"]);
   assert.equal(result.exitCode, 0);
-  assert.match(Buffer.from(result.stdout).toString(), /^tokenfold 0\.4\.0/);
+  assert.match(Buffer.from(result.stdout).toString(), /^tokenfold 0\.4\.1/);
 });
 
 test("compress returns bytes and a canonical report", async () => {

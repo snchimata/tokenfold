@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.1] - 2026-08-18
 
 - **Python: opt-in lossy JSON pruning is now reachable from the binding**, previously
   CLI-only. `CompressionPolicy` gained `lossy`, `lossy_ratio`, `lossy_preserve`, and
