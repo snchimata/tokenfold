@@ -10,4 +10,4 @@ keywords = ["llm", "tokens", "compression", "reports", "token-optimization"]
 categories = ["compression"]
 
 [dependencies]
-tokenfold-core = { version = "0.4.0", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.4.1", path = "../tokenfold-core" }
