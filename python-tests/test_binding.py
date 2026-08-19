@@ -57,7 +57,7 @@ OPENAI_PAYLOAD = json.dumps(
 
 ANTHROPIC_PAYLOAD = json.dumps(
     {
-        "model": "claude-3-5-sonnet",
+        "model": "claude-sonnet-5",
         "system": "You are a terse assistant. " * 20,
         "messages": [
             {"role": "user", "content": "first question " * 20},
