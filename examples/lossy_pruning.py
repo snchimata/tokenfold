@@ -8,9 +8,11 @@ PowerShell:
     $env:TOKENFOLD_BIN = "target/release/tokenfold.exe"
     python examples/lossy_pruning.py
 
-Lossy pruning is CLI-only today -- the Python and TypeScript packages stay
-lossless -- so this drives the `tokenfold` binary via subprocess. Standard
-library only, no extra dependencies.
+This drives the `tokenfold` binary via subprocess so it runs against any install,
+standard library only, no extra dependencies. The same knobs are available
+in-process from the Python binding (`compress(..., lossy=LossyPath.HEURISTIC)`
+plus `retrieve()`) and from the TypeScript package (`compress(input, { lossy:
+"heuristic" })` plus `retrieve()`).
 
 Everything runs against a throwaway retrieval store in a temp directory, so it
 never touches the one your real runs use, and cleans up after itself.

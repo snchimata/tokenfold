@@ -16,9 +16,10 @@ It shows the three things you'll actually do in an app:
 Every call returns a typed report: before/after tokens, which transforms ran, and any
 safety warnings. tokenfold never silently drops content — you get receipts.
 
-Everything here is lossless: the Python binding only ever restructures data, never
-discards it. Opt-in lossy array pruning is CLI-only today — see
-`examples/lossy_pruning.py` for that.
+Everything here is lossless: these calls only ever restructure data, never discard it.
+Lossy array pruning is opt-in and stays off unless you ask for it
+(`compress(..., lossy=LossyPath.HEURISTIC)`) — see `examples/lossy_pruning.py`
+for that end to end.
 """
 
 import json
@@ -60,6 +61,8 @@ def compress_a_raw_body() -> None:
     report = result.report
 
     print("== compress (raw OpenAI body) ==")
+    # `best_effort` here means "no target_tokens to confirm against", not a failure:
+    # `compressed` is reserved for runs that provably met a target you asked for.
     print(f"status:     {report.status}")
     print(
         f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "

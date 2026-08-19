@@ -122,12 +122,17 @@ print(f"saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 `tokenfold doctor` verifies it. Trusted filters for Git, build, and test output
 are available through `tokenfold filters list`.
 
-Runnable examples:
+Runnable examples, one per surface, all under [`examples/`](examples):
 
 ```bash
-python examples/quickstart.py
-python examples/lossy_pruning.py
+python examples/quickstart.py      # Python: compress messages, request bodies, JSON data
+node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read the receipt
+cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
+python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
 ```
+
+[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the notebook form of the
+Python quickstart, one operation per cell.
 
 ## Recoverable lossy pruning
 
@@ -182,6 +187,27 @@ tokenfold compress examples/incident_feed.json --format json \
   --lossy heuristic --lossy-ratio 0.35 --dry-run
 ```
 
+The same flags, and the same fail-closed contract, from Python and TypeScript:
+
+```python
+from tokenfold import CompressionPolicy, InputFormat, LossyPath, compress, retrieve
+
+policy = CompressionPolicy(lossy=LossyPath.HEURISTIC, lossy_ratio=0.35)
+result = compress(feed_bytes, format=InputFormat.JSON, policy=policy)
+original = retrieve(marker["$tf_ref"]["hash"])   # any dropped row, verbatim
+```
+
+```ts
+import { compress, retrieve } from "tokenfold";
+
+const { payload, report } = await compress(feed, {
+  format: "json",
+  lossy: "heuristic",
+  lossyRatio: 0.35,
+});
+const original = await retrieve(hash); // any dropped row, verbatim
+```
+
 <details>
 <summary><strong>Current Phase 1 constraints</strong></summary>
 
@@ -190,9 +216,8 @@ already contain retrieval markers. A filesystem failure after partial writes
 may also leave unreferenced entries until their configured TTL expires. Both
 require location-based transactional materialization before promotion.
 
-Lossy pruning is CLI-only today; Python and TypeScript remain lossless. Preview
-is a projection rather than a filesystem transaction, so a real run may keep
-more rows if storage becomes unavailable.
+Preview is a projection rather than a filesystem transaction, so a real run may
+keep more rows if storage becomes unavailable.
 
 </details>
 

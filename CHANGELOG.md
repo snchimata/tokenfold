@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+- **Python: opt-in lossy JSON pruning is now reachable from the binding**, previously
+  CLI-only. `CompressionPolicy` gained `lossy`, `lossy_ratio`, `lossy_preserve`, and
+  `retrieval_store_path`; `compress()`/`inspect()` accept `lossy`/`lossy_ratio`/
+  `lossy_preserve` directly, mirroring the CLI's `--lossy`/`--lossy-ratio`/
+  `--lossy-preserve`. New `tokenfold.retrieve(hash, *, namespace=, backend=,
+  retrieval_store_path=, policy=)` restores a dropped item's original bytes
+  (`tokenfold_core::retrieval_store::RetrievalStore`), raising the new `RetrievalError`
+  for a missing or expired hash. New `LossyPath` enum (`HEURISTIC`, the only Phase 1
+  path). Same fail-closed guarantees as the CLI: `CompressionPolicy.validate()` still
+  refuses `lossy` without a durable `filesystem` retrieval backend and a TTL floor.
+  `lossy` only ever has an effect on generic JSON (`format=JSON`); every other format
+  silently no-ops it, exactly as the CLI does.
+
+- **TypeScript: opt-in lossy JSON pruning is now reachable from the package**, previously
+  CLI-only. `CompressionOptions` gained `lossy`, `lossyRatio`, and `lossyPreserve`, mirroring
+  the CLI's `--lossy`/`--lossy-ratio`/`--lossy-preserve`; `inspect()` with `lossy` set routes
+  to `compress --dry-run`, the CLI's own lossy preview, since the `inspect` subcommand has no
+  lossy flags of its own. New `retrieve(reference, { namespace, configPath, signal })` restores
+  a dropped item's original bytes via `tokenfold retrieve`, accepting a raw hash or a
+  `[tokenfold:retrieve hash=... namespace=...]` marker (whose embedded namespace wins when
+  `namespace` is omitted), and throwing `TokenFoldProcessError` (`code: "tokenfold_exit"`) for a
+  missing hash, an expired one, or a malformed reference. New `LossyPath` type. `lossyRatio` and
+  `lossyPreserve` are forwarded even without `lossy`, so the CLI's own `requires = "lossy"`
+  rejects the combination rather than the option being silently dropped.
+- Docs: the "lossy pruning is CLI-only; Python and TypeScript remain lossless" note in
+  `README.md` and the `examples/` headers is no longer true and has been corrected.
+
 ## [0.4.0] - 2026-08-15
 
 Minor, not a patch: this release changes the public Rust API (see "Breaking"
