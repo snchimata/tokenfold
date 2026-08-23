@@ -10,6 +10,7 @@
 # Agent / editor configuration, machine-local by nature.
 .claude/*
 /.codex/
+/.vscode/
 /CLAUDE.local.md
 
 # Working design documents. Tracked source must not reference these -- a clone
