@@ -11,7 +11,7 @@
       "status_code": 200,
       "duration_ms": 90,
       "bytes_out": 1200,
-      "detail": "ingest-gateway completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "ingest-gateway handled GET /v2/ingest-gateway/status in 90 ms and returned HTTP 200 with 1200 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7100-inge with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 1,
@@ -20,7 +20,7 @@
       "event": "cache",
       "hit_ratio": 0.91,
       "evictions": 1,
-      "detail": "index-writer observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "index-writer reported a cache hit ratio of 0.91 over the sampling window with 1 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 1; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 2,
@@ -30,7 +30,7 @@
       "lag_ms": 66,
       "success": true,
       "peer": "shard-router-replica-2",
-      "detail": "shard-router re-registered with service discovery after the routine deploy and passed every readiness probe"
+      "detail": "shard-router completed its replication round against shard-router-replica-2 with 66 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 42; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 3,
@@ -40,7 +40,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 155,
       "retries": 0,
-      "detail": "cache-tier rotated its short-lived credentials and re-established upstream sessions without interruption"
+      "detail": "cache-tier finished scheduled task 'segment_compaction' and reclaimed 155 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 3; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 4,
@@ -51,7 +51,7 @@
       "status_code": 200,
       "duration_ms": 118,
       "bytes_out": 1324,
-      "detail": "replica-sync observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "replica-sync handled GET /v2/replica-sync/status in 118 ms and returned HTTP 200 with 1324 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7152-repl with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 5,
@@ -60,7 +60,7 @@
       "event": "cache",
       "hit_ratio": 0.95,
       "evictions": 0,
-      "detail": "auth-broker completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "auth-broker reported a cache hit ratio of 0.95 over the sampling window with 0 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 5; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 6,
@@ -70,7 +70,7 @@
       "lag_ms": 118,
       "success": true,
       "peer": "metrics-collector-replica-0",
-      "detail": "metrics-collector verified segment checksums across every replica and found all of them byte-identical"
+      "detail": "metrics-collector completed its replication round against metrics-collector-replica-0 with 118 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 46; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 7,
@@ -80,7 +80,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 191,
       "retries": 0,
-      "detail": "object-store compacted its oldest generation of segments and released the reclaimed space back to the pool"
+      "detail": "object-store finished scheduled task 'segment_compaction' and reclaimed 191 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 7; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 8,
@@ -91,7 +91,7 @@
       "status_code": 200,
       "duration_ms": 146,
       "bytes_out": 1448,
-      "detail": "query-planner completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "query-planner handled GET /v2/query-planner/status in 146 ms and returned HTTP 200 with 1448 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7204-quer with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 9,
@@ -100,7 +100,7 @@
       "event": "cache",
       "hit_ratio": 0.9,
       "evictions": 4,
-      "detail": "stream-fanout observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "stream-fanout reported a cache hit ratio of 0.90 over the sampling window with 4 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 9; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 10,
@@ -110,7 +110,7 @@
       "lag_ms": 170,
       "success": true,
       "peer": "ingest-gateway-replica-1",
-      "detail": "ingest-gateway re-registered with service discovery after the routine deploy and passed every readiness probe"
+      "detail": "ingest-gateway completed its replication round against ingest-gateway-replica-1 with 170 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 50; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 11,
@@ -120,7 +120,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 227,
       "retries": 0,
-      "detail": "index-writer rotated its short-lived credentials and re-established upstream sessions without interruption"
+      "detail": "index-writer finished scheduled task 'segment_compaction' and reclaimed 227 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 11; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 12,
@@ -131,7 +131,7 @@
       "status_code": 200,
       "duration_ms": 114,
       "bytes_out": 1572,
-      "detail": "shard-router observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "shard-router handled GET /v2/shard-router/status in 114 ms and returned HTTP 200 with 1572 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7256-shar with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 13,
@@ -140,7 +140,7 @@
       "event": "cache",
       "hit_ratio": 0.94,
       "evictions": 3,
-      "detail": "cache-tier completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "cache-tier reported a cache hit ratio of 0.94 over the sampling window with 3 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 13; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 14,
@@ -150,7 +150,7 @@
       "lag_ms": 222,
       "success": true,
       "peer": "replica-sync-replica-2",
-      "detail": "replica-sync verified segment checksums across every replica and found all of them byte-identical"
+      "detail": "replica-sync completed its replication round against replica-sync-replica-2 with 222 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 54; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 15,
@@ -160,7 +160,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 263,
       "retries": 0,
-      "detail": "auth-broker compacted its oldest generation of segments and released the reclaimed space back to the pool"
+      "detail": "auth-broker finished scheduled task 'segment_compaction' and reclaimed 263 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 15; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 16,
@@ -171,7 +171,7 @@
       "status_code": 200,
       "duration_ms": 142,
       "bytes_out": 1696,
-      "detail": "metrics-collector completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "metrics-collector handled GET /v2/metrics-collector/status in 142 ms and returned HTTP 200 with 1696 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7308-metr with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 17,
@@ -180,7 +180,7 @@
       "event": "cache",
       "hit_ratio": 0.98,
       "evictions": 2,
-      "detail": "object-store observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "object-store reported a cache hit ratio of 0.98 over the sampling window with 2 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 17; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 18,
@@ -190,7 +190,7 @@
       "lag_ms": 74,
       "success": true,
       "peer": "query-planner-replica-0",
-      "detail": "query-planner re-registered with service discovery after the routine deploy and passed every readiness probe"
+      "detail": "query-planner completed its replication round against query-planner-replica-0 with 74 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 58; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 19,
@@ -200,7 +200,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 299,
       "retries": 0,
-      "detail": "stream-fanout rotated its short-lived credentials and re-established upstream sessions without interruption"
+      "detail": "stream-fanout finished scheduled task 'segment_compaction' and reclaimed 299 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 19; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 20,
@@ -211,7 +211,7 @@
       "status_code": 200,
       "duration_ms": 110,
       "bytes_out": 1820,
-      "detail": "ingest-gateway observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "ingest-gateway handled GET /v2/ingest-gateway/status in 110 ms and returned HTTP 200 with 1820 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7360-inge with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 21,
@@ -220,7 +220,7 @@
       "event": "cache",
       "hit_ratio": 0.93,
       "evictions": 1,
-      "detail": "index-writer completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "index-writer reported a cache hit ratio of 0.93 over the sampling window with 1 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 21; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 22,
@@ -230,7 +230,7 @@
       "lag_ms": 126,
       "success": true,
       "peer": "shard-router-replica-1",
-      "detail": "shard-router verified segment checksums across every replica and found all of them byte-identical"
+      "detail": "shard-router completed its replication round against shard-router-replica-1 with 126 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 62; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 23,
@@ -241,7 +241,7 @@
       "success": false,
       "retries": 7,
       "duration_ms": 31804,
-      "detail": "object-store connection pool exhausted; the writer could not acquire a lease before the deadline and the batch was abandoned, incident-id INC-4417"
+      "detail": "object-store connection pool exhausted: the writer could not acquire a lease within the 31804 ms deadline and the batch was abandoned after 7 retries, surfacing as HTTP 503 to callers, incident-id INC-4417. Pool telemetry shows every slot pinned by long-running multipart uploads while the lease reaper fell behind, so new writers starved despite healthy upstream capacity. Error budget burn spiked for the interval, the batch remains unwritten pending replay, and the on-call runbook points to raising the reaper cadence and capping multipart concurrency before retrying."
     },
     {
       "seq": 24,
@@ -252,7 +252,7 @@
       "status_code": 200,
       "duration_ms": 138,
       "bytes_out": 1944,
-      "detail": "replica-sync completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "replica-sync handled GET /v2/replica-sync/status in 138 ms and returned HTTP 200 with 1944 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7412-repl with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 25,
@@ -261,7 +261,7 @@
       "event": "cache",
       "hit_ratio": 0.97,
       "evictions": 0,
-      "detail": "auth-broker observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "auth-broker reported a cache hit ratio of 0.97 over the sampling window with 0 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 25; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 26,
@@ -271,7 +271,7 @@
       "lag_ms": 178,
       "success": true,
       "peer": "metrics-collector-replica-2",
-      "detail": "metrics-collector re-registered with service discovery after the routine deploy and passed every readiness probe"
+      "detail": "metrics-collector completed its replication round against metrics-collector-replica-2 with 178 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 66; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 27,
@@ -281,7 +281,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 371,
       "retries": 0,
-      "detail": "object-store rotated its short-lived credentials and re-established upstream sessions without interruption"
+      "detail": "object-store finished scheduled task 'segment_compaction' and reclaimed 371 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 27; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 28,
@@ -292,7 +292,7 @@
       "status_code": 200,
       "duration_ms": 106,
       "bytes_out": 2068,
-      "detail": "query-planner observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "query-planner handled GET /v2/query-planner/status in 106 ms and returned HTTP 200 with 2068 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7464-quer with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 29,
@@ -301,7 +301,7 @@
       "event": "cache",
       "hit_ratio": 0.92,
       "evictions": 4,
-      "detail": "stream-fanout completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "stream-fanout reported a cache hit ratio of 0.92 over the sampling window with 4 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 29; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 30,
@@ -311,7 +311,7 @@
       "lag_ms": 230,
       "success": true,
       "peer": "ingest-gateway-replica-0",
-      "detail": "ingest-gateway verified segment checksums across every replica and found all of them byte-identical"
+      "detail": "ingest-gateway completed its replication round against ingest-gateway-replica-0 with 230 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 70; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 31,
@@ -321,7 +321,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 407,
       "retries": 0,
-      "detail": "index-writer compacted its oldest generation of segments and released the reclaimed space back to the pool"
+      "detail": "index-writer finished scheduled task 'segment_compaction' and reclaimed 407 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 31; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 32,
@@ -332,7 +332,7 @@
       "status_code": 200,
       "duration_ms": 134,
       "bytes_out": 2192,
-      "detail": "shard-router completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "shard-router handled GET /v2/shard-router/status in 134 ms and returned HTTP 200 with 2192 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7516-shar with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 33,
@@ -341,7 +341,7 @@
       "event": "cache",
       "hit_ratio": 0.96,
       "evictions": 3,
-      "detail": "cache-tier observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "cache-tier reported a cache hit ratio of 0.96 over the sampling window with 3 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 33; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 34,
@@ -351,7 +351,7 @@
       "lag_ms": 82,
       "success": true,
       "peer": "replica-sync-replica-1",
-      "detail": "replica-sync re-registered with service discovery after the routine deploy and passed every readiness probe"
+      "detail": "replica-sync completed its replication round against replica-sync-replica-1 with 82 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 74; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 35,
@@ -361,7 +361,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 443,
       "retries": 0,
-      "detail": "auth-broker rotated its short-lived credentials and re-established upstream sessions without interruption"
+      "detail": "auth-broker finished scheduled task 'segment_compaction' and reclaimed 443 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 35; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     },
     {
       "seq": 36,
@@ -372,7 +372,7 @@
       "status_code": 200,
       "duration_ms": 102,
       "bytes_out": 2316,
-      "detail": "metrics-collector observed replication lag well inside the configured tolerance for the whole interval"
+      "detail": "metrics-collector handled GET /v2/metrics-collector/status in 102 ms and returned HTTP 200 with 2316 bytes in the response body. The request was served from the warm path with no upstream fan-out; connection reuse was confirmed and the keep-alive pool stayed at its steady-state size. Downstream callers saw p99 latency inside the objective for the interval, and the request completed under trace id req-7568-metr with no retries, no queue spill, and no degradation flags raised by the admission controller."
     },
     {
       "seq": 37,
@@ -381,7 +381,7 @@
       "event": "cache",
       "hit_ratio": 0.91,
       "evictions": 2,
-      "detail": "object-store completed its scheduled reconciliation pass and reported no drift against the desired state"
+      "detail": "object-store reported a cache hit ratio of 0.91 over the sampling window with 2 eviction(s), all age-based and none under memory pressure. The working set stayed resident, the shard-local LRU segments rotated on schedule, and refill traffic to the backing store remained inside the provisioned budget. Prefetch effectiveness held steady and the negative-lookup cache absorbed the usual crawler burst around cycle 37; no keys were invalidated out of band and no coherence warnings were emitted."
     },
     {
       "seq": 38,
@@ -391,7 +391,7 @@
       "lag_ms": 134,
       "success": true,
       "peer": "query-planner-replica-2",
-      "detail": "query-planner verified segment checksums across every replica and found all of them byte-identical"
+      "detail": "query-planner completed its replication round against query-planner-replica-2 with 134 ms of measured lag, success=true, and a clean acknowledgement from the follower quorum. The write-ahead segment shipped in one batch, checksum verification matched on both ends, and the follower applied the delta without reordering or gap detection. Watermarks advanced normally under epoch 78; no snapshot fallback was required and the catch-up queue drained back to empty before the next scheduling tick."
     },
     {
       "seq": 39,
@@ -401,7 +401,7 @@
       "task": "segment_compaction",
       "reclaimed_mb": 479,
       "retries": 0,
-      "detail": "stream-fanout compacted its oldest generation of segments and released the reclaimed space back to the pool"
+      "detail": "stream-fanout finished scheduled task 'segment_compaction' and reclaimed 479 MB with 0 retry(ies). The pass ran inside its maintenance window with throttling engaged, held the IO ceiling for the whole run, and released its lease cleanly at the end. Tombstone counts, segment fragmentation, and index bloat all landed inside their post-task targets for cycle 39; the follow-up verification sweep found no orphaned references and scheduled nothing for the remediation queue."
     }
   ]
 }

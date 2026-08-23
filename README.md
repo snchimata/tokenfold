@@ -22,7 +22,7 @@ CLI · Python · TypeScript · Rust · proxy · MCP · local-first · provider-n
 
 | Search / RAG results | Repetitive JSON | API responses | Tool schemas |
 | :---: | :---: | :---: | :---: |
-| **91.7% fewer tokens** | **67.6% fewer tokens** | **61.3% fewer tokens** | **45.6% fewer tokens** |
+| **91.7% fewer tokens** | **67.6% fewer tokens** | **63.9% fewer tokens** | **45.6% fewer tokens** |
 | 84,032 → 6,951 | 50-record payload | 30-record payload | 1.8 MB OpenAI fixture |
 | opt-in, recoverable | lossless | lossless | lossless |
 
@@ -68,7 +68,7 @@ gold answer survived selection under the stated budget.
 | --- | --- | --- |
 | **What it does** | Minifies, folds repeated keys into columns, and stores repeated values once | Adds deterministic ranking and retrieval markers for selected array rows |
 | **Best on** | Uniform records, schemas, logs, diffs | Search results, mixed event feeds, agent traces, long arrays |
-| **Measured here** | **45.6–67.6%** fewer tokens | **39.3–91.7%** fewer tokens |
+| **Measured here** | **45.6–67.6%** fewer tokens | **51.7–91.7%** fewer tokens |
 | **Recovery** | All data remains in the payload | Every emitted marker resolves through the local retrieval store |
 
 ## Quick start
@@ -131,8 +131,9 @@ cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
 python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
 ```
 
-[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the notebook form of the
-Python quickstart, one operation per cell.
+[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the guided tour of the whole
+Python surface: everything `quickstart.py` shows, plus previews, budgets and modes,
+provider payloads, recoverable pruning with retrieval, and where Tokenfold Select fits.
 
 ## Recoverable lossy pruning
 
@@ -150,18 +151,19 @@ On the bundled 40-event feed:
 
 | Mode | Exact tokens | Reduction | Events kept | Incident kept |
 | --- | ---: | ---: | ---: | :---: |
-| Lossless | 2,840 | 28.1% | 40 | ✅ |
-| `--lossy-ratio 0.35` | 2,399 | **39.3%** | 13 | ✅ |
-| `--lossy-ratio 0.05` | 2,192 | **44.5%** | 2 | ✅ |
+| Lossless | 6,144 | 14.9% | 40 | ✅ |
+| `--lossy-ratio 0.35` | 3,485 | **51.7%** | 13 | ✅ |
+| `--lossy-ratio 0.05` | 2,294 | **68.2%** | 1 | ✅ |
 
 The planted `503` with `success: false` and `retries: 7` survives every shown
-setting because typed failure signals outrank position and length. Long rows
+setting because typed failure signals outrank position and length — at
+`--lossy-ratio 0.05` it is the only row kept. Long rows
 amortize marker overhead further: the 100-result showcase reaches **91.7%**.
 
 Fetch a dropped row:
 
 ```bash
-tokenfold retrieve 978339a8898fedde3c5b0662a213f12ae4ad1b7fe6771f62b3c3d74d87389a4c
+tokenfold retrieve cb13cc59cca0c218c579cd1d4b3cbab58d6dea265eb995cc9c00faf0cd0a6856
 # {"seq":1,"ts":"2026-08-15T00:01:11Z","subsystem":"index-writer",...}
 ```
 
@@ -310,8 +312,8 @@ cargo run --release --locked -p tokenfold-cli -- \
   inspect examples/api_response.json --format json
 ```
 
-The small bundled API response reports 382 → 206 tokens, a **46.1% lossless
-reduction**. Benchmark sources and thresholds live in [CHANGELOG.md](https://github.com/snchimata/tokenfold/blob/main/CHANGELOG.md)
+The bundled 30-record API response reports 3,812 → 1,376 tokens, a **63.9%
+lossless reduction**. Benchmark sources and thresholds live in [CHANGELOG.md](https://github.com/snchimata/tokenfold/blob/main/CHANGELOG.md)
 and [`crates/tokenfold-core/benches/THRESHOLDS.toml`](https://github.com/snchimata/tokenfold/blob/main/crates/tokenfold-core/benches/THRESHOLDS.toml).
 
 ## Contributing

@@ -1,5 +1,8 @@
 # Contributing
 
+Participation in this project is governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Branch model
 
 `main` is the only long-lived branch. It is protected: no direct pushes, no
