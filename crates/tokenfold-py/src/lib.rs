@@ -1017,13 +1017,12 @@ fn compress_messages(
 
 // ---------------------------------------------------------------------------------------
 // retrieve: restores a payload previously persisted by `store_originals=True` or `lossy`,
-// mirroring `tokenfold retrieve <hash>`. Unlike the CLI, this never accepts a text
-// `[tokenfold:retrieve ...]` marker or a CompressionReport file path -- a Python caller
-// working with a `$tf_ref` JSON marker already has it parsed
-// (`marker["$tf_ref"]["hash"]`/`["namespace"]`), so re-implementing the CLI's text-marker
-// grammar here would be redundant, not more convenient.
+// mirroring `tokenfold retrieve`: accepts a raw hash, legacy text marker, or serialized JSON
+// `$tf_ref` marker through the `hash` argument. CompressionReport paths remain CLI-only.
 // ---------------------------------------------------------------------------------------
 
+/// Restore bytes by raw SHA-256 hash, legacy text marker, or serialized JSON `$tf_ref` marker.
+/// An explicit `namespace` overrides a namespace embedded in a marker.
 #[pyfunction]
 #[pyo3(signature = (hash, *, namespace=None, backend=None, retrieval_store_path=None, policy=None))]
 fn retrieve(
@@ -1035,7 +1034,10 @@ fn retrieve(
     policy: Option<PyRef<'_, PyCompressionPolicy>>,
 ) -> PyResult<Py<PyBytes>> {
     let base = policy.as_deref().map(|p| &p.0);
+    let reference =
+        tokenfold_core::retrieval_store::parse_retrieval_reference(&hash).map_err(map_err)?;
     let resolved_namespace = namespace
+        .or(reference.namespace)
         .or_else(|| base.map(|p| p.retrieval_namespace.clone()))
         .unwrap_or_else(|| "default".to_string());
     let resolved_backend = backend
@@ -1050,13 +1052,15 @@ fn retrieve(
     let store =
         RetrievalStore::open(&resolved_backend, "sha256", resolved_store_path).map_err(map_err)?;
 
-    match store.retrieve(&hash, &resolved_namespace) {
+    match store.retrieve(&reference.hash, &resolved_namespace) {
         RetrievalOutcome::Found(bytes) => Ok(PyBytes::new(py, &bytes).unbind()),
         RetrievalOutcome::Missing => Err(RetrievalError::new_err(format!(
-            "no stored original found for hash {hash:?} in namespace {resolved_namespace:?}"
+            "no stored original found for hash {:?} in namespace {resolved_namespace:?}",
+            reference.hash
         ))),
         RetrievalOutcome::Expired => Err(RetrievalError::new_err(format!(
-            "stored original for hash {hash:?} in namespace {resolved_namespace:?} has expired"
+            "stored original for hash {:?} in namespace {resolved_namespace:?} has expired",
+            reference.hash
         ))),
     }
 }

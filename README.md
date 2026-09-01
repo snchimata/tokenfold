@@ -29,11 +29,14 @@ CLI · Python · TypeScript · Rust · proxy · MCP · local-first · provider-n
 All four use exact `o200k_base` counts in balanced mode. The 91.7% showcase
 keeps the planted `503` result inline and makes the other 98 long rows
 retrievable by hash. Run it with `python examples/lossy_pruning.py`.
+The versioned inputs and source provenance for these headline figures live in
+[`tests/fixtures/readme_metrics.json`](tests/fixtures/readme_metrics.json).
 
 ### Fine-tuned relevance ranking
 
-[Tokenfold Select][tokenfold-select] is the optional query-aware model for
+[Tokenfold Select][tokenfold-select] is an optional external query-aware model for
 choosing what fills a tight context window after structural compression ends.
+It is distributed and evaluated separately; Tokenfold Core does not invoke it.
 
 | Token budget kept | Tokenfold Select task success | BM25 reference | Lift |
 | ---: | ---: | ---: | ---: |
@@ -48,6 +51,8 @@ three-seed repeated subsampling over roughly 73,000 training and 24,000
 held-out fixtures per run; the [model card][tokenfold-select] publishes the
 training recipe and full baseline set. Here, task success means the literal
 gold answer survived selection under the stated budget.
+These are source-reported external results, pinned by model revision in the
+[metric manifest](tests/fixtures/readme_metrics.json); Core CI does not reproduce them.
 
 ## One platform, two engines
 
@@ -82,7 +87,7 @@ cargo add tokenfold-core    # Rust library
 cargo install tokenfold-cli # Rust CLI
 ```
 
-Or download a signed CLI build for Linux, macOS, or Windows from
+Or download a checksummed CLI build for Linux, macOS, or Windows from
 [GitHub Releases](https://github.com/snchimata/tokenfold/releases/latest) and
 verify it with the adjacent `.sha256` file.
 
@@ -214,9 +219,8 @@ const original = await retrieve(hash); // any dropped row, verbatim
 <summary><strong>Current Phase 1 constraints</strong></summary>
 
 Treat `$tf_ref` as reserved and do not enable lossy pruning on documents that
-already contain retrieval markers. A filesystem failure after partial writes
-may also leave unreferenced entries until their configured TTL expires. Both
-require location-based transactional materialization before promotion.
+already contain retrieval markers. Filesystem entries are published under a
+cross-process lock, and a refused batch leaves every candidate inline.
 
 Preview is a projection rather than a filesystem transaction, so a real run may
 keep more rows if storage becomes unavailable.
@@ -230,8 +234,8 @@ keep more rows if storage becomes unavailable.
 Tokenfold Select is an Apache-2.0 LoRA adapter on
 `ibm-granite/granite-embedding-reranker-english-r2`. It scores candidate spans
 against a query; your allocator applies the token budget and force-keeps
-required content. Core remains model-free and deterministic, while Select adds
-relevance when lexical heuristics stop being enough.
+required content. It is a separately distributed companion: Core remains
+model-free and deterministic and neither loads nor invokes Select.
 
 | | Tokenfold Core | Tokenfold Select |
 | --- | --- | --- |
@@ -297,6 +301,12 @@ training data, and limitations.
   retrieval state, and final status.
 - **Local control:** detected secrets are redacted before reports or storage;
   policy learning changes configuration only with `--apply`.
+
+The offline fidelity gate uses deterministic lexical-overlap, critical-token,
+and containment proxies. Those checks catch regressions but do not establish
+semantic equivalence or downstream task success. Runtime `quality` fields are
+absent unless a versioned evaluator has supplied data; applications should run
+their own representative task evaluation before enabling lossy pruning.
 
 ## Reproduce the results
 

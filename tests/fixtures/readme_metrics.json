@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "repository_commit": "eabbf63805e137fc4c7a8b74e5f02aef4fb842b7",
+  "compression": {
+    "search_rag": { "reduction_pct": 91.7, "command": "python examples/lossy_pruning.py" },
+    "repetitive_json": { "reduction_pct": 67.6, "source": "CHANGELOG.md benchmark record" },
+    "api_responses": {
+      "reduction_pct": 63.9,
+      "fixture": "examples/api_response.json",
+      "sha256": "91653e687b399362c766760a69bc260c8ef0a1e805825c71602f968cd1c6ef27"
+    },
+    "tool_schemas": { "reduction_pct": 45.6, "source": "crates/tokenfold-core/benches/compression_bench.rs" }
+  },
+  "select": {
+    "status": "external_source_reported",
+    "model_revision": "38778684b6643ce28a2014f214301fddc8a69595",
+    "source": "https://huggingface.co/snchimata/tokenfold-select/blob/38778684b6643ce28a2014f214301fddc8a69595/README.md",
+    "budgets": {
+      "0.50": { "task_success": 86.3, "bm25": 79.4, "lift": 8.7 },
+      "0.25": { "task_success": 70.3, "bm25": 60.7, "lift": 15.8 },
+      "0.10": { "task_success": 39.9, "bm25": 37.7, "lift": 5.8 }
+    },
+    "reproduction_gap": "The external model card does not publish dataset hashes, seeds, dependency revisions, command, or environment; these figures are not reproduced by Core CI."
+  }
+}

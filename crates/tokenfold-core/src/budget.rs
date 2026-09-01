@@ -17,6 +17,8 @@ pub struct CompressionPolicy {
     pub reserve_output_tokens: usize,
     pub mode: CompressionMode,
     pub task_scope: TaskScope,
+    /// Reserved for a future prompt-cache preservation contract. Any non-`None` value is
+    /// rejected by [`CompressionPolicy::validate`] so it can never silently do nothing.
     pub cache_boundary: Option<CacheBoundary>,
     pub preserve_latest_user_message: bool,
     pub disabled: Vec<String>,
@@ -128,6 +130,11 @@ impl CompressionPolicy {
     /// policy it receives so a hand-built policy can't silently skip the same fail-closed
     /// guarantees a builder-built one gets for free.
     pub fn validate(&self) -> Result<(), TokenFoldError> {
+        if self.cache_boundary.is_some() {
+            return Err(TokenFoldError::ConfigError(
+                "cache_boundary is reserved but not implemented; omit it".to_string(),
+            ));
+        }
         if self.disabled.iter().any(|id| id == "secret_redaction") {
             return Err(TokenFoldError::ConfigError(
                 "secret_redaction cannot be disabled via CompressionPolicy.disabled".to_string(),
@@ -450,6 +457,15 @@ mod tests {
     fn default_mode_is_balanced() {
         let policy = CompressionPolicy::builder().build().unwrap();
         assert_eq!(policy.mode, CompressionMode::Balanced);
+    }
+
+    #[test]
+    fn cache_boundary_is_rejected_instead_of_silently_ignored() {
+        let error = CompressionPolicy::builder()
+            .cache_boundary(CacheBoundary::ByteOffset(10))
+            .build()
+            .unwrap_err();
+        assert!(error.to_string().contains("not implemented"));
     }
 
     #[test]

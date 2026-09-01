@@ -14,11 +14,8 @@
 //! already documents (`TOKENFOLD_RETRIEVAL_BACKEND`, `TOKENFOLD_RETRIEVAL_STORE_PATH`,
 //! `TOKENFOLD_ANALYTICS_LEDGER_DB`) rather than the full config file.
 //!
-//! Scope cut: `tokenfold_compress`/`tokenfold_inspect`'s own `store_originals` argument still has
-//! no effect (see `tool_input_schema`) — wiring per-request storage into those two tools is
-//! deferred to a future pass. Only the proxy's `/v1/compress` and provider-passthrough routes got
-//! that wiring this pass (via the `X-TokenFold-Store-Originals`/`X-TokenFold-Retrieve-Store`
-//! request headers).
+//! `tokenfold_compress`/`tokenfold_inspect` reject `store_originals=true` until per-request MCP
+//! persistence is implemented, rather than accepting an option that has no effect.
 //!
 //! Transport is newline-delimited JSON-RPC 2.0 over stdio, the standard MCP stdio framing: one
 //! JSON object per line in, one per line out. stdout carries only JSON-RPC messages; logs (none
@@ -30,7 +27,9 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use tokenfold_core::retrieval_store::{RetrievalOutcome, RetrievalStore};
+use tokenfold_core::retrieval_store::{
+    RetrievalOutcome, RetrievalStore, parse_retrieval_reference,
+};
 use tokenfold_core::stats::{self, LedgerStore};
 use tokenfold_core::{
     CompressionInput, CompressionMode, CompressionPolicy, InputFormat, TokenFoldError,
@@ -132,7 +131,7 @@ fn tool_input_schema() -> Value {
             "target_tokens": {"type": "integer", "minimum": 0},
             "store_originals": {
                 "type": "boolean",
-                "description": "The local retrieval store now exists (see `tokenfold_retrieve`), but this tool doesn't persist to it yet; currently has no effect here.",
+                "description": "Reserved. `true` is rejected until per-request MCP persistence is implemented.",
             },
         },
     })
@@ -148,7 +147,11 @@ fn retrieve_input_schema() -> Value {
             },
             "marker": {
                 "type": "string",
-                "description": "A `[tokenfold:retrieve hash=<hex> alg=sha256 namespace=<ns> bytes=<n> ttl=<seconds>]` marker string.",
+                "description": "A legacy `[tokenfold:retrieve ...]` marker or serialized JSON `$tf_ref` marker.",
+            },
+            "namespace": {
+                "type": "string",
+                "description": "Namespace override. Takes precedence over a namespace embedded in `marker`.",
             },
             "report_ref": {
                 "type": "string",
@@ -186,7 +189,7 @@ fn handle_tools_list() -> Value {
             },
             {
                 "name": "tokenfold_retrieve",
-                "description": "Restore an original payload previously persisted to the local retrieval store, by hash, marker, or report reference. Missing/expired retrieval is explicit, never partial.",
+                "description": "Restore an original payload previously persisted to the local retrieval store, by hash or marker. Missing/expired retrieval is explicit, never partial; report references are reserved but not yet resolvable.",
                 "inputSchema": retrieve_input_schema(),
             },
             {
@@ -285,6 +288,16 @@ fn build_input(arguments: &Value) -> Result<(CompressionInput, bool), String> {
 }
 
 fn build_policy(arguments: &Value) -> Result<CompressionPolicy, String> {
+    if arguments
+        .get("store_originals")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Err(
+            "store_originals=true is not implemented for MCP compression; use the CLI or proxy"
+                .to_string(),
+        );
+    }
     let mode = match arguments.get("mode").and_then(Value::as_str) {
         Some(s) => ModeArg::parse(s)?.to_core(),
         None => CompressionMode::Balanced,
@@ -324,14 +337,11 @@ fn run_retrieve(arguments: &Value) -> Result<Value, String> {
     let hash_arg = arguments.get("hash").and_then(Value::as_str);
     let report_ref = arguments.get("report_ref").and_then(Value::as_str);
 
-    let (hash, namespace) = if let Some(marker) = marker {
-        let hash = extract_marker_field(marker, "hash")
-            .ok_or_else(|| "retrieval marker has no hash=<hex> field".to_string())?;
-        let namespace =
-            extract_marker_field(marker, "namespace").unwrap_or_else(|| "default".to_string());
-        (hash, namespace)
+    let explicit_namespace = arguments.get("namespace").and_then(Value::as_str);
+    let reference = if let Some(marker) = marker {
+        parse_retrieval_reference(marker).map_err(|error| error.to_string())?
     } else if let Some(hash) = hash_arg {
-        (hash.to_string(), "default".to_string())
+        parse_retrieval_reference(hash).map_err(|error| error.to_string())?
     } else if report_ref.is_some() {
         // `RetrievalReport` (report.rs) carries no per-entry content hash, so a report
         // reference alone can never be resolved to a stored hash in the current schema —
@@ -345,9 +355,15 @@ fn run_retrieve(arguments: &Value) -> Result<Value, String> {
     } else {
         return Err("at least one of `hash`, `marker`, or `report_ref` is required".to_string());
     };
+    let namespace = explicit_namespace
+        .map(str::to_string)
+        .or(reference.namespace)
+        .unwrap_or_else(|| "default".to_string());
 
     let store = retrieval_store_from_env()?;
-    Ok(retrieve_outcome_to_value(store.retrieve(&hash, &namespace)))
+    Ok(retrieve_outcome_to_value(
+        store.retrieve(&reference.hash, &namespace),
+    ))
 }
 
 /// `source` is honestly always `"local_mcp"`: this tool only ever reads the local retrieval
@@ -362,18 +378,6 @@ fn retrieve_outcome_to_value(outcome: RetrievalOutcome) -> Value {
         RetrievalOutcome::Missing => json!({"status": "missing", "source": "local_mcp"}),
         RetrievalOutcome::Expired => json!({"status": "expired", "source": "local_mcp"}),
     }
-}
-
-/// Extracts `field=<value>` from a `[tokenfold:retrieve hash=<hex> alg=sha256 namespace=<ns>
-/// bytes=<n> ttl=<seconds>]` marker string, stopping at the next whitespace or `]`.
-fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
-    let needle = format!("{field}=");
-    let start = marker.find(&needle)? + needle.len();
-    let rest = &marker[start..];
-    let end = rest
-        .find(|c: char| c.is_whitespace() || c == ']')
-        .unwrap_or(rest.len());
-    Some(rest[..end].to_string())
 }
 
 fn call_stats(arguments: &Value) -> Value {

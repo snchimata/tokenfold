@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Make filesystem retrieval publication atomic across `store`, `retrieve`, and `gc`; lossy
+  candidate batches now commit completely or remain inline, and rollback restores only the
+  generated marker location.
+- Serve proxy requests with a bounded worker pool so a held-open SSE response does not block
+  health checks or other requests.
+- Cache the immutable tiktoken estimator, add Python wheel testing to pull-request CI, and pin
+  README metric provenance.
+- Parse raw hashes, legacy markers, and JSON `$tf_ref` markers through one validated retrieval
+  path across Core, CLI, proxy, MCP, Python, and TypeScript; MCP retrieval now accepts an explicit
+  namespace, and MCP compression rejects unsupported `store_originals=true` instead of ignoring it.
+- Add focused Windows CLI/proxy CI, private vulnerability-reporting guidance, and explicit
+  semantic-quality limitations. Reserved `cache_boundary` values now fail clearly instead of
+  behaving as a no-op.
+
 ## [0.4.1] - 2026-08-18
 
 - **Python: opt-in lossy JSON pruning is now reachable from the binding**, previously

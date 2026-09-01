@@ -265,9 +265,10 @@ export interface RetrieveOptions {
 
 /**
  * Restores the original bytes of something a lossy run dropped, or a `storeOriginals` run saved,
- * mirroring `tokenfold retrieve`. `reference` is either a raw hex SHA-256 hash — a compressed
- * payload's `$tf_ref.hash` — or a `[tokenfold:retrieve hash=... namespace=...]` text marker,
- * whose embedded namespace is used when `options.namespace` is omitted. A CompressionReport
+ * mirroring `tokenfold retrieve`. `reference` is a raw hex SHA-256 hash (a compressed
+ * payload's `$tf_ref.hash`), a `[tokenfold:retrieve hash=... namespace=...]` text marker,
+ * or a serialized JSON `$tf_ref` marker. An embedded namespace is used when
+ * `options.namespace` is omitted. A CompressionReport
  * path is NOT a valid reference: the current report schema carries no per-entry hash, and the
  * CLI rejects it rather than guessing.
  *
