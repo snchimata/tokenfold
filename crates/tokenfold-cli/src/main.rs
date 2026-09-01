@@ -1457,10 +1457,11 @@ fn cmd_retrieve(
         };
     }
 
-    let (hash, marker_namespace) = parse_retrieve_reference(&reference)?;
+    let parsed = tokenfold_core::retrieval_store::parse_retrieval_reference(&reference)?;
     let namespace = namespace_flag
-        .or(marker_namespace)
+        .or(parsed.namespace)
         .unwrap_or(resolved.effective.retrieval_namespace);
+    let hash = parsed.hash;
 
     let store = tokenfold_core::retrieval_store::RetrievalStore::open(
         &resolved.effective.retrieval_backend,
@@ -1483,34 +1484,6 @@ fn cmd_retrieve(
             Ok(1)
         }
     }
-}
-
-/// Accepts a raw hex SHA-256 hash or a `[tokenfold:retrieve hash=<hex> ... namespace=<ns> ...]`
-/// marker, returning the hash and (when the input was a marker carrying one) its namespace.
-fn parse_retrieve_reference(reference: &str) -> Result<(String, Option<String>), TokenFoldError> {
-    if reference.contains("tokenfold:retrieve") {
-        let hash = extract_marker_field(reference, "hash").ok_or_else(|| {
-            TokenFoldError::InvalidInput("retrieval marker has no hash=<hex> field".to_string())
-        })?;
-        let namespace = extract_marker_field(reference, "namespace");
-        return Ok((hash, namespace));
-    }
-    if reference.is_empty() || !reference.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(TokenFoldError::InvalidInput(format!(
-            "{reference:?} is not a valid sha256 hex hash, retrieval marker, or existing report file path"
-        )));
-    }
-    Ok((reference.to_ascii_lowercase(), None))
-}
-
-fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
-    let needle = format!("{field}=");
-    let start = marker.find(&needle)? + needle.len();
-    let rest = &marker[start..];
-    let end = rest
-        .find(|c: char| c.is_whitespace() || c == ']')
-        .unwrap_or(rest.len());
-    Some(rest[..end].to_string())
 }
 
 /// Appends redacted ledger metadata for one successful compress/wrap run when

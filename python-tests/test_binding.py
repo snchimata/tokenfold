@@ -399,6 +399,23 @@ def test_retrieve_via_policy_matches_explicit_kwargs(tmp_path):
     assert via_policy == via_kwargs
 
 
+def test_retrieve_accepts_a_serialized_json_marker(tmp_path):
+    policy = CompressionPolicy(
+        retrieval_store_path=str(tmp_path),
+        lossy=LossyPath.HEURISTIC,
+        lossy_ratio=0.35,
+    )
+    lossy = compress(INCIDENT_FEED, format=InputFormat.JSON, policy=policy)
+    marker = next(
+        event
+        for event in json.loads(lossy.payload)["events"]
+        if isinstance(event, dict) and "$tf_ref" in event
+    )
+
+    restored = retrieve(json.dumps(marker), policy=policy)
+    assert json.loads(restored) in json.loads(INCIDENT_FEED)["events"]
+
+
 def test_retrieve_raises_for_a_missing_hash(tmp_path):
     with pytest.raises(RetrievalError):
         retrieve("0" * 64, namespace="default", retrieval_store_path=str(tmp_path))

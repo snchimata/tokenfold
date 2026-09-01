@@ -159,6 +159,27 @@ fn tools_call_rejects_both_content_and_messages() {
 }
 
 #[test]
+fn tools_call_rejects_unimplemented_store_originals_instead_of_ignoring_it() {
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "tokenfold_compress",
+            "arguments": {"content": "hello", "store_originals": true}
+        }
+    });
+    let responses = run_mcp(&format!("{request}\n"));
+    assert_eq!(responses[0]["result"]["isError"], true);
+    assert!(
+        responses[0]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("not implemented")
+    );
+}
+
+#[test]
 fn unknown_tool_name_is_a_protocol_error_not_a_tool_error() {
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -266,6 +287,38 @@ fn tools_call_retrieve_missing_hash_returns_missing_status_not_a_tool_error() {
     assert_eq!(structured["source"], "local_mcp");
     assert_eq!(responses[0]["result"]["isError"], false);
 
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
+#[test]
+fn tools_call_retrieve_explicit_namespace_overrides_json_marker_namespace() {
+    let store_path = unique_temp_path("retrieve_namespace");
+    let payload = b"stored in the explicit namespace";
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store.store(payload, "explicit", None).unwrap();
+    let marker = serde_json::json!({
+        "$tf_ref": {"hash": stored.hash, "alg": "sha256", "namespace": "embedded"}
+    });
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "tokenfold_retrieve",
+            "arguments": {"marker": marker.to_string(), "namespace": "explicit"}
+        }
+    });
+    let responses = run_mcp_with_env(
+        &format!("{request}\n"),
+        &[(
+            "TOKENFOLD_RETRIEVAL_STORE_PATH",
+            store_path.to_str().unwrap(),
+        )],
+    );
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["content"],
+        String::from_utf8_lossy(payload).into_owned()
+    );
     std::fs::remove_dir_all(&store_path).ok();
 }
 

@@ -188,7 +188,7 @@ test("lossy pruning beats lossless and the planted incident survives", async () 
   }
 });
 
-test("retrieve round-trips a dropped item, by hash and by text marker", async () => {
+test("retrieve round-trips a dropped item by every supported reference form", async () => {
   const { configPath } = throwawayStore();
   const input = await readFile(INCIDENT_FEED);
   const lossy = await compress(input, {
@@ -216,6 +216,9 @@ test("retrieve round-trips a dropped item, by hash and by text marker", async ()
     { configPath },
   );
   assert.deepEqual(byMarker, byHash);
+
+  const byJsonMarker = await retrieve(JSON.stringify({ $tf_ref: marker }), { configPath });
+  assert.deepEqual(byJsonMarker, byHash);
 });
 
 test("retrieve rejects an unknown hash, a malformed reference, and a report path", async () => {

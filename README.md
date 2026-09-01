@@ -302,6 +302,12 @@ training data, and limitations.
 - **Local control:** detected secrets are redacted before reports or storage;
   policy learning changes configuration only with `--apply`.
 
+The offline fidelity gate uses deterministic lexical-overlap, critical-token,
+and containment proxies. Those checks catch regressions but do not establish
+semantic equivalence or downstream task success. Runtime `quality` fields are
+absent unless a versioned evaluator has supplied data; applications should run
+their own representative task evaluation before enabling lossy pruning.
+
 ## Reproduce the results
 
 ```bash

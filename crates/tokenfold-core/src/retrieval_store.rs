@@ -41,6 +41,90 @@ pub struct RetrievalMarker {
     pub ttl_seconds: Option<u64>,
 }
 
+/// A validated reference to one stored original. Accepted inputs are a raw SHA-256 hash,
+/// the legacy `[tokenfold:retrieve ...]` marker, or the JSON `{"$tf_ref": ...}` marker
+/// emitted by lossy JSON pruning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetrievalReference {
+    pub hash: String,
+    pub namespace: Option<String>,
+}
+
+pub fn parse_retrieval_reference(reference: &str) -> Result<RetrievalReference, TokenFoldError> {
+    let reference = reference.trim();
+    if reference.starts_with('{') {
+        let value: serde_json::Value = serde_json::from_str(reference).map_err(|error| {
+            TokenFoldError::InvalidInput(format!("invalid retrieval JSON marker: {error}"))
+        })?;
+        let marker = value.get("$tf_ref").unwrap_or(&value);
+        let hash = marker
+            .get("hash")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                TokenFoldError::InvalidInput(
+                    "retrieval JSON marker has no string hash field".into(),
+                )
+            })?;
+        let alg = marker
+            .get("alg")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("sha256");
+        let namespace = marker
+            .get("namespace")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
+        return validate_reference(hash, alg, namespace);
+    }
+    if reference.contains("tokenfold:retrieve") {
+        let hash = extract_marker_field(reference, "hash").ok_or_else(|| {
+            TokenFoldError::InvalidInput("retrieval marker has no hash=<hex> field".into())
+        })?;
+        let alg = extract_marker_field(reference, "alg").unwrap_or_else(|| "sha256".into());
+        return validate_reference(&hash, &alg, extract_marker_field(reference, "namespace"));
+    }
+    validate_reference(reference, "sha256", None)
+}
+
+fn validate_reference(
+    hash: &str,
+    alg: &str,
+    namespace: Option<String>,
+) -> Result<RetrievalReference, TokenFoldError> {
+    if alg != "sha256" {
+        return Err(TokenFoldError::InvalidInput(format!(
+            "unsupported retrieval hash algorithm {alg:?}; expected \"sha256\""
+        )));
+    }
+    if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(TokenFoldError::InvalidInput(format!(
+            "{hash:?} is not a valid SHA-256 hex hash"
+        )));
+    }
+    if namespace
+        .as_deref()
+        .is_some_and(|value| !is_safe_path_component(value))
+    {
+        return Err(TokenFoldError::InvalidInput(format!(
+            "invalid retrieval namespace: {:?}",
+            namespace.as_deref().unwrap_or_default()
+        )));
+    }
+    Ok(RetrievalReference {
+        hash: hash.to_ascii_lowercase(),
+        namespace,
+    })
+}
+
+fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
+    let needle = format!("{field}=");
+    let start = marker.find(&needle)? + needle.len();
+    let rest = &marker[start..];
+    let end = rest
+        .find(|c: char| c.is_whitespace() || c == ']')
+        .unwrap_or(rest.len());
+    Some(rest[..end].to_string())
+}
+
 /// Result of a retrieval lookup. Deliberately has no "partial" variant: a caller either gets
 /// the exact original bytes back, or an explicit reason it did not.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -787,6 +871,45 @@ mod tests {
         assert_eq!(
             store.retrieve("deadbeef", "../escape"),
             RetrievalOutcome::Missing
+        );
+    }
+
+    #[test]
+    fn parses_all_supported_retrieval_reference_forms() {
+        let hash = "A".repeat(64);
+        let raw = parse_retrieval_reference(&hash).unwrap();
+        assert_eq!(raw.hash, "a".repeat(64));
+        assert_eq!(raw.namespace, None);
+
+        let legacy = parse_retrieval_reference(&format!(
+            "[tokenfold:retrieve hash={hash} alg=sha256 namespace=project bytes=1]"
+        ))
+        .unwrap();
+        assert_eq!(legacy.namespace.as_deref(), Some("project"));
+
+        let json = parse_retrieval_reference(&format!(
+            r#"{{"$tf_ref":{{"hash":"{hash}","alg":"sha256","namespace":"project"}}}}"#
+        ))
+        .unwrap();
+        assert_eq!(json, legacy);
+    }
+
+    #[test]
+    fn rejects_malformed_retrieval_references() {
+        assert!(parse_retrieval_reference("deadbeef").is_err());
+        assert!(
+            parse_retrieval_reference(&format!(
+                "[tokenfold:retrieve hash={} alg=blake3]",
+                "a".repeat(64)
+            ))
+            .is_err()
+        );
+        assert!(
+            parse_retrieval_reference(&format!(
+                r#"{{"$tf_ref":{{"hash":"{}","namespace":"../escape"}}}}"#,
+                "a".repeat(64)
+            ))
+            .is_err()
         );
     }
 }

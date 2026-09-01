@@ -517,7 +517,7 @@ fn store_originals_header_then_retrieve_round_trips_via_v1_retrieve() {
     assert_eq!(get_value["content"], payload);
 
     // POST /v1/retrieve { "hash": ... } resolves the same entry.
-    let post_body = serde_json::json!({"hash": hash});
+    let post_body = serde_json::json!({"hash": &hash});
     let mut post_response = ureq::post(proxy.url("/v1/retrieve"))
         .header("Content-Type", "application/json")
         .send(&serde_json::to_vec(&post_body).unwrap())
@@ -532,6 +532,23 @@ fn store_originals_header_then_retrieve_round_trips_via_v1_retrieve() {
     let post_value: serde_json::Value = serde_json::from_str(&post_text).unwrap();
     assert_eq!(post_value["status"], "found");
     assert_eq!(post_value["content"], payload);
+
+    let json_marker = serde_json::json!({
+        "$tf_ref": {"hash": hash, "alg": "sha256", "namespace": "default"}
+    });
+    let marker_body = serde_json::json!({"marker": json_marker.to_string()});
+    let mut marker_response = ureq::post(proxy.url("/v1/retrieve"))
+        .header("Content-Type", "application/json")
+        .send(&serde_json::to_vec(&marker_body).unwrap())
+        .unwrap();
+    let mut marker_text = String::new();
+    marker_response
+        .body_mut()
+        .as_reader()
+        .read_to_string(&mut marker_text)
+        .unwrap();
+    let marker_value: serde_json::Value = serde_json::from_str(&marker_text).unwrap();
+    assert_eq!(marker_value["content"], payload);
 
     std::fs::remove_dir_all(&store_dir).ok();
 }

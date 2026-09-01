@@ -23,7 +23,9 @@ use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 use tokenfold_core::budget::CompressionPolicyBuilder;
 use tokenfold_core::report::{CompressionReport, TransformStatus};
-use tokenfold_core::retrieval_store::{RetrievalOutcome, RetrievalStore};
+use tokenfold_core::retrieval_store::{
+    RetrievalOutcome, RetrievalStore, parse_retrieval_reference,
+};
 use tokenfold_core::status::Status;
 use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, InputFormat};
 
@@ -525,14 +527,15 @@ fn resolve_retrieve_reference(
     let report_ref = value.get("report_ref").and_then(Value::as_str);
 
     if let Some(marker) = marker {
-        let hash = extract_marker_field(marker, "hash")
-            .ok_or("retrieval marker has no hash=<hex> field")?;
-        let namespace = extract_marker_field(marker, "namespace")
+        let reference = parse_retrieval_reference(marker).map_err(|error| error.to_string())?;
+        let namespace = reference
+            .namespace
             .unwrap_or_else(|| default_namespace.to_string());
-        return Ok((hash, namespace));
+        return Ok((reference.hash, namespace));
     }
     if let Some(hash) = hash {
-        return Ok((hash.to_string(), default_namespace.to_string()));
+        let reference = parse_retrieval_reference(hash).map_err(|error| error.to_string())?;
+        return Ok((reference.hash, default_namespace.to_string()));
     }
     if report_ref.is_some() {
         // `RetrievalReport` (tokenfold_core::report) carries no per-entry content hash, so a
@@ -545,19 +548,6 @@ fn resolve_retrieve_reference(
         );
     }
     Err("exactly one of `marker`, `hash`, or `report_ref` is required".to_string())
-}
-
-/// Extracts `field=<value>` from a retrieval marker of the form
-/// `[tokenfold:retrieve hash=<hex> alg=<alg> namespace=<ns> bytes=<n> ttl=<seconds>]`,
-/// stopping at the next whitespace or `]`.
-fn extract_marker_field(marker: &str, field: &str) -> Option<String> {
-    let needle = format!("{field}=");
-    let start = marker.find(&needle)? + needle.len();
-    let rest = &marker[start..];
-    let end = rest
-        .find(|c: char| c.is_whitespace() || c == ']')
-        .unwrap_or(rest.len());
-    Some(rest[..end].to_string())
 }
 
 /// `source` is honestly `"proxy_store"`: this is the proxy's own retrieval store, not the MCP
@@ -609,15 +599,16 @@ fn handle_retrieve_get(
     path: &str,
 ) -> (u16, Response<BodyReader>) {
     let hash = path.trim_start_matches("/v1/retrieve/");
-    if hash.is_empty() {
-        return error_response(400, "missing retrieval hash in path");
-    }
+    let hash = match parse_retrieval_reference(hash) {
+        Ok(reference) => reference.hash,
+        Err(error) => return error_response(400, &error.to_string()),
+    };
     let namespace = retrieval_namespace_header(headers);
     let store = match open_retrieval_store(config) {
         Ok(store) => store,
         Err(message) => return error_response(500, &message),
     };
-    retrieve_response(store.retrieve(hash, &namespace))
+    retrieve_response(store.retrieve(&hash, &namespace))
 }
 
 /// `RetrievalStore`'s public API (tokenfold_core::retrieval_store) has no entry-count/byte-total

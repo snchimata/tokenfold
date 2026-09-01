@@ -42,6 +42,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked
 
+  windows-smoke:
+    name: windows-smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -p tokenfold-cli -p tokenfold-proxy --locked
+
   python-wheel:
     name: python-wheel (Python 3.12)
     runs-on: ubuntu-latest
