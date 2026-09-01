@@ -1021,6 +1021,8 @@ fn compress_messages(
 // `$tf_ref` marker through the `hash` argument. CompressionReport paths remain CLI-only.
 // ---------------------------------------------------------------------------------------
 
+/// Restore bytes by raw SHA-256 hash, legacy text marker, or serialized JSON `$tf_ref` marker.
+/// An explicit `namespace` overrides a namespace embedded in a marker.
 #[pyfunction]
 #[pyo3(signature = (hash, *, namespace=None, backend=None, retrieval_store_path=None, policy=None))]
 fn retrieve(

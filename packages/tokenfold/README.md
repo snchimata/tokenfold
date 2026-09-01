@@ -28,7 +28,7 @@ const { payload, report } = await compress(feed, {
   lossyRatio: 0.35,        // selection hint, not an enforced budget
   lossyPreserve: ["meta"], // arrays that are never pruned
 });
-const original = await retrieve(hash); // a dropped item's original bytes
+const original = await retrieve(JSON.stringify(marker)); // raw hashes also work
 ```
 
 Pass the same options to `inspect` to preview the projected savings without

@@ -189,7 +189,7 @@ fn handle_tools_list() -> Value {
             },
             {
                 "name": "tokenfold_retrieve",
-                "description": "Restore an original payload previously persisted to the local retrieval store, by hash, marker, or report reference. Missing/expired retrieval is explicit, never partial.",
+                "description": "Restore an original payload previously persisted to the local retrieval store, by hash or marker. Missing/expired retrieval is explicit, never partial; report references are reserved but not yet resolvable.",
                 "inputSchema": retrieve_input_schema(),
             },
             {

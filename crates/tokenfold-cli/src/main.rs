@@ -163,13 +163,13 @@ enum Command {
         #[command(subcommand)]
         action: McpAction,
     },
-    /// Restore an original payload stored via `--store-originals`.
+    /// Restore an original payload stored by `--store-originals` or recoverable lossy pruning.
     Retrieve {
-        /// A raw hex SHA-256 hash, a `[tokenfold:retrieve ...]` marker, or a path to a
-        /// `CompressionReport` JSON file.
+        /// A raw SHA-256 hash, legacy `[tokenfold:retrieve ...]` marker, serialized JSON
+        /// `$tf_ref` marker, or `CompressionReport` path (reports without a hash are rejected).
         reference: String,
         /// Namespace to look the hash up under; defaults to the resolved `[retrieval]`
-        /// namespace (or the marker's own `namespace=` field, when the reference is a marker).
+        /// namespace, or the marker's embedded namespace when present.
         #[arg(long = "retrieve-namespace")]
         retrieve_namespace: Option<String>,
     },
