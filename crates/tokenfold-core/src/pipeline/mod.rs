@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+#[cfg(feature = "tiktoken")]
+use std::sync::OnceLock;
 
 use serde_json::Value;
 
@@ -24,8 +26,12 @@ pub fn compress(
 ) -> Result<CompressionOutput, TokenFoldError> {
     #[cfg(feature = "tiktoken")]
     {
-        if let Ok(estimator) = crate::token_estimator::TiktokenEstimator::o200k_base() {
-            return compress_with_estimator(input, policy, &estimator);
+        static ESTIMATOR: OnceLock<Option<crate::token_estimator::TiktokenEstimator>> =
+            OnceLock::new();
+        if let Some(estimator) =
+            ESTIMATOR.get_or_init(|| crate::token_estimator::TiktokenEstimator::o200k_base().ok())
+        {
+            return compress_with_estimator(input, policy, estimator);
         }
     }
     compress_with_estimator(input, policy, &ByteHeuristicEstimator)
@@ -709,8 +715,8 @@ fn apply_lossy_reduction(
     let mut persisted_bytes = 0usize;
     let mut skipped_bytes = 0usize;
     let mut marker_count = 0usize;
-    for item in &outcome.dropped {
-        if let Some(probe) = &preview_probe {
+    if let Some(probe) = &preview_probe {
+        for item in &outcome.dropped {
             let would_store = probe
                 .store(&item.bytes, &policy.retrieval_namespace, Some(ttl_seconds))
                 .is_ok();
@@ -722,29 +728,38 @@ fn apply_lossy_reduction(
                         "json_prune produced a dropped item that isn't valid JSON: {e}"
                     ))
                 })?;
-                restore.insert(item.hash.clone(), original);
+                restore.insert(item.pointer.clone(), original);
             }
             // Whether or not the probe succeeded, `marker_count`/`persisted_bytes` stay at 0 —
             // nothing was REALLY stored, so the report must still honestly show `retrieval:
             // None` for a preview run; the probe only ever gates the projected OUTPUT/savings.
-            continue;
         }
-        let stored = store.as_ref().and_then(|s| {
-            s.store(&item.bytes, &policy.retrieval_namespace, Some(ttl_seconds))
-                .ok()
-        });
-        match stored {
-            Some(_marker) => {
-                persisted_bytes += item.bytes.len();
-                marker_count += 1;
-            }
-            None => {
+    } else {
+        let entries: Vec<_> = outcome
+            .dropped
+            .iter()
+            .map(|item| {
+                (
+                    item.bytes.as_slice(),
+                    policy.retrieval_namespace.as_str(),
+                    Some(ttl_seconds),
+                )
+            })
+            .collect();
+        let stored_all = store
+            .as_ref()
+            .is_some_and(|store| store.store_batch(&entries).is_ok());
+        if stored_all {
+            persisted_bytes = outcome.dropped.iter().map(|item| item.bytes.len()).sum();
+            marker_count = outcome.dropped.len();
+        } else {
+            for item in &outcome.dropped {
                 let original: Value = serde_json::from_slice(&item.bytes).map_err(|e| {
                     TokenFoldError::InternalError(format!(
                         "json_prune produced a dropped item that isn't valid JSON: {e}"
                     ))
                 })?;
-                restore.insert(item.hash.clone(), original);
+                restore.insert(item.pointer.clone(), original);
                 skipped_bytes += item.bytes.len();
             }
         }
@@ -761,9 +776,7 @@ fn apply_lossy_reduction(
     // silently emitting a larger payload than we started with. Status is decided BEFORE the
     // retrieval report is touched (below): on rollback, `bytes_out` reverts to the original
     // plaintext with zero `$tf_ref` markers in it, so the report must not claim any markers
-    // exist either, even though the underlying `store()` calls above already physically
-    // succeeded — those bytes are real but orphaned (nothing in the output references them),
-    // not a lie, but reporting them as live markers would be.
+    // exist either. Batched publication above ensures a refused set commits no new entries.
     //
     // `json_prune` has no concept of message roles/protected content -- it happily nominates a
     // system message or the latest user turn in an OpenAI/Anthropic `messages` array as prunable

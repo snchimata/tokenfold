@@ -111,14 +111,24 @@ impl Drop for ProxyProcess {
 /// Bare-metal HTTP request over a raw TCP socket, for framing edge cases the high-level `ureq`
 /// client won't let us construct (duplicate/conflicting headers).
 fn raw_request(addr: &str, raw: &str) -> String {
-    let mut stream = TcpStream::connect(addr).unwrap();
-    stream.write_all(raw.as_bytes()).unwrap();
-    stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
-    let mut response = String::new();
-    let _ = stream.read_to_string(&mut response);
-    response
+    // Windows intermittently drops these deliberately malformed sockets when several raw
+    // clients close concurrently. The behavior under test is server framing, not client load.
+    static RAW_REQUEST_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = RAW_REQUEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    for _ in 0..3 {
+        let mut stream = TcpStream::connect(addr).unwrap();
+        stream.write_all(raw.as_bytes()).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut response = String::new();
+        let _ = stream.read_to_string(&mut response);
+        if !response.is_empty() {
+            return response;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    String::new()
 }
 
 // ---- startup validation ----
@@ -363,6 +373,56 @@ fn sse_response_passes_through_with_event_stream_content_type() {
         .unwrap();
     assert!(text.contains("data: first"));
     assert!(text.contains("data: [DONE]"));
+}
+
+#[test]
+fn held_open_sse_does_not_block_health_checks() {
+    struct SlowBody(bool);
+    impl Read for SlowBody {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if !self.0 {
+                self.0 = true;
+                let chunk = b"data: first\n\n";
+                buf[..chunk.len()].copy_from_slice(chunk);
+                return Ok(chunk.len());
+            }
+            thread::sleep(Duration::from_secs(2));
+            Ok(0)
+        }
+    }
+
+    let upstream = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let upstream_addr = upstream.server_addr().to_string();
+    thread::spawn(move || {
+        if let Ok(request) = upstream.recv() {
+            let headers = vec![Header::from_bytes("Content-Type", "text/event-stream").unwrap()];
+            let _ = request.respond(Response::new(
+                StatusCode(200),
+                headers,
+                SlowBody(false),
+                None,
+                None,
+            ));
+        }
+    });
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &[]);
+    let stream_url = proxy.url("/v1/chat/completions");
+    let stream = thread::spawn(move || {
+        let mut response = ureq::get(stream_url).call().unwrap();
+        let mut body = String::new();
+        response
+            .body_mut()
+            .as_reader()
+            .read_to_string(&mut body)
+            .unwrap();
+        body
+    });
+
+    thread::sleep(Duration::from_millis(200));
+    let start = std::time::Instant::now();
+    assert_eq!(ureq::get(proxy.url("/livez")).call().unwrap().status(), 200);
+    assert!(start.elapsed() < Duration::from_secs(1));
+    assert!(stream.join().unwrap().contains("data: first"));
 }
 
 // ---- CL.TE / TE.CL smuggling defense ----

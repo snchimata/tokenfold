@@ -91,6 +91,8 @@ pub struct LossyOptions {
 pub struct DroppedItem {
     pub hash: String,
     pub bytes: Vec<u8>,
+    /// RFC 6901 pointer to the exact marker generated for this item.
+    pub pointer: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -126,7 +128,7 @@ pub fn prune(
     let value: Value = serde_json::from_slice(input)?;
 
     let mut arrays = Vec::new();
-    collect_eligible_arrays(&value, String::new(), &mut arrays);
+    collect_eligible_arrays(&value, String::new(), String::new(), &mut arrays);
     if arrays.is_empty() {
         return Ok(None);
     }
@@ -351,6 +353,7 @@ pub fn prune(
                     ),
                     bytes: serde_json::to_vec(&arrays[array_idx].items[item_idx])
                         .unwrap_or_default(),
+                    pointer: format!("{}/{}", arrays[array_idx].pointer, item_idx),
                 });
             }
         }
@@ -478,6 +481,7 @@ fn marker_json(hash: &str, namespace: &str) -> Value {
 
 struct EligibleArray {
     path: String,
+    pointer: String,
     items: Vec<Value>,
 }
 
@@ -490,17 +494,23 @@ struct EligibleArray {
 /// this cut. Must stay traversal-identical to [`rewrite_tree`] — both increment their cursor in
 /// lockstep over the same `Value`, which is how the two passes stay correlated without needing a
 /// separate stable identity per array instance.
-fn collect_eligible_arrays(value: &Value, path: String, out: &mut Vec<EligibleArray>) {
+fn collect_eligible_arrays(
+    value: &Value,
+    path: String,
+    pointer: String,
+    out: &mut Vec<EligibleArray>,
+) {
     match value {
         Value::Array(items) if items.len() >= MIN_ARRAY_LEN => {
             out.push(EligibleArray {
                 path,
+                pointer,
                 items: items.clone(),
             });
         }
         Value::Array(items) => {
-            for item in items {
-                collect_eligible_arrays(item, path.clone(), out);
+            for (index, item) in items.iter().enumerate() {
+                collect_eligible_arrays(item, path.clone(), format!("{pointer}/{index}"), out);
             }
         }
         Value::Object(map) => {
@@ -510,7 +520,8 @@ fn collect_eligible_arrays(value: &Value, path: String, out: &mut Vec<EligibleAr
                 } else {
                     format!("{path}.{k}")
                 };
-                collect_eligible_arrays(v, child_path, out);
+                let escaped = k.replace('~', "~0").replace('/', "~1");
+                collect_eligible_arrays(v, child_path, format!("{pointer}/{escaped}"), out);
             }
         }
         _ => {}
@@ -567,33 +578,18 @@ fn rewrite_tree(
     }
 }
 
-/// Puts specific dropped items back, keyed by content hash — the fail-closed half of the
+/// Puts specific dropped items back at their generated markers' JSON pointers — the fail-closed half of the
 /// contract (`pipeline::apply_lossy_reduction`): an item whose `RetrievalStore::store` call
 /// failed must not be silently lost, so the caller restores it here rather than leaving its
-/// `$tf_ref` marker in place. Recognizes exactly the marker shape [`marker_json`] builds; any
-/// other node (including one that merely looks similar) is left untouched.
+/// `$tf_ref` marker in place. Location identity keeps unrelated pre-existing markers untouched.
 pub fn revert_markers(json: &Value, restore: &std::collections::HashMap<String, Value>) -> Value {
-    if let Value::Object(map) = json
-        && map.len() == 1
-        && let Some(Value::Object(inner)) = map.get("$tf_ref")
-        && let Some(Value::String(hash)) = inner.get("hash")
-        && let Some(original) = restore.get(hash)
-    {
-        return original.clone();
-    }
-    match json {
-        Value::Array(items) => {
-            Value::Array(items.iter().map(|v| revert_markers(v, restore)).collect())
+    let mut out = json.clone();
+    for (pointer, original) in restore {
+        if let Some(marker) = out.pointer_mut(pointer) {
+            *marker = original.clone();
         }
-        Value::Object(map) => {
-            let mut out = Map::new();
-            for (k, v) in map {
-                out.insert(k.clone(), revert_markers(v, restore));
-            }
-            Value::Object(out)
-        }
-        _ => json.clone(),
     }
+    out
 }
 
 /// Minimal dot-separated path match (exact equality, plus one fail-safe fallback) —
@@ -1088,7 +1084,7 @@ mod tests {
         let bytes = serde_json::to_vec(&input).unwrap();
         let mut arrays = Vec::new();
         let value: Value = serde_json::from_slice(&bytes).unwrap();
-        collect_eligible_arrays(&value, String::new(), &mut arrays);
+        collect_eligible_arrays(&value, String::new(), String::new(), &mut arrays);
         assert_eq!(
             arrays.len(),
             1,
@@ -1110,7 +1106,7 @@ mod tests {
         let mut restore = std::collections::HashMap::new();
         let first = &outcome.dropped[0];
         let original: Value = serde_json::from_slice(&first.bytes).unwrap();
-        restore.insert(first.hash.clone(), original.clone());
+        restore.insert(first.pointer.clone(), original.clone());
 
         let reverted = revert_markers(&outcome.json, &restore);
         let s = serde_json::to_string(&reverted).unwrap();
@@ -1119,6 +1115,31 @@ mod tests {
         assert_eq!(s.matches("$tf_ref").count(), remaining_markers);
         let arr = reverted["items"].as_array().unwrap();
         assert!(arr.contains(&original));
+    }
+
+    #[test]
+    fn revert_markers_does_not_replace_a_preexisting_matching_reference() {
+        let item = serde_json::json!({"n": 1, "pad": padding()});
+        let item_bytes = serde_json::to_vec(&item).unwrap();
+        let hash = hex_sha256(&item_bytes);
+        let existing = marker_json(&hash, "default");
+        let input = serde_json::json!({"existing": existing, "items": vec![item; 10]});
+        let outcome = prune(
+            &serde_json::to_vec(&input).unwrap(),
+            &opts(0.1),
+            &ByteHeuristicEstimator,
+        )
+        .unwrap()
+        .unwrap();
+        let first = &outcome.dropped[0];
+        let mut restore = std::collections::HashMap::new();
+        restore.insert(
+            first.pointer.clone(),
+            serde_json::from_slice(&first.bytes).unwrap(),
+        );
+
+        let reverted = revert_markers(&outcome.json, &restore);
+        assert_eq!(reverted["existing"], input["existing"]);
     }
 
     #[test]
@@ -1229,7 +1250,7 @@ mod tests {
         let bytes = serde_json::to_vec(&input).unwrap();
         let value: Value = serde_json::from_slice(&bytes).unwrap();
         let mut arrays = Vec::new();
-        collect_eligible_arrays(&value, String::new(), &mut arrays);
+        collect_eligible_arrays(&value, String::new(), String::new(), &mut arrays);
         let mut paths: Vec<&str> = arrays.iter().map(|a| a.path.as_str()).collect();
         paths.sort_unstable();
         assert_eq!(paths, vec!["a", "b.c"]);

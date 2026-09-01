@@ -16,6 +16,7 @@
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
@@ -42,13 +43,37 @@ pub struct ProxyConfig {
 }
 
 pub fn run(config: &ProxyConfig, server: &tiny_http::Server) {
-    for request in server.incoming_requests() {
-        let start = Instant::now();
-        let method = request.method().as_str().to_string();
-        let path = request.url().split('?').next().unwrap_or("").to_string();
-        let status = handle(config, request);
-        log_access(&method, &path, status, start.elapsed());
-    }
+    let workers = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(2)
+        .clamp(2, 16);
+    let (tx, rx) = mpsc::sync_channel::<Request>(workers * 2);
+    let rx = Arc::new(Mutex::new(rx));
+
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let rx = Arc::clone(&rx);
+            scope.spawn(move || {
+                loop {
+                    let request = {
+                        let receiver = rx.lock().unwrap_or_else(|e| e.into_inner());
+                        receiver.recv()
+                    };
+                    let Ok(request) = request else { break };
+                    let start = Instant::now();
+                    let method = request.method().as_str().to_string();
+                    let path = request.url().split('?').next().unwrap_or("").to_string();
+                    let status = handle(config, request);
+                    log_access(&method, &path, status, start.elapsed());
+                }
+            });
+        }
+        for request in server.incoming_requests() {
+            if tx.send(request).is_err() {
+                break;
+            }
+        }
+    });
 }
 
 fn handle(config: &ProxyConfig, mut request: Request) -> u16 {

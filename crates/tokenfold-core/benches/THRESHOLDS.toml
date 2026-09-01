@@ -4,10 +4,9 @@
 # record. Thresholds carry ~1.3-1.5x headroom over the measured baseline for runner variance;
 # tighten once `bench-regression` has run on a dedicated, fixed-spec CI runner.
 #
-# p95 latency — dominated by TiktokenEstimator::o200k_base() reloading BPE ranks on every
-# `compress()` call (the public API doesn't cache the estimator across calls) plus tiktoken-rs's
-# reference BPE merge implementation; not a benchmark artifact. Worth revisiting if p95 becomes
-# release-blocking in practice.
+# p95 latency uses the cached `o200k_base` estimator.
+# immutable tokenizer data is cached after first use, and benchmark warmup excludes that load.
+# The remaining cost is tiktoken-rs's reference BPE merge implementation.
 command_output_under_1mb_p95_ms = 800.0   # measured 528.163
 structured_json_under_2mb_p95_ms = 2500.0 # measured 1693.855
 # Allocation (total bytes passed to GlobalAlloc::alloc during one compress() call, not peak RSS)

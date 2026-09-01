@@ -55,7 +55,23 @@ git switch main && git pull
 git tag -a v0.4.1 -m "v0.4.1" && git push origin v0.4.1   # fires release.yml
 # wait for the GitHub Release to exist, then:
 gh workflow run publish-packages.yml -f version=0.4.1
+
+# After the workflow succeeds, verify every registry artifact (replace VERSION).
+VERSION=0.4.1
+for crate in tokenfold-core tokenfold-output tokenfold-learn tokenfold-cli; do
+  path="${crate:0:2}/${crate:2:2}/$crate"
+  curl -sS "https://index.crates.io/$path" | jq -e --arg v "$VERSION" 'select(.vers == $v)' >/dev/null
+done
+curl -sS https://pypi.org/pypi/tokenfold/json | jq -e --arg v "$VERSION" '.releases[$v] | length > 0' >/dev/null
+for package in tokenfold @tokenfold/cli-darwin-x64 @tokenfold/cli-darwin-arm64 @tokenfold/cli-linux-x64 @tokenfold/cli-linux-arm64 @tokenfold/cli-win32-x64; do
+  encoded=${package/\//%2f}
+  test "$(curl -sS "https://registry.npmjs.org/$encoded" | jq -r '.["dist-tags"].latest')" = "$VERSION"
+done
 ```
+
+Use the sparse crates.io index above rather than its JSON API: the JSON API
+requires a policy-compliant `User-Agent` and may return HTTP 200 with an error
+body to a bare `curl`, which can look like a missing release.
 
 Release tags are protected against deletion and force-moves: a published tag is
 immutable, because `publish-packages.yml` builds registry artifacts from the

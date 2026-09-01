@@ -14,8 +14,11 @@
 //! scope cut.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -128,55 +131,71 @@ impl RetrievalStore {
         namespace: &str,
         ttl_seconds: Option<u64>,
     ) -> Result<RetrievalMarker, TokenFoldError> {
-        if redaction::contains_secret(bytes) {
-            return Err(TokenFoldError::SafetyViolation(
-                "refusing to persist bytes that match a secret-redaction pattern".to_string(),
-            ));
-        }
-        if !is_safe_path_component(namespace) {
-            return Err(TokenFoldError::InvalidInput(format!(
-                "invalid retrieval namespace: {namespace:?}"
-            )));
-        }
+        self.store_batch(&[(bytes, namespace, ttl_seconds)])
+            .map(|mut markers| markers.remove(0))
+    }
 
-        let hash = hex_sha256(bytes);
-        let meta = EntryMeta {
-            stored_at_unix: now_unix(),
-            ttl_seconds,
-            bytes: bytes.len(),
-        };
+    /// Stores a set as one publication unit. On failure, no newly-created entry remains.
+    pub fn store_batch(
+        &self,
+        entries: &[(&[u8], &str, Option<u64>)],
+    ) -> Result<Vec<RetrievalMarker>, TokenFoldError> {
+        let prepared: Vec<_> = entries
+            .iter()
+            .map(|(bytes, namespace, ttl_seconds)| {
+                validate_store_input(bytes, namespace)?;
+                let hash = hex_sha256(bytes);
+                let meta = EntryMeta {
+                    stored_at_unix: now_unix(),
+                    ttl_seconds: *ttl_seconds,
+                    bytes: bytes.len(),
+                };
+                let marker = RetrievalMarker {
+                    hash,
+                    alg: "sha256",
+                    namespace: (*namespace).to_string(),
+                    bytes: bytes.len(),
+                    ttl_seconds: *ttl_seconds,
+                };
+                Ok((bytes.to_vec(), meta, marker))
+            })
+            .collect::<Result<_, TokenFoldError>>()?;
 
         match self {
             RetrievalStore::Memory(map) => {
                 let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
-                guard.insert(
-                    (namespace.to_string(), hash.clone()),
-                    MemoryEntry {
-                        bytes: bytes.to_vec(),
-                        meta,
-                    },
-                );
+                for (bytes, meta, marker) in &prepared {
+                    guard.insert(
+                        (marker.namespace.clone(), marker.hash.clone()),
+                        MemoryEntry {
+                            bytes: bytes.clone(),
+                            meta: meta.clone(),
+                        },
+                    );
+                }
             }
             RetrievalStore::Filesystem { root } => {
-                let dir = root.join(namespace);
-                std::fs::create_dir_all(&dir)?;
-                std::fs::write(dir.join(format!("{hash}.bin")), bytes)?;
-                let meta_json = serde_json::to_vec_pretty(&meta).map_err(|e| {
-                    TokenFoldError::InternalError(format!(
-                        "failed to encode retrieval metadata: {e}"
-                    ))
-                })?;
-                std::fs::write(dir.join(format!("{hash}.meta.json")), meta_json)?;
+                std::fs::create_dir_all(root)?;
+                let _lock = lock_store(root)?;
+                let mut created = Vec::new();
+                for (bytes, meta, marker) in &prepared {
+                    match store_filesystem_entry(root, bytes, meta, marker) {
+                        Ok(true) => created.push((marker.namespace.clone(), marker.hash.clone())),
+                        Ok(false) => {}
+                        Err(error) => {
+                            for (namespace, hash) in created {
+                                let dir = root.join(namespace);
+                                std::fs::remove_file(dir.join(format!("{hash}.meta.json"))).ok();
+                                std::fs::remove_file(dir.join(format!("{hash}.bin"))).ok();
+                            }
+                            return Err(error);
+                        }
+                    }
+                }
             }
         }
 
-        Ok(RetrievalMarker {
-            hash,
-            alg: "sha256",
-            namespace: namespace.to_string(),
-            bytes: bytes.len(),
-            ttl_seconds,
-        })
+        Ok(prepared.into_iter().map(|(_, _, marker)| marker).collect())
     }
 
     /// Looks up `hash` in `namespace`. Never returns a partial result: exactly one of
@@ -196,6 +215,12 @@ impl RetrievalStore {
                 }
             }
             RetrievalStore::Filesystem { root } => {
+                if !root.is_dir() {
+                    return RetrievalOutcome::Missing;
+                }
+                let Ok(_lock) = lock_store(root) else {
+                    return RetrievalOutcome::Missing;
+                };
                 let dir = root.join(namespace);
                 let meta_path = dir.join(format!("{hash}.meta.json"));
                 let data_path = dir.join(format!("{hash}.bin"));
@@ -262,6 +287,7 @@ impl RetrievalStore {
                 if !root.is_dir() {
                     return Ok(outcome);
                 }
+                let _lock = lock_store(root)?;
 
                 let mut live: Vec<(PathBuf, PathBuf, EntryMeta)> = Vec::new();
                 for ns_entry in std::fs::read_dir(root)? {
@@ -315,6 +341,111 @@ impl RetrievalStore {
             }
         }
     }
+}
+
+fn validate_store_input(bytes: &[u8], namespace: &str) -> Result<(), TokenFoldError> {
+    if redaction::contains_secret(bytes) {
+        return Err(TokenFoldError::SafetyViolation(
+            "refusing to persist bytes that match a secret-redaction pattern".to_string(),
+        ));
+    }
+    if !is_safe_path_component(namespace) {
+        return Err(TokenFoldError::InvalidInput(format!(
+            "invalid retrieval namespace: {namespace:?}"
+        )));
+    }
+    Ok(())
+}
+
+fn lock_store(root: &Path) -> Result<File, TokenFoldError> {
+    std::fs::create_dir_all(root)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(root.join(".tokenfold.lock"))?;
+    file.lock()?;
+    Ok(file)
+}
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_sidecar(path: &Path, label: &str) -> PathBuf {
+    let id = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("entry");
+    path.with_file_name(format!(".{name}.{}.{}.{label}", std::process::id(), id))
+}
+
+fn stage_file(path: &Path, bytes: &[u8]) -> Result<PathBuf, TokenFoldError> {
+    let temp = unique_sidecar(path, "tmp");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    if let Err(error) = file.write_all(bytes).and_then(|_| file.sync_all()) {
+        std::fs::remove_file(&temp).ok();
+        return Err(error.into());
+    }
+    Ok(temp)
+}
+
+fn publish_file(temp: &Path, destination: &Path) -> Result<(), TokenFoldError> {
+    let backup = unique_sidecar(destination, "bak");
+    let had_destination = destination.exists();
+    if had_destination {
+        std::fs::rename(destination, &backup)?;
+    }
+    if let Err(error) = std::fs::rename(temp, destination) {
+        if had_destination {
+            std::fs::rename(&backup, destination).ok();
+        }
+        std::fs::remove_file(temp).ok();
+        return Err(error.into());
+    }
+    if had_destination {
+        std::fs::remove_file(backup).ok();
+    }
+    Ok(())
+}
+
+fn store_filesystem_entry(
+    root: &Path,
+    bytes: &[u8],
+    meta: &EntryMeta,
+    marker: &RetrievalMarker,
+) -> Result<bool, TokenFoldError> {
+    let dir = root.join(&marker.namespace);
+    std::fs::create_dir_all(&dir)?;
+    let data_path = dir.join(format!("{}.bin", marker.hash));
+    let meta_path = dir.join(format!("{}.meta.json", marker.hash));
+    let existed = data_path.is_file() && meta_path.is_file();
+    if !existed {
+        std::fs::remove_file(&data_path).ok();
+        std::fs::remove_file(&meta_path).ok();
+    }
+    let meta_json = serde_json::to_vec_pretty(meta).map_err(|e| {
+        TokenFoldError::InternalError(format!("failed to encode retrieval metadata: {e}"))
+    })?;
+    let data_temp = stage_file(&data_path, bytes)?;
+    let meta_temp = match stage_file(&meta_path, &meta_json) {
+        Ok(path) => path,
+        Err(error) => {
+            std::fs::remove_file(data_temp).ok();
+            return Err(error);
+        }
+    };
+    if let Err(error) = publish_file(&data_temp, &data_path) {
+        std::fs::remove_file(meta_temp).ok();
+        return Err(error);
+    }
+    if let Err(error) = publish_file(&meta_temp, &meta_path) {
+        if !existed {
+            std::fs::remove_file(data_path).ok();
+        }
+        return Err(error);
+    }
+    Ok(!existed)
 }
 
 fn is_expired(meta: &EntryMeta) -> bool {
@@ -572,6 +703,56 @@ mod tests {
         assert!(matches!(err, TokenFoldError::SafetyViolation(_)));
         // Nothing should have been written to disk.
         assert!(!root.join("default").exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn filesystem_batch_failure_commits_no_new_entries() {
+        let root = temp_root("batch_rollback");
+        let store = RetrievalStore::filesystem(&root);
+        let entries = [
+            (b"safe first".as_slice(), "default", None),
+            (
+                b"Authorization: Bearer abcDEF123.token-value".as_slice(),
+                "default",
+                None,
+            ),
+        ];
+        assert!(store.store_batch(&entries).is_err());
+        assert_eq!(
+            store.retrieve(&hex_sha256(b"safe first"), "default"),
+            RetrievalOutcome::Missing
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn filesystem_store_and_gc_do_not_expose_partial_entries() {
+        let root = temp_root("store_gc_race");
+        let store = std::sync::Arc::new(RetrievalStore::filesystem(&root));
+        let writer = {
+            let store = std::sync::Arc::clone(&store);
+            std::thread::spawn(move || {
+                for i in 0..50 {
+                    let bytes = format!("entry-{i}-{}", "x".repeat(256));
+                    let marker = store.store(bytes.as_bytes(), "default", None).unwrap();
+                    assert_eq!(
+                        store.retrieve(&marker.hash, "default"),
+                        RetrievalOutcome::Found(bytes.into_bytes())
+                    );
+                }
+            })
+        };
+        let collector = {
+            let store = std::sync::Arc::clone(&store);
+            std::thread::spawn(move || {
+                for _ in 0..50 {
+                    store.gc(None).unwrap();
+                }
+            })
+        };
+        writer.join().unwrap();
+        collector.join().unwrap();
         std::fs::remove_dir_all(&root).ok();
     }
 

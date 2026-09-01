@@ -8,6 +8,7 @@ is no claim to check.
 """
 
 import json
+import hashlib
 import re
 from pathlib import Path
 
@@ -18,6 +19,7 @@ import tokenfold
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
 FIXTURE = REPO_ROOT / "examples" / "api_response.json"
+METRICS = REPO_ROOT / "tests" / "fixtures" / "readme_metrics.json"
 
 CLAIM = re.compile(
     r"The bundled (\d+)-record API response reports ([\d,]+) → ([\d,]+) tokens,\s+"
@@ -29,8 +31,7 @@ def test_readme_fixture_claim_matches_measurement():
     if not (README.is_file() and FIXTURE.is_file()):
         pytest.skip("repository files not present; nothing to check")
     match = CLAIM.search(README.read_text(encoding="utf-8"))
-    if match is None:
-        pytest.skip("README no longer publishes the fixture claim")
+    assert match is not None, "README fixture claim is missing"
 
     source = FIXTURE.read_text(encoding="utf-8")
     report = tokenfold.compress(source, format=tokenfold.InputFormat.JSON).report
@@ -51,6 +52,10 @@ def test_readme_fixture_claim_matches_measurement():
         f"README claim {claimed} no longer matches measurement {measured}; "
         "update README.md (and re-run examples/quickstart.ipynb) in this change"
     )
+    manifest = json.loads(METRICS.read_text(encoding="utf-8"))
+    provenance = manifest["compression"]["api_responses"]
+    assert provenance["reduction_pct"] == claimed["pct"]
+    assert hashlib.sha256(FIXTURE.read_bytes()).hexdigest() == provenance["sha256"]
 
 
 INCIDENT_FIXTURE = REPO_ROOT / "examples" / "incident_feed.json"
@@ -65,8 +70,7 @@ def test_readme_incident_table_matches_measurement(tmp_path):
     if not (README.is_file() and INCIDENT_FIXTURE.is_file()):
         pytest.skip("repository files not present; nothing to check")
     claimed = INCIDENT_ROW.findall(README.read_text(encoding="utf-8"))
-    if not claimed:
-        pytest.skip("README no longer publishes the incident-feed table")
+    assert claimed, "README incident-feed table is missing"
 
     source = INCIDENT_FIXTURE.read_text(encoding="utf-8")
     measured = []
@@ -95,3 +99,22 @@ def test_readme_incident_table_matches_measurement(tmp_path):
         f"README incident-feed table {claimed} no longer matches measurement {measured}; "
         "update README.md (and re-run examples/quickstart.ipynb) in this change"
     )
+
+
+def test_every_headline_metric_has_versioned_provenance():
+    if not README.is_file():
+        pytest.skip("repository files not present; nothing to check")
+    manifest = json.loads(METRICS.read_text(encoding="utf-8"))
+    readme = README.read_text(encoding="utf-8")
+    compression = manifest["compression"]
+    for name in ("search_rag", "repetitive_json", "api_responses", "tool_schemas"):
+        assert f"{compression[name]['reduction_pct']:.1f}% fewer tokens" in readme
+    for budget, values in manifest["select"]["budgets"].items():
+        ratio = str(int(float(budget) * 100))
+        row = re.compile(
+            rf"\| {ratio}% \| \*\*{values['task_success']:.1f}%\*\* \| "
+            rf"{values['bm25']:.1f}% \| \*\*\+{values['lift']:.1f}%\*\* \|"
+        )
+        assert row.search(readme), f"README Select metric row for {ratio}% is missing or stale"
+    revision = manifest["select"]["model_revision"]
+    assert revision in manifest["select"]["source"]
