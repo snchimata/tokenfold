@@ -1,287 +1,105 @@
 import { binaryPath } from "./binary.js";
 import { TokenFoldProcessError } from "./errors.js";
 import { run, type Input, type ProcessResult, type RunOptions } from "./process.js";
-
 export { binaryPath, run, TokenFoldProcessError };
 export type { Input, ProcessResult, RunOptions };
 
-export type CompressionMode = "conservative" | "balanced" | "aggressive";
-export type TaskScope =
-  | "all"
-  | "general"
-  | "code_review"
-  | "change_summary"
-  | "debugging"
-  | "generation"
-  | "api_overview"
-  | "retrieval_qa"
-  | "agent_history";
-
-/** Selection backend for opt-in lossy pruning. `heuristic` is the only Phase 1 path. */
-export type LossyPath = "heuristic";
-
+export type Preset = "conservative" | "balanced" | "aggressive";
+export type OutputEncoding = "json" | "toon";
+export type InputFormat = "auto" | "openai" | "anthropic" | "json" | "text" | "command" | "diff";
+export type DecodeFormat = "auto" | "json" | "toon" | "text";
+export interface PruningPolicy { keepRatio?: number; preservePaths?: readonly string[]; retrievalStore?: string; retrievalNamespace?: string }
 export interface CompressionOptions {
-  format?: "auto" | "openai" | "anthropic" | "json" | "text" | "command" | "diff";
-  mode?: CompressionMode;
-  targetTokens?: number;
-  disable?: readonly string[];
-  taskScope?: TaskScope;
-  experimental?: boolean;
-  storeOriginals?: boolean;
-  retrieveNamespace?: string;
-  /**
-   * Opt-in LOSSY JSON array-item pruning (`--lossy`): drops whole array items to hit a token
-   * budget instead of only restructuring them. Generic JSON only — on any other format the run
-   * is a no-op and `json_prune` comes back as `status: "skipped"` with
-   * `skipped_reason: "not_applicable_to_format"`, persisting nothing. Dropped items are replaced
-   * by `$tf_ref` markers and stay recoverable via {@link retrieve}; pruning needs a durable
-   * filesystem retrieval store, so pass `configPath` when you want one other than the default.
-   */
-  lossy?: LossyPath;
-  /**
-   * `--lossy-ratio`: a best-effort selection hint (0.0..=1.0), not an enforced budget — the
-   * achieved ratio differs by design. Use `targetTokens` for a real ceiling.
-   */
-  lossyRatio?: number;
-  /** `--lossy-preserve`: dot-separated paths (e.g. `data.results`) whose arrays are never pruned. */
-  lossyPreserve?: readonly string[];
-  configPath?: string;
-  signal?: AbortSignal;
+  format?: InputFormat; preset?: Preset; targetTokens?: number; requireTarget?: boolean;
+  encoding?: OutputEncoding; pruning?: PruningPolicy; configPath?: string; signal?: AbortSignal;
 }
-
-export interface EstimatorInfo {
-  backend: string;
-  model: string | null;
-  is_exact: boolean;
-}
-
-export interface BudgetReport {
-  target_tokens: number | null;
-  protected_floor: number;
-  achieved_tokens: number;
-}
-
-export interface QualityReport {
-  eval_profile_id: string;
-  task_scope: string;
-  validated_ratio_band: string | null;
-  quality_retention: number;
-  contrastive_failure_rate: number;
-  gate_passed: boolean;
-}
-
-export interface Warning {
-  code: string;
-  severity: "info" | "warn" | "critical";
-  transform: string | null;
-  message: string;
-}
-
+export interface EstimatorInfo { backend: string; model: string | null; is_exact: boolean }
+export interface Warning { code: string; severity: "info" | "warn" | "critical"; transform: string | null; message: string }
 export interface TransformReport {
-  id: string;
-  version: string;
-  tokens_before: number;
-  tokens_after: number;
-  saved_tokens: number;
-  savings_ratio: number;
-  elapsed_micros: number | null;
-  status: "applied" | "no_op" | "skipped" | "rolled_back";
-  skipped_reason: string | null;
-  warnings: readonly Warning[];
+  id: string; version: string; tokens_before: number; tokens_after: number; saved_tokens: number;
+  savings_ratio: number; elapsed_micros: number | null; status: "applied" | "no_op" | "skipped" | "rolled_back";
+  skipped_reason: string | null; warnings: readonly Warning[];
 }
-
-export interface CacheReport {
-  boundary_kind: string | null;
-  protected_bytes: number;
-  prefix_byte_identical: boolean;
-  warnings: readonly Warning[];
+export interface BudgetReport { status: "not_requested" | "met" | "best_effort" | "unreachable"; target_tokens: number | null; protected_floor: number; achieved_tokens: number }
+export interface EncodingReport { codec: string; version: string; roundtrip_verified: boolean; tokens_before: number; tokens_after: number; token_delta: number; warnings: readonly Warning[] }
+export interface PruningReport { requested: boolean; applied: boolean; preview: boolean; candidate_items: number; retained_items: number; pruned_items: number; evidence_refs: number; preserve_paths: readonly string[] }
+export interface QualityReport { eval_profile_id: string; task_scope: string; validated_ratio_band: string | null; quality_retention: number | null; contrastive_failure_rate: number | null; gate_passed: boolean }
+export interface RetrievalReport { store_namespace: string; hash_algorithm: string; marker_count: number; ttl_seconds: number | null; persisted_original_bytes: number; skipped_original_bytes: number }
+export interface PipelineStageReport { id: string; version: string | null; input_bytes: number | null; output_bytes: number | null; saved_bytes: number | null; input_tokens: number | null; output_tokens: number | null; saved_tokens: number | null; estimator: EstimatorInfo | null; status: string; duration_ms: number | null; bypass_reason: string | null; provenance: string; recoverability: string; evidence_ref: string | null }
+export interface PipelineReport { raw_input_bytes: number | null; raw_input_tokens: number | null; final_output_bytes: number; final_output_tokens: number; total_saved_tokens: number | null; raw_capture: string; upstream_recoverability: string; stages: readonly PipelineStageReport[] }
+export interface CompressionReceipt {
+  schema_version: string; status: "compressed" | "passthrough"; original_tokens: number;
+  compressed_tokens: number; saved_tokens: number; savings_ratio: number; savings_pct: number;
+  estimator: EstimatorInfo; preset: Preset; format: string; output_encoding: string; task_scope: string;
+  request_id: string | null; pipeline: PipelineReport | null; quality: QualityReport | null;
+  budget: BudgetReport | null; encoding: EncodingReport | null; pruning: PruningReport | null;
+  retrieval: RetrievalReport | null; transforms: readonly TransformReport[]; warnings: readonly Warning[];
+  cache: unknown; output_savings: unknown; bypass: unknown; command: unknown; ledger: unknown;
 }
-
-export interface RetrievalReport {
-  store_namespace: string;
-  hash_algorithm: string;
-  marker_count: number;
-  ttl_seconds: number | null;
-  persisted_original_bytes: number;
-  skipped_original_bytes: number;
+export type CompressionReport = CompressionReceipt;
+export interface CompressionResult { payload: Uint8Array; readonly text: string; report: CompressionReceipt }
+export class BudgetUnmetError extends Error {
+  readonly receipt: CompressionReceipt;
+  constructor(receipt: CompressionReceipt) { super(`token budget unmet: achieved ${receipt.compressed_tokens} tokens`); this.name = "BudgetUnmetError"; this.receipt = receipt; }
 }
-
-export interface OutputSavingsReport {
-  profile: string;
-  estimated_output_tokens_saved: number | null;
-  measured_output_tokens_saved: number | null;
-  provenance: string;
-}
-
-export interface BypassReport {
-  reason: string;
-  source: string;
-}
-
-export interface CommandReport {
-  command_family: string | null;
-  child_exit_code: number | null;
-  duration_ms: number;
-  raw_output_bytes: number;
-  stdout_bytes: number;
-  stderr_bytes: number;
-  stderr_mode: string;
-  stderr_truncated: boolean;
-  compressed_output_bytes: number;
-  filter_pack_id: string | null;
-  filter_version: string | null;
-  never_worse_applied: boolean;
-  bypass_reason: string | null;
-}
-
-export interface LedgerReport {
-  recorded: boolean;
-  scope: string | null;
-  project_hash: string | null;
-  record_id: string | null;
-}
-
-export interface CompressionReport {
-  schema_version: string;
-  original_tokens: number;
-  compressed_tokens: number;
-  saved_tokens: number;
-  savings_ratio: number;
-  savings_pct: number;
-  estimator: EstimatorInfo;
-  status: "compressed" | "passthrough" | "best_effort" | "unreachable_target";
-  mode: string;
-  format: string;
-  task_scope: string;
-  request_id: string | null;
-  quality: QualityReport | null;
-  budget: BudgetReport | null;
-  cache: CacheReport | null;
-  retrieval: RetrievalReport | null;
-  output_savings: OutputSavingsReport | null;
-  bypass: BypassReport | null;
-  command: CommandReport | null;
-  ledger: LedgerReport | null;
-  transforms: readonly TransformReport[];
-  warnings: readonly Warning[];
-}
-
-export interface CompressionResult {
-  payload: Uint8Array;
-  report: CompressionReport;
-}
-
 function argumentsFor(command: "compress" | "inspect", options: CompressionOptions): string[] {
-  // The `inspect` subcommand has no --lossy flags of its own; the CLI's lossy preview is
-  // `compress --dry-run`, which routes to the same code path and, exactly like `inspect --json`,
-  // writes the report to stdout and no payload. So a lossy inspect() becomes that instead.
-  const wantsLossy =
-    options.lossy !== undefined ||
-    options.lossyRatio !== undefined ||
-    (options.lossyPreserve?.length ?? 0) > 0;
-  const previewLossy = command === "inspect" && wantsLossy;
-  const args = previewLossy ? ["compress", "--json", "--dry-run"] : [command, "--json"];
-  const compressing = command === "compress" || previewLossy;
+  const args = [command, "--receipt-format", "json"];
   if (options.format) args.push("--format", options.format);
-  if (options.mode) args.push("--mode", options.mode);
+  if (options.preset) args.push("--preset", options.preset);
   if (options.targetTokens !== undefined) args.push("--target-tokens", String(options.targetTokens));
-  if (options.disable?.length && compressing) args.push("--disable", options.disable.join(","));
-  if (options.taskScope) args.push("--task-scope", options.taskScope);
-  if (options.experimental) args.push("--experimental");
-  if (options.storeOriginals && compressing) args.push("--store-originals");
-  if (options.retrieveNamespace && compressing) {
-    args.push("--retrieve-namespace", options.retrieveNamespace);
-  }
-  if (wantsLossy && compressing) {
-    // `--lossy-ratio`/`--lossy-preserve` are `requires = "lossy"` in the CLI. Forward them even
-    // when `lossy` is unset rather than dropping them: silently ignoring a pruning-aggression
-    // knob is worse than the CLI's own "the following required arguments were not provided".
-    if (options.lossy) args.push("--lossy", options.lossy);
-    if (options.lossyRatio !== undefined) args.push("--lossy-ratio", String(options.lossyRatio));
-    for (const path of options.lossyPreserve ?? []) args.push("--lossy-preserve", path);
+  if (options.requireTarget) args.push("--require-target");
+  if (options.encoding) args.push("--encoding", options.encoding);
+  if (options.pruning) {
+    args.push("--prune");
+    if (options.pruning.keepRatio !== undefined) args.push("--keep-ratio", String(options.pruning.keepRatio));
+    for (const path of options.pruning.preservePaths ?? []) args.push("--preserve", path);
+    if (options.pruning.retrievalStore) args.push("--retrieval-store", options.pruning.retrievalStore);
+    if (options.pruning.retrievalNamespace) args.push("--retrieval-namespace", options.pruning.retrievalNamespace);
   }
   if (options.configPath) args.push("--config", options.configPath);
   return args;
 }
-
-function parseReport(bytes: Uint8Array, result: ProcessResult): CompressionReport {
-  try {
-    return JSON.parse(Buffer.from(bytes).toString("utf8")) as CompressionReport;
-  } catch (cause) {
-    throw new TokenFoldProcessError("tokenfold returned an invalid JSON report", {
-      code: "invalid_report",
-      exitCode: result.exitCode,
-      signal: result.signal,
-      stderr: result.stderr,
-      cause,
-    });
-  }
+function parseReceipt(bytes: Uint8Array, result: ProcessResult): CompressionReceipt {
+  const text = Buffer.from(bytes).toString("utf8");
+  const json = text.split("\ntokenfold:", 1)[0] ?? "";
+  try { return JSON.parse(json) as CompressionReceipt; }
+  catch (cause) { throw new TokenFoldProcessError("tokenfold returned an invalid JSON receipt", { code: "invalid_report", exitCode: result.exitCode, signal: result.signal, stderr: result.stderr, cause }); }
 }
-
-function throwIfFailed(result: ProcessResult): void {
-  if (result.exitCode === 0) return;
-  throw new TokenFoldProcessError(`tokenfold exited with status ${result.exitCode ?? result.signal}`, {
-    code: "tokenfold_exit",
-    exitCode: result.exitCode,
-    signal: result.signal,
-    stderr: result.stderr,
-  });
+function optionsFor(input: Input | undefined, signal?: AbortSignal): RunOptions {
+  const options: RunOptions = { env: { TOKENFOLD_ANALYTICS_ENABLED: "false" } };
+  if (input !== undefined) options.stdin = input;
+  if (signal) options.signal = signal;
+  return options;
 }
-
-async function execute(
-  command: "compress" | "inspect",
-  input: Input,
-  options: CompressionOptions,
-): Promise<CompressionResult> {
-  const runOptions: RunOptions = {
-    stdin: input,
-    env: { TOKENFOLD_ANALYTICS_ENABLED: "false" },
-  };
-  if (options.signal) runOptions.signal = options.signal;
-  const result = await run(argumentsFor(command, options), runOptions);
-  throwIfFailed(result);
-
-  const reportBytes = command === "compress" ? result.stderr : result.stdout;
-  return {
-    payload: command === "compress" ? result.stdout : Uint8Array.from(Buffer.from(input)),
-    report: parseReport(reportBytes, result),
-  };
+function withText(payload: Uint8Array, report: CompressionReceipt): CompressionResult {
+  return { payload, report, get text() { return new TextDecoder("utf-8", { fatal: true }).decode(payload); } };
 }
-
-export function compress(input: Input, options: CompressionOptions = {}): Promise<CompressionResult> {
-  return execute("compress", input, options);
+export async function compress(input: Input, options: CompressionOptions = {}): Promise<CompressionResult> {
+  const result = await run(argumentsFor("compress", options), optionsFor(input, options.signal));
+  if (result.exitCode !== 0 && result.exitCode !== 7) throwProcess(result);
+  const receipt = parseReceipt(result.stderr, result);
+  if (result.exitCode === 7) throw new BudgetUnmetError(receipt);
+  return withText(result.stdout, receipt);
 }
-
-export function inspect(input: Input, options: CompressionOptions = {}): Promise<CompressionResult> {
-  return execute("inspect", input, options);
+export async function inspect(input: Input, options: CompressionOptions = {}): Promise<CompressionReceipt> {
+  const result = await run(argumentsFor("inspect", options), optionsFor(input, options.signal));
+  if (result.exitCode !== 0 && result.exitCode !== 7) throwProcess(result);
+  const receipt = parseReceipt(result.stdout, result);
+  if (result.exitCode === 7) throw new BudgetUnmetError(receipt);
+  return receipt;
 }
-
-export interface RetrieveOptions {
-  /** `--retrieve-namespace`: the namespace the item was stored under. */
-  namespace?: string;
-  configPath?: string;
-  signal?: AbortSignal;
+export async function decode(input: Input, options: { from?: DecodeFormat; signal?: AbortSignal } = {}): Promise<Uint8Array> {
+  const args = ["decode"]; if (options.from) args.push("--from", options.from);
+  const result = await run(args, optionsFor(input, options.signal)); if (result.exitCode !== 0) throwProcess(result); return result.stdout;
 }
-
-/**
- * Restores the original bytes of something a lossy run dropped, or a `storeOriginals` run saved,
- * mirroring `tokenfold retrieve`. `reference` is a raw hex SHA-256 hash (a compressed
- * payload's `$tf_ref.hash`), a `[tokenfold:retrieve hash=... namespace=...]` text marker,
- * or a serialized JSON `$tf_ref` marker. An embedded namespace is used when
- * `options.namespace` is omitted. A CompressionReport
- * path is NOT a valid reference: the current report schema carries no per-entry hash, and the
- * CLI rejects it rather than guessing.
- *
- * Throws `TokenFoldProcessError` (`code: "tokenfold_exit"`) when the hash is unknown, its TTL
- * has elapsed, or the reference is malformed — the CLI reports all of those as a non-zero exit.
- */
-export async function retrieve(reference: string, options: RetrieveOptions = {}): Promise<Uint8Array> {
-  const args = ["retrieve", reference];
-  if (options.namespace) args.push("--retrieve-namespace", options.namespace);
+export interface RetrieveOptions { retrievalStore?: string; namespace?: string; configPath?: string; signal?: AbortSignal }
+export async function retrieve(reference: string | Record<string, unknown>, options: RetrieveOptions = {}): Promise<Uint8Array> {
+  const args = ["retrieve", typeof reference === "string" ? reference : JSON.stringify(reference)];
+  if (options.retrievalStore) args.push("--retrieval-store", options.retrievalStore);
+  if (options.namespace) args.push("--retrieval-namespace", options.namespace);
   if (options.configPath) args.push("--config", options.configPath);
-  const runOptions: RunOptions = { env: { TOKENFOLD_ANALYTICS_ENABLED: "false" } };
-  if (options.signal) runOptions.signal = options.signal;
-  const result = await run(args, runOptions);
-  throwIfFailed(result);
-  return result.stdout;
+  const result = await run(args, optionsFor(undefined, options.signal)); if (result.exitCode !== 0) throwProcess(result); return result.stdout;
+}
+function throwProcess(result: ProcessResult): never {
+  throw new TokenFoldProcessError(`tokenfold exited with status ${result.exitCode ?? result.signal}`, { code: "tokenfold_exit", exitCode: result.exitCode, signal: result.signal, stderr: result.stderr });
 }

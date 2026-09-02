@@ -85,22 +85,22 @@ pub fn render_verdict(
     let t = tilde(report.estimator.is_exact);
     let orig = thousands(report.original_tokens);
     let comp = thousands(report.compressed_tokens);
-    match (target_tokens, &report.status) {
-        (Some(target), Status::Passthrough) => colors.dim(&format!(
+    match (target_tokens, report.budget.as_ref().map(|b| b.status)) {
+        (Some(target), Some(tokenfold_core::report::BudgetStatus::Met)) if report.status == Status::Passthrough => colors.dim(&format!(
             "UNDER budget: {t}{orig} est. tokens \u{2264} target {} \u{2014} nothing to compress",
             thousands(target)
         )),
-        (Some(target), Status::Compressed) => colors.green(&format!(
+        (Some(target), Some(tokenfold_core::report::BudgetStatus::Met)) => colors.green(&format!(
             "OVER budget: {t}{orig} \u{2192} {t}{comp} est. tokens ({:.1}% reduction, target {}) \u{2713} reachable",
             report.savings_pct,
             thousands(target)
         )),
-        (Some(target), Status::BestEffort) => colors.yellow(&format!(
+        (Some(target), Some(tokenfold_core::report::BudgetStatus::BestEffort)) => colors.yellow(&format!(
             "OVER budget: {t}{orig} \u{2192} {t}{comp} est. tokens ({:.1}% reduction, target {}) ~ best effort (target not fully reached)",
             report.savings_pct,
             thousands(target)
         )),
-        (Some(target), Status::UnreachableTarget) => {
+        (Some(target), Some(tokenfold_core::report::BudgetStatus::Unreachable)) => {
             let floor = report
                 .budget
                 .as_ref()
@@ -111,6 +111,7 @@ pub fn render_verdict(
                 thousands(target)
             ))
         }
+        (Some(target), _) => colors.yellow(&format!("target {} was not evaluated", thousands(target))),
         (None, _) if is_inspect => {
             colors.dim("No target set \u{2014} showing max achievable savings per transform")
         }
@@ -195,7 +196,7 @@ pub fn render_transform_table(
     );
     for t in &report.transforms {
         let name = truncate(&t.id, 22, no_truncate);
-        let mode = mode_label_for(&t.id);
+        let preset = mode_label_for(&t.id);
         let before_after = format!(
             "{}\u{2192}{}",
             thousands(t.tokens_before),
@@ -205,7 +206,7 @@ pub fn render_transform_table(
         let pct = format!("{:.1}%", t.savings_ratio * 100.0);
         let status = status_label(&t.status, &t.skipped_reason);
         let row =
-            format!("{name:<22} {mode:<12} {before_after:>24} {saved:>10} {pct:>7}  {status}");
+            format!("{name:<22} {preset:<12} {before_after:>24} {saved:>10} {pct:>7}  {status}");
         let row = if matches!(
             t.status,
             TransformStatus::Skipped | TransformStatus::RolledBack
@@ -294,7 +295,7 @@ pub fn render_transform_list() -> String {
     ));
     for entry in tokenfold_core::modes::ALL_ENTRIES {
         let id = entry.transform_id.as_str();
-        let mode = mode_label_for(id);
+        let preset = mode_label_for(id);
         let status = if entry.experimental {
             "experimental"
         } else if entry.conservative_enabled || entry.balanced_enabled || entry.aggressive_enabled {
@@ -309,7 +310,7 @@ pub fn render_transform_list() -> String {
             .map(format_label)
             .collect::<Vec<_>>()
             .join(", ");
-        out.push_str(&format!("{id:<20} {mode:<12} {status:<12} {formats}\n"));
+        out.push_str(&format!("{id:<20} {preset:<12} {status:<12} {formats}\n"));
     }
     out
 }
@@ -317,7 +318,7 @@ pub fn render_transform_list() -> String {
 pub fn render_transform_list_json() -> serde_json::Value {
     let mut rows = vec![serde_json::json!({
         "id": "secret_redaction",
-        "mode": "all",
+        "preset": "all",
         "status": "enabled",
         "formats": ["openai_json", "anthropic_json", "plain_text", "command_output", "git_diff"],
     })];
@@ -332,7 +333,7 @@ pub fn render_transform_list_json() -> serde_json::Value {
         };
         rows.push(serde_json::json!({
             "id": id,
-            "mode": mode_label_for(id),
+            "preset": mode_label_for(id),
             "status": status,
             "formats": entry.applicable_formats.iter().copied().map(format_label).collect::<Vec<_>>(),
         }));

@@ -229,7 +229,7 @@ jobs:
         shell: bash
         run: |
           npx --no-install tokenfold --version | grep "tokenfold $VERSION"
-          node --input-type=module --eval "import { compress, inspect } from 'tokenfold'; const input = Uint8Array.from(Buffer.from('[{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"}]')); const a = await compress(input, { format: 'json' }); const b = await inspect(input, { format: 'json' }); if (a.report.schema_version !== '1.0' || b.report.schema_version !== '1.0' || !Buffer.from(b.payload).equals(Buffer.from(input))) process.exit(1);"
+          node --input-type=module --eval "import { compress, inspect } from 'tokenfold'; const input = Uint8Array.from(Buffer.from('[{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"}]')); const a = await compress(input, { format: 'json' }); const b = await inspect(input, { format: 'json' }); if (a.report.schema_version !== '2.0' || b.schema_version !== '2.0' || !a.payload.byteLength) process.exit(1);"
       - if: runner.os == 'Linux'
         name: Prove Linux binary is static
         shell: bash

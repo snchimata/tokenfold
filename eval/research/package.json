@@ -1,0 +1,7 @@
+{
+  "name": "tokenfold-research",
+  "private": true,
+  "dependencies": {
+    "@toon-format/cli": "4.1.1"
+  }
+}

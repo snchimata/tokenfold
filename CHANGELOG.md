@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## [0.5.0] - 2026-09-02
+
+- **Breaking:** replace compression modes with reversible `Preset` values across Rust, CLI,
+  Python, TypeScript, proxy metadata, MCP, configuration, and receipts. The default remains
+  `balanced`; irreversible schema, log, and diff compaction no longer run in presets.
+- Add an explicit, verified TOON output codec for generic JSON and a shared `decode` path.
+  TOON never activates implicitly, is round-trip checked before emission, and reports its
+  exact signed token delta without silently falling back to JSON.
+- Replace the lossy flag family with one recoverable pruning policy: CLI `--prune`,
+  `--keep-ratio`, and repeatable `--preserve`, plus nested typed Python and TypeScript policies.
+  Pruning remains generic-JSON-only and persists each omitted value before publishing a marker.
+- Introduce compression receipt schema 2.0 with independent operation, budget, encoding, and
+  pruning outcomes. Add `--require-target`; an unmet hard target emits its receipt, suppresses
+  payload output, and exits 7. Missing or expired retrieval references now exit 8.
+- Make CLI streams deterministic: `compress` emits payload on stdout and receipt on stderr,
+  while `inspect` emits only a receipt and never writes retrieval state. Add explicit receipt
+  routing and formatting options.
+- Replace the Python and TypeScript convenience surfaces with bytes-first v2 APIs. Text helpers
+  now decode UTF-8 strictly, inspection returns a receipt rather than echoed input, and hard
+  target errors carry the receipt.
+- Make secret redaction mandatory on every public compression path; remove the public bypass.
+
 - Make filesystem retrieval publication atomic across `store`, `retrieve`, and `gc`; lossy
   candidate batches now commit completely or remain inline, and rollback restores only the
   generated marker location.
@@ -13,8 +35,18 @@
   path across Core, CLI, proxy, MCP, Python, and TypeScript; MCP retrieval now accepts an explicit
   namespace, and MCP compression rejects unsupported `store_originals=true` instead of ignoring it.
 - Add focused Windows CLI/proxy CI, private vulnerability-reporting guidance, and explicit
-  semantic-quality limitations. Reserved `cache_boundary` values now fail clearly instead of
-  behaving as a no-op.
+  semantic-quality limitations. Remove the unusable Rust-only `cache_boundary` policy placeholder;
+  it never preserved provider prompt caches and accepting it would misrepresent cache economics.
+- Strengthen the deterministic fidelity corpus with fail-closed fixture validation, grounded
+  claim-faithfulness outcomes, compressor-only structural cases, and a reproducible human-audit
+  sample that cannot pass until a named reviewer completes it.
+- Add a merge-safe Claude Code MCP project integration, complete environment-override and MCP
+  client configuration docs, a canonical report fixture/schema shared across bindings, scheduled
+  CodeQL/property testing, and a one-command golden regenerator.
+- Raise the pinned minimum Rust toolchain to 1.98 and add advisory monthly latest-stable checks.
+- Add a research-only TOON benchmark against compact JSON and Tokenfold, with a versioned
+  seven-case corpus, exact token/byte measurements, local-CLI encode/decode latency, determinism,
+  and lossless round-trip checks.
 
 ## [0.4.1] - 2026-08-18
 

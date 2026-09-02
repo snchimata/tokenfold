@@ -1,4 +1,4 @@
-mod args;
+﻿mod args;
 mod config;
 mod diff;
 mod format;
@@ -14,9 +14,19 @@ use tokenfold_core::report::{CommandReport, EstimatorInfo, PipelineReport, Pipel
 use tokenfold_core::token_estimator::{ByteHeuristicEstimator, TiktokenEstimator, TokenEstimator};
 use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, TokenFoldError};
 
-use args::{Input, LossyArg, ModeArg, TaskScopeArg};
+use args::{DecodeFormatArg, EncodingArg, Input, PresetArg, ReceiptFormatArg, TaskScopeArg};
 use config::CliOverrides;
 use format::FormatArg;
+
+fn json_pretty(value: &impl serde::Serialize) -> Result<String, TokenFoldError> {
+    serde_json::to_string_pretty(value)
+        .map_err(|e| TokenFoldError::InternalError(format!("failed to serialize JSON output: {e}")))
+}
+
+fn json_compact(value: &impl serde::Serialize) -> Result<String, TokenFoldError> {
+    serde_json::to_string(value)
+        .map_err(|e| TokenFoldError::InternalError(format!("failed to serialize JSON output: {e}")))
+}
 
 #[derive(Parser)]
 #[command(
@@ -25,23 +35,21 @@ use format::FormatArg;
     about = "Token-aware compression for LLM payloads"
 )]
 struct Cli {
-    #[arg(long, global = true)]
+    #[arg(long, global = true, hide = true)]
     json: bool,
-    #[arg(long = "no-color", global = true)]
+    #[arg(long = "no-color", global = true, hide = true)]
     no_color: bool,
     #[arg(long, global = true)]
     quiet: bool,
-    #[arg(long = "unsafe-disable-redaction", global = true)]
-    unsafe_disable_redaction: bool,
-    #[arg(long, global = true)]
+    #[arg(long, global = true, hide = true)]
     experimental: bool,
-    #[arg(long = "task-scope", global = true)]
+    #[arg(long = "task-scope", global = true, hide = true)]
     task_scope: Option<TaskScopeArg>,
-    #[arg(long = "enable", global = true, value_delimiter = ',')]
+    #[arg(long = "enable", global = true, value_delimiter = ',', hide = true)]
     enable: Vec<String>,
     #[arg(long, global = true, value_name = "PATH")]
     config: Option<PathBuf>,
-    #[arg(long = "no-truncate", global = true)]
+    #[arg(long = "no-truncate", global = true, hide = true)]
     no_truncate: bool,
     #[command(subcommand)]
     cmd: Command,
@@ -58,11 +66,29 @@ enum Command {
         #[arg(long)]
         target_tokens: Option<usize>,
         #[arg(long)]
-        mode: Option<ModeArg>,
+        preset: Option<PresetArg>,
         #[arg(long)]
+        require_target: bool,
+        #[arg(long)]
+        encoding: Option<EncodingArg>,
+        #[arg(long)]
+        prune: bool,
+        #[arg(long, requires = "prune")]
+        keep_ratio: Option<f64>,
+        #[arg(long, requires = "prune")]
+        preserve: Vec<String>,
+        #[arg(long)]
+        retrieval_store: Option<PathBuf>,
+        #[arg(long = "retrieval-namespace")]
+        retrieval_namespace: Option<String>,
+        #[arg(long)]
+        receipt_file: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        receipt_format: ReceiptFormatArg,
+        #[arg(long, hide = true)]
         list_transforms: bool,
     },
-    /// Compress; payload -> stdout, report -> stderr (or --json).
+    /// Compress; payload -> stdout, receipt -> stderr.
     Compress {
         #[arg(default_value = "-")]
         input: Input,
@@ -73,50 +99,47 @@ enum Command {
         #[arg(long)]
         target_tokens: Option<usize>,
         #[arg(long)]
-        mode: Option<ModeArg>,
-        #[arg(long, value_delimiter = ',')]
-        disable: Vec<String>,
-        /// Routes to the same code path as `inspect`: no stdout payload, report only.
+        preset: Option<PresetArg>,
         #[arg(long)]
-        dry_run: bool,
-        /// Persist the original payload to the reversible evidence store, keyed by its
-        /// SHA-256 hash, unless it contains secret-shaped content.
-        #[arg(long = "store-originals")]
-        store_originals: bool,
-        /// Namespace stored originals are keyed under (see `tokenfold retrieve`).
-        #[arg(long = "retrieve-namespace")]
-        retrieve_namespace: Option<String>,
-        /// Opt-in LOSSY JSON array-item selection — drops array items to hit a token budget
-        /// instead of only structurally reshaping them. Forces `--store-originals` on; dropped
-        /// items are recoverable via `tokenfold retrieve <hash>`, never silently destroyed. Also
-        /// disables `json_field_fold`/`json_value_dict` regardless of `--disable`, since both
-        /// restructure arrays before this stage runs and would otherwise silently move a
-        /// `--lossy-preserve` path off the array it names. Only applies to generic JSON — never
-        /// runs on OpenAI/Anthropic message payloads. See the "Recoverable lossy pruning"
-        /// section of README.md for worked examples.
+        require_target: bool,
         #[arg(long)]
-        lossy: Option<LossyArg>,
-        /// BEST-EFFORT selection hint, not a budget: how aggressively to prune, expressed as the
-        /// fraction (0.0..=1.0) of the prunable pool's own estimated token cost to keep. It steers
-        /// the item-selection walk and nothing more — the final document is NOT re-checked against
-        /// it, and the achieved ratio will differ, because the pool excludes preserved arrays,
-        /// non-array content, and items cheaper than the `$tf_ref` marker replacing them, and
-        /// because a whole prune is rolled back if it fails to beat the lossless pipeline. Use
-        /// `--target-tokens` for a real, enforced token ceiling. Requires `--lossy`.
-        #[arg(long = "lossy-ratio", requires = "lossy")]
-        lossy_ratio: Option<f64>,
+        encoding: Option<EncodingArg>,
+        /// Enable recoverable JSON array-item pruning. Requires a target or keep ratio.
+        #[arg(long)]
+        prune: bool,
+        /// Token-weighted lower retention boundary across eligible candidates (0.0 < R <= 1.0).
+        #[arg(long = "keep-ratio", requires = "prune")]
+        keep_ratio: Option<f64>,
         /// Dot-separated path (e.g. `items` or `data.results`) whose array must never be
-        /// pruned; repeatable. Requires `--lossy`. Pruning never looks inside an array it's
+        /// pruned; repeatable. Requires `--prune`. Pruning never looks inside an array it's
         /// already decided to consider, so a path naming something INSIDE another prunable
         /// array (e.g. `groups.users` when `groups` itself has 2+ items) protects the nearest
         /// enclosing array (`groups`) rather than matching nothing.
-        #[arg(long = "lossy-preserve", requires = "lossy")]
-        lossy_preserve: Vec<String>,
+        #[arg(long = "preserve", requires = "prune")]
+        preserve: Vec<String>,
+        #[arg(long)]
+        retrieval_store: Option<PathBuf>,
+        #[arg(long = "retrieval-namespace")]
+        retrieval_namespace: Option<String>,
+        #[arg(long)]
+        receipt_file: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        receipt_format: ReceiptFormatArg,
+    },
+    /// Reverse TOON and self-describing Tokenfold frames.
+    Decode {
+        #[arg(default_value = "-")]
+        input: Input,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[arg(long = "from", default_value = "auto")]
+        from: DecodeFormatArg,
     },
     /// Compression-aware diff of two payloads.
+    #[command(hide = true)]
     Diff { raw: Input, compressed: Input },
     /// Run a command and compress its captured output. `shell` is a visible alias.
-    #[command(visible_alias = "shell", alias = "exec")]
+    #[command(visible_alias = "shell", alias = "exec", hide = true)]
     Wrap {
         /// Persist the captured output to the reversible evidence store.
         #[arg(long = "store-originals")]
@@ -128,7 +151,7 @@ enum Command {
         /// pipeline. Falls open to the tokenfold-only path if RTK is missing/incompatible.
         #[arg(long = "rtk")]
         rtk: bool,
-        /// Opt into CCR — hand RTK a permission-restricted per-run tee dir, ingest the
+        /// Opt into CCR â€” hand RTK a permission-restricted per-run tee dir, ingest the
         /// pre-RTK raw capture through redaction/persistence, then delete it. Requires `--rtk`.
         #[arg(long = "rtk-capture-raw", requires = "rtk")]
         rtk_capture_raw: bool,
@@ -136,12 +159,14 @@ enum Command {
         argv: Vec<String>,
     },
     /// Compress each fixture and report before/after tokens.
+    #[command(hide = true)]
     Benchmark {
         fixtures: Vec<PathBuf>,
         #[arg(long)]
         format: Option<FormatArg>,
     },
     /// Install a durable agent/host integration.
+    #[command(hide = true)]
     Init {
         #[arg(long)]
         agent: String,
@@ -149,16 +174,19 @@ enum Command {
         dry_run: bool,
     },
     /// Remove a durable agent/host integration.
+    #[command(hide = true)]
     Uninit {
         #[arg(long)]
         agent: String,
     },
     /// Verify estimator availability, config validity, and host integration status.
+    #[command(hide = true)]
     Doctor {
         #[arg(long)]
         agent: Option<String>,
     },
     /// Model Context Protocol server surface.
+    #[command(hide = true)]
     Mcp {
         #[command(subcommand)]
         action: McpAction,
@@ -170,10 +198,15 @@ enum Command {
         reference: String,
         /// Namespace to look the hash up under; defaults to the resolved `[retrieval]`
         /// namespace, or the marker's embedded namespace when present.
-        #[arg(long = "retrieve-namespace")]
-        retrieve_namespace: Option<String>,
+        #[arg(long = "retrieval-namespace")]
+        retrieval_namespace: Option<String>,
+        #[arg(long = "retrieval-store")]
+        retrieval_store: Option<PathBuf>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
     /// Aggregate ad-hoc `CompressionReport` JSON files and/or the local ledger.
+    #[command(hide = true)]
     Stats {
         /// Glob(s) matching `CompressionReport` JSON files (e.g. `reports/*.json`). A bare
         /// existing file path also works. Aggregation always additionally includes the local
@@ -190,6 +223,7 @@ enum Command {
         ledger: Option<PathBuf>,
     },
     /// Realized token/cost savings summary from the local ledger.
+    #[command(hide = true)]
     Gain {
         #[arg(long)]
         scope: Option<String>,
@@ -200,17 +234,20 @@ enum Command {
         csv: bool,
     },
     /// Host-session command-wrapping coverage from the local ledger.
+    #[command(hide = true)]
     Session {
         #[arg(long)]
         recent: Option<usize>,
     },
     /// Declarative command-output filter registry.
+    #[command(hide = true)]
     Filters {
         #[command(subcommand)]
         action: FiltersAction,
     },
     /// Phase 6: output-token-shaping report -- measured (give SHAPED) or estimated (give
     /// --ratio, projected from a known input compression ratio).
+    #[command(hide = true)]
     OutputSavings {
         baseline: Input,
         shaped: Option<Input>,
@@ -219,7 +256,7 @@ enum Command {
     },
     /// Phase 6: mine the local ledger for policy-change proposals. Never silently changes
     /// tokenfold.toml -- prints proposals only, unless --apply is passed.
-    #[command(visible_alias = "discover")]
+    #[command(visible_alias = "discover", hide = true)]
     Learn {
         /// Write the first proposed change into tokenfold.toml instead of only printing it.
         #[arg(long)]
@@ -251,7 +288,6 @@ struct GlobalFlags {
     json: bool,
     no_color: bool,
     quiet: bool,
-    unsafe_disable_redaction: bool,
     experimental: bool,
     task_scope: Option<TaskScopeArg>,
     enable: Vec<String>,
@@ -265,7 +301,6 @@ impl GlobalFlags {
             json: cli.json,
             no_color: cli.no_color,
             quiet: cli.quiet,
-            unsafe_disable_redaction: cli.unsafe_disable_redaction,
             experimental: cli.experimental,
             task_scope: cli.task_scope,
             enable: cli.enable.clone(),
@@ -283,66 +318,71 @@ fn main() {
             input,
             format,
             target_tokens,
-            mode,
+            preset,
+            require_target,
+            encoding,
+            prune,
+            keep_ratio,
+            preserve,
+            retrieval_store,
+            retrieval_namespace,
+            receipt_file,
+            receipt_format,
             list_transforms,
         } => cmd_inspect(
             &global,
             input,
             format,
             target_tokens,
-            mode,
+            preset,
+            require_target,
+            encoding,
+            prune,
+            keep_ratio,
+            &preserve,
+            retrieval_store,
+            retrieval_namespace,
+            receipt_file,
+            receipt_format,
             list_transforms,
-            None,
-            None,
-            &[],
-            Vec::new(),
-            None,
         ),
         Command::Compress {
             input,
             output,
             format,
             target_tokens,
-            mode,
-            disable,
-            dry_run,
-            store_originals,
-            retrieve_namespace,
-            lossy,
-            lossy_ratio,
-            lossy_preserve,
-        } => {
-            if dry_run {
-                cmd_inspect(
-                    &global,
-                    input,
-                    format,
-                    target_tokens,
-                    mode,
-                    false,
-                    lossy,
-                    lossy_ratio,
-                    &lossy_preserve,
-                    disable,
-                    retrieve_namespace,
-                )
-            } else {
-                cmd_compress(
-                    &global,
-                    input,
-                    output,
-                    format,
-                    target_tokens,
-                    mode,
-                    disable,
-                    store_originals,
-                    retrieve_namespace,
-                    lossy,
-                    lossy_ratio,
-                    lossy_preserve,
-                )
-            }
-        }
+            preset,
+            require_target,
+            encoding,
+            prune,
+            keep_ratio,
+            preserve,
+            retrieval_store,
+            retrieval_namespace,
+            receipt_file,
+            receipt_format,
+        } => cmd_compress(
+            &global,
+            input,
+            output,
+            format,
+            target_tokens,
+            preset,
+            require_target,
+            encoding,
+            prune,
+            keep_ratio,
+            preserve,
+            retrieval_store,
+            retrieval_namespace,
+            receipt_file,
+            receipt_format,
+        ),
+        Command::Decode {
+            input,
+            output,
+            from,
+        } => cmd_decode(input, output, from),
         Command::Diff { raw, compressed } => cmd_diff(&global, raw, compressed),
         Command::Wrap {
             store_originals,
@@ -364,8 +404,16 @@ fn main() {
         Command::Doctor { agent } => cmd_doctor(&global, agent),
         Command::Retrieve {
             reference,
-            retrieve_namespace,
-        } => cmd_retrieve(&global, reference, retrieve_namespace),
+            retrieval_namespace,
+            retrieval_store,
+            output,
+        } => cmd_retrieve(
+            &global,
+            reference,
+            retrieval_namespace,
+            retrieval_store,
+            output,
+        ),
         Command::Mcp {
             action: McpAction::Serve,
         } => mcp::serve(),
@@ -398,7 +446,7 @@ fn main() {
 #[allow(clippy::too_many_arguments)]
 fn overrides_for(
     global: &GlobalFlags,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
     format: Option<FormatArg>,
     disable: Vec<String>,
@@ -406,14 +454,13 @@ fn overrides_for(
     retrieve_namespace: Option<String>,
 ) -> CliOverrides {
     CliOverrides {
-        mode,
+        preset,
         target_tokens,
         format,
         disable,
         json: global.json,
         no_color: global.no_color,
         quiet: global.quiet,
-        unsafe_disable_redaction: global.unsafe_disable_redaction,
         experimental: global.experimental,
         task_scope: global.task_scope,
         enable: global.enable.clone(),
@@ -441,30 +488,37 @@ fn validate_enable_requires_experimental(
 }
 
 /// `lossy`/`lossy_ratio`/`lossy_preserve` are CLI-only for now (unlike every other field here,
-/// which flows through `config::resolve`'s flag/env/`tokenfold.toml` precedence chain) —
+/// which flows through `config::resolve`'s flag/env/`tokenfold.toml` precedence chain) â€”
 /// deliberately a smaller surface for a brand-new, still-Phase-1 feature; `dry_run` is the
 /// existing precedent for a `Compress`-only flag that skips the config layer entirely. Extend
 /// `config.rs` with a `[lossy]` section if/when this graduates the same way `[retrieval]` did.
 #[allow(clippy::too_many_arguments)]
 fn build_policy(
     effective: &config::Effective,
-    lossy: Option<LossyArg>,
-    lossy_ratio: Option<f64>,
-    lossy_preserve: &[String],
+    prune: bool,
+    keep_ratio: Option<f64>,
+    preserve: &[String],
     preview: bool,
+    encoding: Option<EncodingArg>,
+    retrieval_store: Option<PathBuf>,
 ) -> Result<CompressionPolicy, TokenFoldError> {
     let mut builder = CompressionPolicy::builder()
         .preview(preview)
-        .mode(effective.mode)
+        .preset(effective.preset)
         .task_scope(effective.task_scope)
         .preserve_latest_user_message(effective.preserve_latest_user_message)
-        .unsafe_disable_redaction(effective.unsafe_disable_redaction)
         .experimental(effective.experimental)
         .store_originals(effective.retrieval_store_originals)
         .retrieval_namespace(effective.retrieval_namespace.clone())
         .retrieval_ttl_seconds(effective.retrieval_ttl_seconds)
         .retrieval_backend(effective.retrieval_backend.clone())
         .retrieval_store_path(effective.retrieval_store_path.clone());
+    if let Some(encoding) = encoding {
+        builder = builder.encoding(encoding.to_core());
+    }
+    if retrieval_store.is_some() {
+        builder = builder.retrieval_store_path(retrieval_store.clone());
+    }
     if let Some(t) = effective.target_tokens {
         builder = builder.target_tokens(t);
     }
@@ -474,14 +528,14 @@ fn build_policy(
     for id in &effective.enable {
         builder = builder.enable(id.clone());
     }
-    if let Some(lossy) = lossy {
-        builder = builder.lossy(lossy.to_core());
-    }
-    if let Some(ratio) = lossy_ratio {
-        builder = builder.lossy_ratio(ratio);
-    }
-    for path in lossy_preserve {
-        builder = builder.lossy_preserve(path.clone());
+    if prune {
+        builder = builder.store_originals(true);
+        builder = builder.pruning(tokenfold_core::PruningPolicy {
+            keep_ratio,
+            preserve_paths: preserve.to_vec(),
+            retrieval_store: retrieval_store.clone(),
+            retrieval_namespace: None,
+        });
     }
     builder.build()
 }
@@ -543,80 +597,153 @@ fn read_input(input: &Input, label: &str) -> Result<Vec<u8>, TokenFoldError> {
 }
 
 #[allow(clippy::too_many_arguments)]
+fn validate_compression_request(
+    target_tokens: Option<usize>,
+    require_target: bool,
+    prune: bool,
+    keep_ratio: Option<f64>,
+) -> Result<(), TokenFoldError> {
+    if target_tokens == Some(0) {
+        return Err(TokenFoldError::ConfigError(
+            "target_tokens must be positive".to_string(),
+        ));
+    }
+    if require_target && target_tokens.is_none() {
+        return Err(TokenFoldError::ConfigError(
+            "--require-target requires --target-tokens".to_string(),
+        ));
+    }
+    if prune && target_tokens.is_none() && keep_ratio.is_none() {
+        return Err(TokenFoldError::ConfigError(
+            "--prune requires --target-tokens or --keep-ratio".to_string(),
+        ));
+    }
+    if let Some(ratio) = keep_ratio
+        && !(0.0 < ratio && ratio <= 1.0)
+    {
+        return Err(TokenFoldError::ConfigError(format!(
+            "keep_ratio must be greater than 0 and at most 1, got {ratio}"
+        )));
+    }
+    Ok(())
+}
+
+fn receipt_bytes(
+    report: &tokenfold_core::report::CompressionReport,
+    format: ReceiptFormatArg,
+) -> Result<Vec<u8>, TokenFoldError> {
+    let mut bytes = match format {
+        ReceiptFormatArg::Json => json_pretty(report)?.into_bytes(),
+        ReceiptFormatArg::Text => format!(
+            "status: {:?}\nbudget: {:?}\noriginal_tokens: {}\ncompressed_tokens: {}\nsaved_tokens: {}\npreset: {}\nencoding: {}",
+            report.status,
+            report.budget.as_ref().map(|b| b.status),
+            report.original_tokens,
+            report.compressed_tokens,
+            report.saved_tokens,
+            report.preset,
+            report.output_encoding,
+        ).into_bytes(),
+    };
+    bytes.push(b'\n');
+    Ok(bytes)
+}
+
+fn emit_receipt(
+    report: &tokenfold_core::report::CompressionReport,
+    format: ReceiptFormatArg,
+    file: Option<&Path>,
+    inspect: bool,
+) -> Result<(), TokenFoldError> {
+    use std::io::Write;
+    let bytes = receipt_bytes(report, format)?;
+    if let Some(path) = file {
+        std::fs::write(path, bytes)?;
+    } else if inspect {
+        std::io::stdout().write_all(&bytes)?;
+    } else {
+        std::io::stderr().write_all(&bytes)?;
+    }
+    Ok(())
+}
+
+fn hard_target_unmet(report: &tokenfold_core::report::CompressionReport) -> bool {
+    use tokenfold_core::report::BudgetStatus;
+    report.budget.as_ref().is_some_and(|budget| {
+        matches!(
+            budget.status,
+            BudgetStatus::BestEffort | BudgetStatus::Unreachable
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_inspect(
     global: &GlobalFlags,
     input: Input,
     format: Option<FormatArg>,
     target_tokens: Option<usize>,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
+    require_target: bool,
+    encoding: Option<EncodingArg>,
+    prune: bool,
+    keep_ratio: Option<f64>,
+    preserve: &[String],
+    retrieval_store: Option<PathBuf>,
+    retrieval_namespace: Option<String>,
+    receipt_file: Option<PathBuf>,
+    receipt_format: ReceiptFormatArg,
     list_transforms: bool,
-    lossy: Option<LossyArg>,
-    lossy_ratio: Option<f64>,
-    lossy_preserve: &[String],
-    disable: Vec<String>,
-    retrieve_namespace: Option<String>,
 ) -> Result<i32, TokenFoldError> {
     if list_transforms {
-        if global.json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&render::render_transform_list_json()).unwrap()
-            );
-        } else {
-            print!("{}", render::render_transform_list());
+        match receipt_format {
+            ReceiptFormatArg::Json => {
+                println!("{}", json_pretty(&render::render_transform_list_json())?)
+            }
+            ReceiptFormatArg::Text => print!("{}", render::render_transform_list()),
         }
         return Ok(0);
     }
-
-    // `inspect` never stores originals: it's a dry-run preview, and the MCP `tokenfold_inspect`
-    // tool defaults `store_originals` to false for the same reason. `policy.preview = true` is
-    // the actual enforcement of that for the lossy path -- it's what stops
-    // pipeline::apply_lossy_reduction from performing real RetrievalStore writes even though
-    // `--lossy` forces store_originals-equivalent behavior on for a real compress run.
-    // `disable`/`retrieve_namespace` DO still flow through, though (unlike `store_originals`,
-    // which inspect always forces off) -- `compress --dry-run` must preview the SAME set of
-    // active transforms and the SAME namespace a real run with the same flags would use, or the
-    // preview isn't actually previewing what `compress` would do.
+    validate_compression_request(target_tokens, require_target, prune, keep_ratio)?;
     let overrides = overrides_for(
         global,
-        mode,
+        preset,
         target_tokens,
         format,
-        disable,
+        Vec::new(),
         false,
-        retrieve_namespace,
+        retrieval_namespace,
     );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
-    validate_enable_requires_experimental(&resolved.effective)?;
     let policy = build_policy(
         &resolved.effective,
-        lossy,
-        lossy_ratio,
-        lossy_preserve,
+        prune,
+        keep_ratio,
+        preserve,
         true,
+        encoding,
+        retrieval_store,
     )?;
-
     let bytes = read_input(&input, "input")?;
     let resolved_format = resolve_format(resolved.effective.format, &bytes, false);
-    let compression_input = CompressionInput {
-        format: resolved_format,
-        bytes,
-    };
-
-    let output = tokenfold_core::compress(compression_input, &policy)?;
-
-    if resolved.effective.json {
-        println!("{}", serde_json::to_string_pretty(&output.report).unwrap());
-    } else if !resolved.effective.quiet {
-        print_human_report(
-            &output.report,
-            resolved.effective.target_tokens,
-            true,
-            resolved.effective.no_color,
-            global.no_truncate,
-        );
-    }
-    Ok(0)
+    let output = tokenfold_core::compress(
+        CompressionInput {
+            format: resolved_format,
+            bytes,
+        },
+        &policy,
+    )?;
+    emit_receipt(
+        &output.report,
+        receipt_format,
+        receipt_file.as_deref(),
+        true,
+    )?;
+    Ok(if require_target && hard_target_unmet(&output.report) {
+        7
+    } else {
+        0
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -626,65 +753,87 @@ fn cmd_compress(
     output_path: Option<PathBuf>,
     format: Option<FormatArg>,
     target_tokens: Option<usize>,
-    mode: Option<ModeArg>,
-    disable: Vec<String>,
-    store_originals: bool,
-    retrieve_namespace: Option<String>,
-    lossy: Option<LossyArg>,
-    lossy_ratio: Option<f64>,
-    lossy_preserve: Vec<String>,
+    preset: Option<PresetArg>,
+    require_target: bool,
+    encoding: Option<EncodingArg>,
+    prune: bool,
+    keep_ratio: Option<f64>,
+    preserve: Vec<String>,
+    retrieval_store: Option<PathBuf>,
+    retrieval_namespace: Option<String>,
+    receipt_file: Option<PathBuf>,
+    receipt_format: ReceiptFormatArg,
 ) -> Result<i32, TokenFoldError> {
+    validate_compression_request(target_tokens, require_target, prune, keep_ratio)?;
     let overrides = overrides_for(
         global,
-        mode,
+        preset,
         target_tokens,
         format,
-        disable,
-        store_originals,
-        retrieve_namespace,
+        Vec::new(),
+        false,
+        retrieval_namespace,
     );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
-    validate_enable_requires_experimental(&resolved.effective)?;
     let policy = build_policy(
         &resolved.effective,
-        lossy,
-        lossy_ratio,
-        &lossy_preserve,
+        prune,
+        keep_ratio,
+        &preserve,
         false,
+        encoding,
+        retrieval_store,
     )?;
-
     let bytes = read_input(&input, "input")?;
     let resolved_format = resolve_format(resolved.effective.format, &bytes, false);
-    let compression_input = CompressionInput {
-        format: resolved_format,
-        bytes,
-    };
+    let output = tokenfold_core::compress(
+        CompressionInput {
+            format: resolved_format,
+            bytes,
+        },
+        &policy,
+    )?;
 
-    let output = tokenfold_core::compress(compression_input, &policy)?;
+    if require_target && hard_target_unmet(&output.report) {
+        emit_receipt(
+            &output.report,
+            receipt_format,
+            receipt_file.as_deref(),
+            false,
+        )?;
+        eprintln!(
+            "tokenfold: budget unmet: achieved {} tokens; target {}. Output suppressed (--require-target).",
+            output.report.compressed_tokens,
+            target_tokens.expect("validated above"),
+        );
+        return Ok(7);
+    }
 
     write_payload(output_path.as_deref(), &output.bytes)?;
-
-    // Record redacted ledger metadata for this run, best-effort (see `record_to_ledger`).
     let input_path = match &input {
-        Input::Path(p) => Some(p.as_path()),
+        Input::Path(path) => Some(path.as_path()),
         Input::Stdin => None,
     };
     record_to_ledger(&resolved.effective, &output.report, input_path, "stdin");
-
-    if resolved.effective.json {
-        eprintln!("{}", serde_json::to_string_pretty(&output.report).unwrap());
-    } else if !resolved.effective.quiet {
-        print_human_report(
-            &output.report,
-            resolved.effective.target_tokens,
-            false,
-            resolved.effective.no_color,
-            global.no_truncate,
-        );
-    }
+    emit_receipt(
+        &output.report,
+        receipt_format,
+        receipt_file.as_deref(),
+        false,
+    )?;
     Ok(0)
 }
 
+fn cmd_decode(
+    input: Input,
+    output: Option<PathBuf>,
+    from: DecodeFormatArg,
+) -> Result<i32, TokenFoldError> {
+    let bytes = read_input(&input, "encoded input")?;
+    let decoded = tokenfold_core::decode(&bytes, from.to_core())?;
+    write_payload(output.as_deref(), &decoded)?;
+    Ok(0)
+}
 fn cmd_diff(global: &GlobalFlags, raw: Input, compressed: Input) -> Result<i32, TokenFoldError> {
     let raw_bytes = read_input(&raw, "raw input")?;
     let compressed_bytes = read_input(&compressed, "compressed input")?;
@@ -712,7 +861,7 @@ fn cmd_diff(global: &GlobalFlags, raw: Input, compressed: Input) -> Result<i32, 
             "estimator": { "backend": info.backend, "model": info.model, "is_exact": info.is_exact },
             "hunks": diff::to_json(&lines),
         });
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+        println!("{}", json_pretty(&payload)?);
     } else {
         let colors = render::stdout_colors(global.no_color);
         println!(
@@ -746,7 +895,7 @@ fn cmd_output_savings(
     };
 
     if global.json {
-        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+        println!("{}", json_pretty(&report)?);
     } else {
         println!("profile: {}", report.profile);
         if let Some(n) = report.measured_output_tokens_saved {
@@ -787,7 +936,7 @@ fn cmd_learn(global: &GlobalFlags, apply: bool) -> Result<i32, TokenFoldError> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+        println!("{}", json_pretty(&payload)?);
     } else if proposals.is_empty() {
         println!(
             "No policy changes proposed (not enough ledger history yet, or current settings already perform well)."
@@ -815,7 +964,7 @@ fn cmd_learn(global: &GlobalFlags, apply: bool) -> Result<i32, TokenFoldError> {
                 apply_mode_change(global, resolved.config_path.as_deref(), "balanced")?;
                 if !global.json {
                     println!(
-                        "Applied: [compression] mode = \"balanced\" written to tokenfold.toml"
+                        "Applied: [compression] preset = \"balanced\" written to tokenfold.toml"
                     );
                 }
             }
@@ -830,7 +979,7 @@ fn cmd_learn(global: &GlobalFlags, apply: bool) -> Result<i32, TokenFoldError> {
     Ok(0)
 }
 
-/// Writes `[compression].mode = mode` into the resolved config file (or a new `tokenfold.toml`
+/// Writes `[compression].preset = preset` into the resolved config file (or a new `tokenfold.toml`
 /// in the current directory if none exists yet), preserving every other key already there.
 /// Round-trips through `toml::Value` rather than a comment-preserving editor -- this is a
 /// single local config file, not a shared document, so losing comments on a `--apply` write is
@@ -838,7 +987,7 @@ fn cmd_learn(global: &GlobalFlags, apply: bool) -> Result<i32, TokenFoldError> {
 fn apply_mode_change(
     global: &GlobalFlags,
     config_path: Option<&Path>,
-    mode: &str,
+    preset: &str,
 ) -> Result<(), TokenFoldError> {
     let target = config_path
         .map(Path::to_path_buf)
@@ -866,7 +1015,10 @@ fn apply_mode_change(
     let compression_table = compression
         .as_table_mut()
         .ok_or_else(|| TokenFoldError::ConfigError("[compression] is not a table".to_string()))?;
-    compression_table.insert("mode".to_string(), toml::Value::String(mode.to_string()));
+    compression_table.insert(
+        "preset".to_string(),
+        toml::Value::String(preset.to_string()),
+    );
 
     let rendered = toml::to_string_pretty(&doc).map_err(|e| {
         TokenFoldError::InternalError(format!("failed to serialize tokenfold.toml: {e}"))
@@ -1067,12 +1219,12 @@ fn cmd_wrap(
     );
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
     validate_enable_requires_experimental(&resolved.effective)?;
-    let policy = build_policy(&resolved.effective, None, None, &[], false)?;
+    let policy = build_policy(&resolved.effective, false, None, &[], false, None, None)?;
 
     // --- Stage 1: acquire command output, RTK-composed or direct. ---
     // RTK preflight runs *before* the child. If RTK is missing/incompatible we fail open
     // to the tokenfold-only path here, before any side-effectful command has started. Once RTK
-    // (or the child) has been spawned we never rerun it — its output and exit code are final.
+    // (or the child) has been spawned we never rerun it â€” its output and exit code are final.
     let mut rtk_ran = false;
     let mut rtk_version: Option<String> = None;
     let mut rtk_duration_ms: Option<f64> = None;
@@ -1107,9 +1259,9 @@ fn cmd_wrap(
     // or alongside generic log_compaction): the filter stage-pipeline runs first, its own
     // never_worse guard ensures it never hands compress() anything worse than the true raw
     // bytes, and its (possibly reduced) output is simply what compress() then sees as its
-    // input — no special bypass path in `pipeline.rs`. One side effect of this choice:
+    // input â€” no special bypass path in `pipeline.rs`. One side effect of this choice:
     // `CompressionReport.original_tokens`/`saved_tokens` reflect the post-filter input to
-    // compress(), not the true pre-filter raw size — `CommandReport.raw_output_bytes` below
+    // compress(), not the true pre-filter raw size â€” `CommandReport.raw_output_bytes` below
     // still reports the true raw byte count for that visibility.
     //
     // Double-filtering avoidance: when RTK ran, it already owns command-specific
@@ -1256,7 +1408,7 @@ fn cmd_wrap(
     record_to_ledger(&resolved.effective, &output.report, None, "wrap");
 
     if resolved.effective.json {
-        eprintln!("{}", serde_json::to_string_pretty(&output.report).unwrap());
+        eprintln!("{}", json_pretty(&output.report)?);
     } else if !resolved.effective.quiet {
         print_human_report(
             &output.report,
@@ -1310,7 +1462,7 @@ fn cmd_benchmark(
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+        println!("{}", json_pretty(&arr)?);
     } else {
         println!(
             "{:<32} {:>10} {:>10} {:>9} {:>8} {:>10}",
@@ -1331,31 +1483,114 @@ fn cmd_benchmark(
     Ok(0)
 }
 
-// ponytail: no v0.1 agent host has been chosen yet (the v0.1 scope decisions left the "first
-// supported agent host" undecided), so every `--agent` value is honestly reported as
-// unsupported rather than pretending to patch a host config that doesn't exist. Add real
-// host integrations here once a first host is picked.
 fn cmd_init(global: &GlobalFlags, agent: String, dry_run: bool) -> Result<i32, TokenFoldError> {
-    let message = format!(
-        "agent '{agent}' is not a supported host yet (v0.1 has not shipped a host integration)"
+    if !matches!(agent.as_str(), "claude" | "claude-code") {
+        return unsupported_agent(global, &agent, dry_run, false);
+    }
+    let path = std::env::current_dir()?.join(".mcp.json");
+    let mut config = read_mcp_config(&path)?;
+    let root = config.as_object_mut().ok_or_else(|| {
+        TokenFoldError::InternalError("validated MCP config stopped being an object".to_string())
+    })?;
+    root.entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+    let servers = config["mcpServers"].as_object_mut().ok_or_else(|| {
+        TokenFoldError::ConfigError(format!(
+            "{}: mcpServers must be a JSON object",
+            path.display()
+        ))
+    })?;
+    servers.insert(
+        "tokenfold".to_string(),
+        serde_json::json!({"command": "tokenfold", "args": ["mcp", "serve"], "env": {}}),
     );
+    if !dry_run {
+        let bytes = serde_json::to_vec_pretty(&config).map_err(|e| {
+            TokenFoldError::InternalError(format!("failed to serialize MCP config: {e}"))
+        })?;
+        std::fs::write(&path, bytes)?;
+    }
+    let message = if dry_run {
+        format!("would configure tokenfold in {}", path.display())
+    } else {
+        format!("configured tokenfold in {}", path.display())
+    };
+    if global.json {
+        println!(
+            "{}",
+            serde_json::json!({ "agent": agent, "supported": true, "dry_run": dry_run, "path": path, "message": message })
+        );
+    } else {
+        println!("{message}");
+    }
+    Ok(0)
+}
+
+fn cmd_uninit(global: &GlobalFlags, agent: String) -> Result<i32, TokenFoldError> {
+    if !matches!(agent.as_str(), "claude" | "claude-code") {
+        return unsupported_agent(global, &agent, false, true);
+    }
+    let path = std::env::current_dir()?.join(".mcp.json");
+    let mut config = read_mcp_config(&path)?;
+    let removed = config
+        .get_mut("mcpServers")
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|servers| servers.remove("tokenfold"))
+        .is_some();
+    if removed {
+        let bytes = serde_json::to_vec_pretty(&config).map_err(|e| {
+            TokenFoldError::InternalError(format!("failed to serialize MCP config: {e}"))
+        })?;
+        std::fs::write(&path, bytes)?;
+    }
+    let message = if removed {
+        format!("removed tokenfold from {}", path.display())
+    } else {
+        format!("tokenfold was not configured in {}", path.display())
+    };
+    if global.json {
+        println!(
+            "{}",
+            serde_json::json!({ "agent": agent, "supported": true, "removed": removed, "path": path, "message": message })
+        );
+    } else {
+        println!("{message}");
+    }
+    Ok(0)
+}
+
+fn read_mcp_config(path: &Path) -> Result<serde_json::Value, TokenFoldError> {
+    if !path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    let bytes = std::fs::read(path)?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
+        TokenFoldError::ConfigError(format!("invalid MCP config at {}: {e}", path.display()))
+    })?;
+    if !value.is_object() {
+        return Err(TokenFoldError::ConfigError(format!(
+            "invalid MCP config at {}: root must be a JSON object",
+            path.display()
+        )));
+    }
+    Ok(value)
+}
+
+fn unsupported_agent(
+    global: &GlobalFlags,
+    agent: &str,
+    dry_run: bool,
+    uninit: bool,
+) -> Result<i32, TokenFoldError> {
+    let message = if uninit {
+        format!("agent '{agent}' is not a supported host; nothing to remove")
+    } else {
+        format!("agent '{agent}' is not a supported host; supported: claude-code")
+    };
     if global.json {
         println!(
             "{}",
             serde_json::json!({ "agent": agent, "supported": false, "dry_run": dry_run, "message": message })
-        );
-    } else {
-        eprintln!("{message}");
-    }
-    Ok(2)
-}
-
-fn cmd_uninit(global: &GlobalFlags, agent: String) -> Result<i32, TokenFoldError> {
-    let message = format!("agent '{agent}' is not a supported host yet; nothing to remove");
-    if global.json {
-        println!(
-            "{}",
-            serde_json::json!({ "agent": agent, "supported": false, "message": message })
         );
     } else {
         eprintln!("{message}");
@@ -1373,6 +1608,24 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
 
     // Additive RTK health. RTK is optional, so `missing` is a warning, never a failure.
     let rtk = rtk::doctor_probe();
+    let agent_status = agent.as_ref().map(|name| {
+        let supported = matches!(name.as_str(), "claude" | "claude-code");
+        let path = std::env::current_dir()
+            .ok()
+            .map(|dir| dir.join(".mcp.json"));
+        let configured = supported
+            && path
+                .as_ref()
+                .and_then(|path| read_mcp_config(path).ok())
+                .and_then(|value| value.pointer("/mcpServers/tokenfold").cloned())
+                .is_some();
+        serde_json::json!({
+            "name": name,
+            "supported": supported,
+            "configured": configured,
+            "path": path.map(|p| p.display().to_string()),
+        })
+    });
 
     if global.json {
         println!(
@@ -1381,7 +1634,7 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
                 "estimator": { "tiktoken_available": tiktoken_available },
                 "config_path": config_path.as_ref().map(|p| p.display().to_string()),
                 "config_error": config_error,
-                "agent": agent.as_ref().map(|a| serde_json::json!({ "name": a, "supported": false })),
+                "agent": agent_status,
                 "rtk": {
                     "status": rtk.status,
                     "path": rtk.path,
@@ -1410,7 +1663,19 @@ fn cmd_doctor(global: &GlobalFlags, agent: Option<String>) -> Result<i32, TokenF
             println!("  config error: {e}");
         }
         if let Some(a) = &agent {
-            println!("  agent '{a}': not supported yet (no v0.1 host integration has shipped)");
+            let status = agent_status.as_ref();
+            if status.is_some_and(|status| status["supported"] == true) {
+                println!(
+                    "  agent '{a}': {}",
+                    if status.is_some_and(|status| status["configured"] == true) {
+                        "configured"
+                    } else {
+                        "not configured"
+                    }
+                );
+            } else {
+                println!("  agent '{a}': unsupported (supported: claude-code)");
+            }
         }
         match rtk.version {
             Some(v) => println!("  rtk: {} ({})", rtk.status, v),
@@ -1429,13 +1694,15 @@ fn cmd_retrieve(
     global: &GlobalFlags,
     reference: String,
     namespace_flag: Option<String>,
+    retrieval_store: Option<PathBuf>,
+    output: Option<PathBuf>,
 ) -> Result<i32, TokenFoldError> {
     let overrides = overrides_for(global, None, None, None, Vec::new(), false, None);
     let resolved = config::resolve(&overrides, global.config.as_deref())?;
 
     // A path to an existing `CompressionReport` JSON file: this pass's `RetrievalReport`
     // shape has no per-entry content hash, so there is nothing to recover from a report alone
-    // (see `report.rs::RetrievalReport`) — say so clearly instead of guessing.
+    // (see `report.rs::RetrievalReport`) â€” say so clearly instead of guessing.
     let path = std::path::Path::new(&reference);
     if path.is_file() {
         let bytes = std::fs::read(path)?;
@@ -1448,7 +1715,7 @@ fn cmd_retrieve(
                  retrieve by the original hash or `[tokenfold:retrieve ...]` marker instead",
                 path.display()
             );
-            Ok(1)
+            Ok(8)
         } else {
             Err(TokenFoldError::InvalidInput(format!(
                 "{} is not a valid CompressionReport JSON file",
@@ -1466,28 +1733,27 @@ fn cmd_retrieve(
     let store = tokenfold_core::retrieval_store::RetrievalStore::open(
         &resolved.effective.retrieval_backend,
         "sha256",
-        resolved.effective.retrieval_store_path.clone(),
+        retrieval_store.or(resolved.effective.retrieval_store_path.clone()),
     )?;
 
     match store.retrieve(&hash, &namespace) {
         tokenfold_core::retrieval_store::RetrievalOutcome::Found(bytes) => {
-            use std::io::Write;
-            std::io::stdout().write_all(&bytes)?;
+            write_payload(output.as_deref(), &bytes)?;
             Ok(0)
         }
         tokenfold_core::retrieval_store::RetrievalOutcome::Missing => {
             eprintln!("no stored original found for hash {hash} in namespace {namespace:?}");
-            Ok(1)
+            Ok(8)
         }
         tokenfold_core::retrieval_store::RetrievalOutcome::Expired => {
             eprintln!("stored original for hash {hash} in namespace {namespace:?} has expired");
-            Ok(1)
+            Ok(8)
         }
     }
 }
 
 /// Appends redacted ledger metadata for one successful compress/wrap run when
-/// `[analytics].enabled` is true. Best-effort — a ledger write failure must never fail the
+/// `[analytics].enabled` is true. Best-effort â€” a ledger write failure must never fail the
 /// command it's recording, so errors are silently dropped here (the compression itself already
 /// succeeded by the time this is called).
 fn record_to_ledger(
@@ -1577,11 +1843,11 @@ fn cmd_stats(
     summary.scope = scope.unwrap_or_else(|| "project".to_string());
     summary.window = window.unwrap_or_else(|| "all".to_string());
     // ponytail: real per-request retrieval hit/miss/expiry data doesn't exist yet (see
-    // `tokenfold_core::stats` module doc) — only the store-time marker count, summed here
+    // `tokenfold_core::stats` module doc) â€” only the store-time marker count, summed here
     // straight from each ad-hoc report file's own `CompressionReport.retrieval`.
     summary.retrieval.markers = retrieval_markers;
 
-    stats_cmd::print_summary(&summary, global.json, csv);
+    stats_cmd::print_summary(&summary, global.json, csv)?;
     Ok(0)
 }
 
@@ -1614,7 +1880,7 @@ fn cmd_gain(
     summary.scope = scope.unwrap_or_else(|| "project".to_string());
     summary.window = since_arg;
 
-    stats_cmd::print_summary(&summary, global.json, csv);
+    stats_cmd::print_summary(&summary, global.json, csv)?;
     Ok(0)
 }
 
@@ -1639,7 +1905,7 @@ fn cmd_session(global: &GlobalFlags, recent: Option<usize>) -> Result<i32, Token
         summary.recent_requests.truncate(n);
     }
 
-    stats_cmd::print_summary(&summary, global.json, false);
+    stats_cmd::print_summary(&summary, global.json, false)?;
     Ok(0)
 }
 
@@ -1738,7 +2004,7 @@ fn cmd_filters_list(
     let rows = discovered_filter_rows(effective);
 
     if global.json {
-        println!("{}", serde_json::to_string_pretty(&rows).unwrap());
+        println!("{}", json_pretty(&rows)?);
         return Ok(0);
     }
 
@@ -1776,7 +2042,7 @@ fn cmd_filters_list(
 }
 
 /// Validates schema + regex safety + inline fixtures for every discovered filter pack
-/// (built-in, project, user — regardless of trust: `verify` is the pre-trust CI check, not a
+/// (built-in, project, user â€” regardless of trust: `verify` is the pre-trust CI check, not a
 /// report on what's currently applied). `--require-all` is the CI contract: any
 /// failure becomes a non-zero exit; without it, failures are still
 /// reported but the command exits `0`.
@@ -1852,10 +2118,10 @@ fn cmd_filters_verify(
     }
 
     if global.json {
-        println!("{}", serde_json::to_string_pretty(&results).unwrap());
+        println!("{}", json_pretty(&results)?);
     } else {
         for r in &results {
-            println!("{}", serde_json::to_string(r).unwrap());
+            println!("{}", json_compact(r)?);
         }
         println!(
             "{}",
@@ -1871,7 +2137,7 @@ fn cmd_filters_verify(
 }
 
 /// Records `path`'s canonical form + current SHA-256 + `schema_version` into the trust store.
-/// Refuses to trust a pack that doesn't even parse/validate — an explicit `trust` action should
+/// Refuses to trust a pack that doesn't even parse/validate â€” an explicit `trust` action should
 /// never mark a malformed filter as safe to run.
 fn cmd_filters_trust(
     global: &GlobalFlags,

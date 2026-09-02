@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "cases": [
+    {"id": "flat-users", "path": "flat_users.json", "shape": "flat-uniform"},
+    {"id": "api-response", "path": "../../../examples/api_response.json", "shape": "nested-uniform"},
+    {"id": "incident-feed", "path": "../../../examples/incident_feed.json", "shape": "semi-uniform"},
+    {"id": "openai-payload", "path": "../../../examples/openai_payload.json", "shape": "deeply-nested"},
+    {"id": "compression-report", "path": "../../../tests/fixtures/compression_report_v1.json", "shape": "nested-record"},
+    {"id": "compression-report-schema", "path": "../../../tests/fixtures/compression_report_v1.schema.json", "shape": "deeply-nested-schema"},
+    {"id": "readme-metrics", "path": "../../../tests/fixtures/readme_metrics.json", "shape": "nested-record"}
+  ]
+}

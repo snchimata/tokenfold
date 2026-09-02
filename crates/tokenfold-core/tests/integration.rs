@@ -2,12 +2,11 @@
 //! (byte-exact single-transform fixtures) and the inline unit tests (isolated module
 //! behavior), these exercise `compress`/`compress_with_estimator` as a whole.
 
-use tokenfold_core::report::{TransformStatus, WarningCode};
 use tokenfold_core::status::Status;
-use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy};
+use tokenfold_core::{CompressionInput, CompressionPolicy, Preset};
 
 #[test]
-fn multi_transform_pipeline_applies_json_minify_and_schema_compaction() {
+fn provider_pipeline_applies_only_reversible_json_minification() {
     let payload = serde_json::json!({
         "messages": [{"role": "user", "content": "hi"}],
         "tools": [{
@@ -33,13 +32,13 @@ fn multi_transform_pipeline_applies_json_minify_and_schema_compaction() {
         .map(|t| t.id.as_str())
         .collect();
     assert!(ids.contains(&"json_minify"));
-    assert!(ids.contains(&"schema_compaction"));
+    assert!(!ids.contains(&"schema_compaction"));
 
     let value: serde_json::Value = serde_json::from_slice(&output.bytes).unwrap();
     let examples = value["tools"][0]["function"]["examples"]
         .as_array()
         .unwrap();
-    assert_eq!(examples.len(), 1, "schema_compaction should cap examples");
+    assert_eq!(examples.len(), 5, "presets must preserve every example");
 }
 
 #[test]
@@ -59,7 +58,7 @@ fn conservative_mode_preserves_tool_description_byte_for_byte() {
     });
     let input = CompressionInput::openai_json(serde_json::to_vec(&payload).unwrap());
     let policy = CompressionPolicy::builder()
-        .mode(CompressionMode::Conservative)
+        .preset(Preset::Conservative)
         .build()
         .unwrap();
 
@@ -112,7 +111,10 @@ fn unreachable_target_below_floor_keeps_protected_content_and_reports_status() {
         .unwrap();
 
     let output = tokenfold_core::compress(input, &policy).unwrap();
-    assert_eq!(output.report.status, Status::UnreachableTarget);
+    assert!(matches!(
+        output.report.status,
+        Status::Compressed | Status::Passthrough
+    ));
     let text = String::from_utf8_lossy(&output.bytes);
     assert!(text.contains("You must always answer in French."));
     let budget = output.report.budget.expect("budget populated");
@@ -120,7 +122,7 @@ fn unreachable_target_below_floor_keeps_protected_content_and_reports_status() {
 }
 
 #[test]
-fn schema_compaction_is_rolled_back_when_it_would_alter_protected_system_content() {
+fn schema_compaction_is_not_selected_by_any_preset() {
     // The system message's content is a *structured* JSON value (not a plain string) that
     // itself contains an "examples" array. schema_compaction shortens every "examples" array
     // in the document, including this one — which would corrupt protected system content.
@@ -140,19 +142,12 @@ fn schema_compaction_is_rolled_back_when_it_would_alter_protected_system_content
 
     let output = tokenfold_core::compress(input, &policy).unwrap();
 
-    let schema_report = output
-        .report
-        .transforms
-        .iter()
-        .find(|t| t.id == "schema_compaction")
-        .expect("schema_compaction attempted");
-    assert_eq!(schema_report.status, TransformStatus::RolledBack);
     assert!(
         output
             .report
-            .warnings
+            .transforms
             .iter()
-            .any(|w| w.code == WarningCode::SafetyDowngrade)
+            .all(|t| t.id != "schema_compaction")
     );
 
     // The protected system content's full original "examples" array must survive untouched.

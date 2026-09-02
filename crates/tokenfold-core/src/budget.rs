@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::codec::OutputEncoding;
 use crate::errors::TokenFoldError;
 use crate::input::{CompressionInput, InputFormat};
 use crate::token_estimator::TokenEstimator;
@@ -15,20 +16,18 @@ const MIN_LOSSY_TTL_SECONDS: u64 = 86_400;
 pub struct CompressionPolicy {
     pub target_tokens: Option<usize>,
     pub reserve_output_tokens: usize,
-    pub mode: CompressionMode,
+    pub preset: Preset,
     pub task_scope: TaskScope,
-    /// Reserved for a future prompt-cache preservation contract. Any non-`None` value is
-    /// rejected by [`CompressionPolicy::validate`] so it can never silently do nothing.
-    pub cache_boundary: Option<CacheBoundary>,
+    pub encoding: OutputEncoding,
+    pub pruning: Option<PruningPolicy>,
     pub preserve_latest_user_message: bool,
     pub disabled: Vec<String>,
-    pub unsafe_disable_redaction: bool,
     /// CLI `--experimental`: enables transforms with `ModeEntry.experimental == true`
     /// (currently `diff_compaction`; `log_compaction` was promoted out of `--experimental`
     /// after the Phase 5 fidelity gate, see `modes::ALL_ENTRIES`) at their validated ratio band.
     pub experimental: bool,
-    /// CLI `--enable <id>`: force-enable a specific transform ID even though its mode-matrix
-    /// entry doesn't enable it for the current mode. Still requires `experimental` for any
+    /// CLI `--enable <id>`: force-enable a specific transform ID even though its preset-matrix
+    /// entry doesn't enable it for the current preset. Still requires `experimental` for any
     /// transform whose `ModeEntry.experimental == true` (see `modes::pipeline_for`).
     pub enable: Vec<String>,
     /// When true, and the full pre-transform input contains no secret-shaped content,
@@ -52,7 +51,7 @@ pub struct CompressionPolicy {
     /// Opt-in lossy JSON array-item selection: array items are dropped and replaced by a
     /// recoverable `$tf_ref` marker. `None` (the default) means the lossless pipeline is
     /// untouched — this field is set only by an explicit CLI flag, never derived from
-    /// `mode`/`experimental`, and is deliberately NOT part of `modes.rs`/`ALL_ENTRIES`: it is a
+    /// `preset`/`experimental`, and is deliberately NOT part of `modes.rs`/`ALL_ENTRIES`: it is a
     /// fundamentally different category (data-lossy, not just structurally-lossy-but-reversible)
     /// from every other transform in this crate. See `pipeline::apply_lossy_reduction`.
     pub lossy: Option<LossyPath>,
@@ -84,7 +83,7 @@ pub struct CompressionPolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompressionMode {
+pub enum Preset {
     Conservative,
     Balanced,
     Aggressive,
@@ -97,6 +96,14 @@ pub enum CompressionMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LossyPath {
     Heuristic,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PruningPolicy {
+    pub keep_ratio: Option<f64>,
+    pub preserve_paths: Vec<String>,
+    pub retrieval_store: Option<PathBuf>,
+    pub retrieval_namespace: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,12 +119,6 @@ pub enum TaskScope {
     AgentHistory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CacheBoundary {
-    ByteOffset(usize),
-    TurnIndex(usize),
-}
-
 impl CompressionPolicy {
     pub fn builder() -> CompressionPolicyBuilder {
         CompressionPolicyBuilder::default()
@@ -130,10 +131,20 @@ impl CompressionPolicy {
     /// policy it receives so a hand-built policy can't silently skip the same fail-closed
     /// guarantees a builder-built one gets for free.
     pub fn validate(&self) -> Result<(), TokenFoldError> {
-        if self.cache_boundary.is_some() {
-            return Err(TokenFoldError::ConfigError(
-                "cache_boundary is reserved but not implemented; omit it".to_string(),
-            ));
+        if let Some(pruning) = &self.pruning {
+            if pruning.keep_ratio.is_none() && self.target_tokens.is_none() {
+                return Err(TokenFoldError::ConfigError(
+                    "pruning requires target_tokens or keep_ratio".to_string(),
+                ));
+            }
+            if pruning
+                .keep_ratio
+                .is_some_and(|ratio| !(0.0 < ratio && ratio <= 1.0))
+            {
+                return Err(TokenFoldError::ConfigError(
+                    "keep_ratio must be greater than 0 and at most 1".to_string(),
+                ));
+            }
         }
         if self.disabled.iter().any(|id| id == "secret_redaction") {
             return Err(TokenFoldError::ConfigError(
@@ -175,12 +186,12 @@ impl CompressionPolicy {
 pub struct CompressionPolicyBuilder {
     target_tokens: Option<usize>,
     reserve_output_tokens: Option<usize>,
-    mode: Option<CompressionMode>,
+    preset: Option<Preset>,
     task_scope: Option<TaskScope>,
-    cache_boundary: Option<CacheBoundary>,
+    encoding: Option<OutputEncoding>,
+    pruning: Option<PruningPolicy>,
     preserve_latest_user_message: Option<bool>,
     disabled: Vec<String>,
-    unsafe_disable_redaction: bool,
     experimental: bool,
     enable: Vec<String>,
     store_originals: bool,
@@ -205,8 +216,8 @@ impl CompressionPolicyBuilder {
         self
     }
 
-    pub fn mode(mut self, mode: CompressionMode) -> Self {
-        self.mode = Some(mode);
+    pub fn preset(mut self, preset: Preset) -> Self {
+        self.preset = Some(preset);
         self
     }
 
@@ -215,8 +226,22 @@ impl CompressionPolicyBuilder {
         self
     }
 
-    pub fn cache_boundary(mut self, cache_boundary: CacheBoundary) -> Self {
-        self.cache_boundary = Some(cache_boundary);
+    pub fn encoding(mut self, encoding: OutputEncoding) -> Self {
+        self.encoding = Some(encoding);
+        self
+    }
+
+    pub fn pruning(mut self, pruning: PruningPolicy) -> Self {
+        self.lossy = Some(LossyPath::Heuristic);
+        self.lossy_ratio = Some(pruning.keep_ratio.unwrap_or(0.0));
+        self.lossy_preserve = pruning.preserve_paths.clone();
+        if pruning.retrieval_store.is_some() {
+            self.retrieval_store_path = pruning.retrieval_store.clone();
+        }
+        if pruning.retrieval_namespace.is_some() {
+            self.retrieval_namespace = pruning.retrieval_namespace.clone();
+        }
+        self.pruning = Some(pruning);
         self
     }
 
@@ -227,11 +252,6 @@ impl CompressionPolicyBuilder {
 
     pub fn disable(mut self, transform_id: impl Into<String>) -> Self {
         self.disabled.push(transform_id.into());
-        self
-    }
-
-    pub fn unsafe_disable_redaction(mut self, unsafe_disable: bool) -> Self {
-        self.unsafe_disable_redaction = unsafe_disable;
         self
     }
 
@@ -299,12 +319,12 @@ impl CompressionPolicyBuilder {
         let policy = CompressionPolicy {
             target_tokens: self.target_tokens,
             reserve_output_tokens: self.reserve_output_tokens.unwrap_or(0),
-            mode: self.mode.unwrap_or(CompressionMode::Balanced),
+            preset: self.preset.unwrap_or(Preset::Balanced),
             task_scope: self.task_scope.unwrap_or(TaskScope::All),
-            cache_boundary: self.cache_boundary,
+            encoding: self.encoding.unwrap_or_default(),
+            pruning: self.pruning,
             preserve_latest_user_message: self.preserve_latest_user_message.unwrap_or(true),
             disabled: self.disabled,
-            unsafe_disable_redaction: self.unsafe_disable_redaction,
             experimental: self.experimental,
             enable: self.enable,
             store_originals: self.store_originals,
@@ -456,16 +476,7 @@ mod tests {
     #[test]
     fn default_mode_is_balanced() {
         let policy = CompressionPolicy::builder().build().unwrap();
-        assert_eq!(policy.mode, CompressionMode::Balanced);
-    }
-
-    #[test]
-    fn cache_boundary_is_rejected_instead_of_silently_ignored() {
-        let error = CompressionPolicy::builder()
-            .cache_boundary(CacheBoundary::ByteOffset(10))
-            .build()
-            .unwrap_err();
-        assert!(error.to_string().contains("not implemented"));
+        assert_eq!(policy.preset, Preset::Balanced);
     }
 
     #[test]

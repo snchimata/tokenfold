@@ -1,26 +1,71 @@
 use clap::ValueEnum;
 use serde::Deserialize;
-use tokenfold_core::{CompressionMode, LossyPath, TaskScope};
+use tokenfold_core::{DecodeFormat, OutputEncoding, Preset, TaskScope};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ModeArg {
+pub enum PresetArg {
     Conservative,
     Balanced,
     Aggressive,
 }
 
-impl ModeArg {
-    pub fn to_core(self) -> CompressionMode {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum EncodingArg {
+    Json,
+    Toon,
+}
+
+impl EncodingArg {
+    pub fn to_core(self) -> OutputEncoding {
         match self {
-            ModeArg::Conservative => CompressionMode::Conservative,
-            ModeArg::Balanced => CompressionMode::Balanced,
-            ModeArg::Aggressive => CompressionMode::Aggressive,
+            Self::Json => OutputEncoding::Json,
+            Self::Toon => OutputEncoding::Toon,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum DecodeFormatArg {
+    #[default]
+    Auto,
+    Json,
+    Toon,
+    Text,
+}
+
+impl DecodeFormatArg {
+    pub fn to_core(self) -> DecodeFormat {
+        match self {
+            Self::Auto => DecodeFormat::Auto,
+            Self::Json => DecodeFormat::Json,
+            Self::Toon => DecodeFormat::Toon,
+            Self::Text => DecodeFormat::Text,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum ReceiptFormatArg {
+    #[default]
+    Json,
+    Text,
+}
+
+impl PresetArg {
+    pub fn to_core(self) -> Preset {
+        match self {
+            PresetArg::Conservative => Preset::Conservative,
+            PresetArg::Balanced => Preset::Balanced,
+            PresetArg::Aggressive => Preset::Aggressive,
         }
     }
 
     pub fn parse(s: &str) -> Result<Self, String> {
-        <ModeArg as ValueEnum>::from_str(s, true)
+        <PresetArg as ValueEnum>::from_str(s, true)
     }
 }
 
@@ -56,22 +101,6 @@ impl TaskScopeArg {
 
     pub fn parse(s: &str) -> Result<Self, String> {
         <TaskScopeArg as ValueEnum>::from_str(s, true)
-    }
-}
-
-/// Opt-in lossy JSON array-item selection (drops whole array items to hit a token budget,
-/// local-only). `Heuristic` is the only Phase 1 backend; a future `Select` backend is Phase 2.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "snake_case")]
-pub enum LossyArg {
-    Heuristic,
-}
-
-impl LossyArg {
-    pub fn to_core(self) -> LossyPath {
-        match self {
-            LossyArg::Heuristic => LossyPath::Heuristic,
-        }
     }
 }
 

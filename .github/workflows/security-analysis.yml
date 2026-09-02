@@ -1,0 +1,61 @@
+name: Security analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+    - cron: "43 7 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v4
+        if: matrix.language == 'rust'
+      - uses: github/codeql-action/analyze@v4
+
+  parser-property-fuzz:
+    name: Scheduled parser/property fuzzing
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 6 * * 1'
+    runs-on: ubuntu-latest
+    env:
+      PROPTEST_CASES: 10000
+      PROPTEST_MAX_SHRINK_ITERS: 10000
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -p tokenfold-core --locked
+
+  next-rust-stable:
+    name: Monthly latest-stable compatibility
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '43 7 1 * *'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --locked

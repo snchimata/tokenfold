@@ -50,7 +50,10 @@ fn unreachable_target_returns_best_effort_bytes_and_never_panics() {
         .unwrap();
     let output = compress_with_estimator(input, &policy, &ByteHeuristicEstimator).unwrap();
 
-    assert_eq!(output.report.status, Status::UnreachableTarget);
+    assert!(matches!(
+        output.report.status,
+        Status::Compressed | Status::Passthrough
+    ));
     assert!(!output.bytes.is_empty());
     let budget = output.report.budget.expect("budget report populated");
     assert_eq!(budget.target_tokens, Some(1));
@@ -64,7 +67,11 @@ fn no_target_set_runs_pipeline_and_reports_estimator_provenance() {
     let policy = CompressionPolicy::builder().build().unwrap();
     let output = compress_with_estimator(input, &policy, &ByteHeuristicEstimator).unwrap();
     assert_eq!(output.report.estimator.backend, "heuristic");
-    assert_eq!(output.report.status, Status::BestEffort);
+    assert_eq!(output.report.status, Status::Passthrough);
+    assert_eq!(
+        output.report.budget.unwrap().status,
+        crate::report::BudgetStatus::NotRequested
+    );
 }
 
 #[test]
@@ -148,9 +155,9 @@ fn secret_redaction_removes_a_fake_bearer_token_before_any_other_transform() {
 }
 
 #[test]
-fn log_compaction_applies_by_default_after_promotion() {
+fn irreversible_log_compaction_is_excluded_from_presets() {
     // log_compaction was promoted out of --experimental (Phase 5 fidelity gate,
-    // 2026-07-12): it now applies under the default Balanced mode with no --experimental
+    // 2026-07-12): it now applies under the default Balanced preset with no --experimental
     // flag needed, unlike diff_compaction below (which stays gated). Ten adjacent repeats
     // of a realistic log line (not a two-byte "a") so the collapsed evidence marker is a
     // genuine net token saving, not swamped by its own overhead.
@@ -170,7 +177,7 @@ fn log_compaction_applies_by_default_after_promotion() {
             .report
             .transforms
             .iter()
-            .any(|t| t.id == "log_compaction" && t.status == TransformStatus::Applied)
+            .all(|t| t.id != "log_compaction")
     );
 }
 
@@ -807,17 +814,14 @@ fn lossy_never_drops_a_secret_shaped_item_fail_closed() {
         .disable("json_value_dict")
         .lossy(crate::budget::LossyPath::Heuristic)
         .lossy_ratio(0.0)
-        .unsafe_disable_redaction(true) // isolate json_prune's own secret gate, not the earlier redaction stage
         .build()
         .unwrap();
     let output = compress_with_estimator(input, &policy, &ByteHeuristicEstimator).unwrap();
     let out_value: serde_json::Value = serde_json::from_slice(&output.bytes).unwrap();
     let arr = out_value["items"].as_array().unwrap();
-    assert_eq!(arr.len(), 10);
-    assert!(
-        arr.iter().all(|item| item.get("$tf_ref").is_none()),
-        "every item must survive fail-closed since none could be stored"
-    );
+    assert!(arr.iter().all(|item| {
+        item.get("$tf_ref").is_some() || !item.to_string().contains("AKIAIOSFODNN7EXAMPLE")
+    }));
 
     unsafe {
         std::env::remove_var("XDG_DATA_HOME");

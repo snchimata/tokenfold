@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 pub enum Status {
     Compressed,
     Passthrough,
-    BestEffort,
-    UnreachableTarget,
 }
 
 #[cfg(test)]
@@ -23,24 +21,11 @@ mod tests {
             serde_json::to_string(&Status::Passthrough).unwrap(),
             "\"passthrough\""
         );
-        assert_eq!(
-            serde_json::to_string(&Status::BestEffort).unwrap(),
-            "\"best_effort\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Status::UnreachableTarget).unwrap(),
-            "\"unreachable_target\""
-        );
     }
 
     #[test]
     fn round_trips_through_json() {
-        for status in [
-            Status::Compressed,
-            Status::Passthrough,
-            Status::BestEffort,
-            Status::UnreachableTarget,
-        ] {
+        for status in [Status::Compressed, Status::Passthrough] {
             let json = serde_json::to_string(&status).unwrap();
             let back: Status = serde_json::from_str(&json).unwrap();
             assert_eq!(status, back);

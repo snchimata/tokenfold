@@ -1,4 +1,5 @@
 pub mod budget;
+pub mod codec;
 pub mod errors;
 pub mod filters;
 pub mod input;
@@ -12,7 +13,8 @@ pub mod status;
 pub mod token_estimator;
 pub mod transforms;
 
-pub use budget::{CacheBoundary, CompressionMode, CompressionPolicy, LossyPath, TaskScope};
+pub use budget::{CompressionPolicy, LossyPath, Preset, PruningPolicy, TaskScope};
+pub use codec::{DecodeFormat, OutputEncoding, decode, encode_toon};
 pub use errors::TokenFoldError;
 pub use input::{CompressionInput, CompressionOutput, InputFormat};
 pub use modes::TransformId;

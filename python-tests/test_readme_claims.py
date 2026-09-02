@@ -22,7 +22,7 @@ FIXTURE = REPO_ROOT / "examples" / "api_response.json"
 METRICS = REPO_ROOT / "tests" / "fixtures" / "readme_metrics.json"
 
 CLAIM = re.compile(
-    r"The bundled (\d+)-record API response reports ([\d,]+) → ([\d,]+) tokens,\s+"
+    r"The bundled (\d+)-record API response reports ([\d,]+)\D+([\d,]+) tokens,\s+"
     r"a \*\*([\d.]+)%",
 )
 
@@ -61,7 +61,7 @@ def test_readme_fixture_claim_matches_measurement():
 INCIDENT_FIXTURE = REPO_ROOT / "examples" / "incident_feed.json"
 
 INCIDENT_ROW = re.compile(
-    r"\| (?:Lossless|`--lossy-ratio (0\.\d+)`) \| ([\d,]+) \| \*{0,2}([\d.]+)%\*{0,2} "
+    r"\| (?:Lossless|`--keep-ratio (0\.\d+)`) \| ([\d,]+) \| \*{0,2}([\d.]+)%\*{0,2} "
     r"\| ([\d,]+) \|"
 )
 
@@ -79,14 +79,12 @@ def test_readme_incident_table_matches_measurement(tmp_path):
             report = tokenfold.compress(source, format=tokenfold.InputFormat.JSON).report
             kept = len(json.loads(source)["events"])
         else:
-            policy = tokenfold.CompressionPolicy(
-                retrieval_backend="filesystem",
-                retrieval_store_path=str(tmp_path / ratio),
-                lossy=tokenfold.LossyPath.HEURISTIC,
-                lossy_ratio=float(ratio),
-            )
             result = tokenfold.compress(
-                source, policy=policy, format=tokenfold.InputFormat.JSON
+                source,
+                format=tokenfold.InputFormat.JSON,
+                pruning=tokenfold.PruningPolicy(
+                    keep_ratio=float(ratio), retrieval_store=tmp_path / ratio
+                ),
             )
             report = result.report
             kept = sum(

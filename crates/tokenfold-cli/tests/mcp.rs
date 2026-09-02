@@ -108,7 +108,7 @@ fn tools_call_compress_returns_messages_array_and_report() {
     assert_eq!(responses.len(), 1);
     let structured = &responses[0]["result"]["structuredContent"];
     assert!(structured["messages"].is_array());
-    assert_eq!(structured["report"]["schema_version"], "1.0");
+    assert_eq!(structured["report"]["schema_version"], "2.0");
     assert_eq!(responses[0]["result"]["isError"], false);
 }
 
@@ -127,7 +127,7 @@ fn tools_call_inspect_never_returns_a_modified_payload() {
     let structured = &responses[0]["result"]["structuredContent"];
     assert!(structured.get("content").is_none());
     assert!(structured.get("messages").is_none());
-    assert!(structured["preview"].is_string());
+    assert!(structured.get("preview").is_none());
     assert!(structured["report"]["schema_version"].is_string());
 }
 
@@ -156,27 +156,6 @@ fn tools_call_rejects_both_content_and_messages() {
     });
     let responses = run_mcp(&format!("{request}\n"));
     assert_eq!(responses[0]["result"]["isError"], true);
-}
-
-#[test]
-fn tools_call_rejects_unimplemented_store_originals_instead_of_ignoring_it() {
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "tokenfold_compress",
-            "arguments": {"content": "hello", "store_originals": true}
-        }
-    });
-    let responses = run_mcp(&format!("{request}\n"));
-    assert_eq!(responses[0]["result"]["isError"], true);
-    assert!(
-        responses[0]["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("not implemented")
-    );
 }
 
 #[test]
@@ -211,56 +190,6 @@ fn malformed_json_line_returns_parse_error_and_does_not_crash_the_server() {
 }
 
 // ---- tokenfold_retrieve ----
-
-#[test]
-fn tools_call_retrieve_round_trips_a_payload_stored_via_cli_compress() {
-    let store_path = unique_temp_path("retrieve_roundtrip");
-    let payload = b"the quick brown fox jumps over the lazy dog, over and over.";
-
-    // Pre-populate the retrieval store via `tokenfold compress --store-originals`, scoped to
-    // this test's own temp store path via env (never the test process's own environment).
-    let mut child = Command::new(bin())
-        .args(["compress", "-", "--format", "text", "--store-originals"])
-        .env("TOKENFOLD_RETRIEVAL_STORE_PATH", &store_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child.stdin.take().unwrap().write_all(payload).unwrap();
-    let out = child.wait_with_output().unwrap();
-    assert!(
-        out.status.success(),
-        "compress stderr: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
-    let hash = tokenfold_core::retrieval_store::hex_sha256(payload);
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {"name": "tokenfold_retrieve", "arguments": {"hash": hash}}
-    });
-    let responses = run_mcp_with_env(
-        &format!("{request}\n"),
-        &[(
-            "TOKENFOLD_RETRIEVAL_STORE_PATH",
-            store_path.to_str().unwrap(),
-        )],
-    );
-
-    let structured = &responses[0]["result"]["structuredContent"];
-    assert_eq!(structured["status"], "found");
-    assert_eq!(structured["source"], "local_mcp");
-    assert_eq!(
-        structured["content"],
-        String::from_utf8_lossy(payload).into_owned()
-    );
-    assert_eq!(responses[0]["result"]["isError"], false);
-
-    std::fs::remove_dir_all(&store_path).ok();
-}
 
 #[test]
 fn tools_call_retrieve_missing_hash_returns_missing_status_not_a_tool_error() {
@@ -344,7 +273,7 @@ fn tools_call_stats_aggregates_the_local_ledger_and_carries_no_raw_payload() {
         timestamp: "2026-01-01T00:00:00Z".to_string(),
         surface: "cli".to_string(),
         format: "plain_text".to_string(),
-        mode: "balanced".to_string(),
+        preset: "balanced".to_string(),
         status: "compressed".to_string(),
         original_tokens: 1000,
         compressed_tokens: 600,

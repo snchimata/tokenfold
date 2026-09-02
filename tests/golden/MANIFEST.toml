@@ -62,8 +62,7 @@ expected = "tests/golden/diff_compaction/small_diff.out.txt"
 description = "Small unified diff for one file: headers and changed +/- bodies kept, two runs of context lines each collapse to an evidence marker"
 sha256 = "ae66968a39d5bf54ad7ceac9d6bd7c40aa325684ef668828cc9429bb0f86664b"
 
-# Updating golden fixtures: golden files are versioned and immutable.
-# Regenerating an expected output requires `REGENERATE_GOLDENS=1 cargo test` (not yet wired —
-# tracked as a Phase 3+ CLI/tooling nicety) and an explanation in the commit message. Until
-# that exists, update `.out` fixtures and this manifest's `sha256` field by hand in the same
-# commit, and explain why in the commit message.
+# Updating golden fixtures: golden files are versioned contracts. For an intentional behavior
+# change, run cargo run -p tokenfold-core --example regenerate_goldens -- --write; it rewrites
+# every expected output and manifest hash together. Review the byte diff and explain the contract
+# change in the commit message.

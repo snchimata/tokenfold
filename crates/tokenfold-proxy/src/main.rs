@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use tokenfold_core::CompressionMode;
+use tokenfold_core::Preset;
 
 /// HTTP proxy that compresses provider-shaped JSON requests before forwarding them upstream.
 /// Deliberately a separate binary rather than a `tokenfold` subcommand, so the HTTP server and
@@ -32,10 +32,10 @@ struct Cli {
     #[arg(long)]
     no_compress: bool,
     #[arg(long, default_value = "balanced")]
-    mode: String,
+    preset: String,
     #[arg(long)]
     target_tokens: Option<usize>,
-    /// Always rejected: secret redaction cannot be disabled in proxy mode.
+    /// Always rejected: secret redaction cannot be disabled in proxy preset.
     #[arg(long = "unsafe-disable-redaction", hide = true)]
     unsafe_disable_redaction: bool,
     /// Retrieval-store backend used by `/v1/retrieve*` and `X-TokenFold-Store-Originals`.
@@ -50,7 +50,7 @@ fn main() {
     let cli = Cli::parse();
 
     if cli.unsafe_disable_redaction {
-        eprintln!("error: --unsafe-disable-redaction is forbidden in proxy mode");
+        eprintln!("error: --unsafe-disable-redaction is forbidden in proxy preset");
         std::process::exit(5);
     }
     if let Err(message) = validate_upstream(&cli.upstream, cli.insecure_upstream) {
@@ -70,12 +70,12 @@ fn main() {
         );
         std::process::exit(5);
     }
-    let mode = match cli.mode.to_ascii_lowercase().as_str() {
-        "conservative" => CompressionMode::Conservative,
-        "balanced" => CompressionMode::Balanced,
-        "aggressive" => CompressionMode::Aggressive,
+    let preset = match cli.preset.to_ascii_lowercase().as_str() {
+        "conservative" => Preset::Conservative,
+        "balanced" => Preset::Balanced,
+        "aggressive" => Preset::Aggressive,
         other => {
-            eprintln!("error: invalid --mode {other}");
+            eprintln!("error: invalid --preset {other}");
             std::process::exit(2);
         }
     };
@@ -84,7 +84,7 @@ fn main() {
         upstream: cli.upstream.trim_end_matches('/').to_string(),
         max_body_bytes: cli.max_body_bytes,
         compress: !cli.no_compress,
-        mode,
+        preset,
         target_tokens: cli.target_tokens,
         retrieval_backend: cli.retrieval_backend,
         retrieval_store_path: cli.retrieval_store_path,

@@ -324,7 +324,7 @@ pub fn doctor_probe() -> RtkDoctor {
             // until the user opts in. Report honestly rather than claim readiness.
             raw_capture: "unavailable".to_string(),
             notes: vec![
-                "enable RTK [tee] (enabled=true, mode=\"always\") to allow CCR raw capture; \
+                "enable RTK [tee] (enabled=true, preset=\"always\") to allow CCR raw capture; \
                  tokenfold supplies a per-run RTK_TEE_DIR"
                     .to_string(),
             ],

@@ -206,7 +206,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -270,7 +270,7 @@ checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -620,7 +620,7 @@ dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -632,7 +632,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -860,7 +860,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -946,6 +946,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -970,7 +981,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+dependencies = [
+ "thiserror-impl 2.0.20",
 ]
 
 [[package]]
@@ -981,7 +1001,18 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.4",
 ]
 
 [[package]]
@@ -1013,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-adapters"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1022,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-admin"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ed25519-dalek",
  "serde",
@@ -1032,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-cli"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "clap",
  "serde",
@@ -1045,39 +1076,40 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-core"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "proptest",
  "regex",
  "serde",
  "serde_json",
  "sha2",
- "thiserror",
+ "thiserror 1.0.69",
  "tiktoken-rs",
  "toml",
+ "toon-format",
 ]
 
 [[package]]
 name = "tokenfold-image"
-version = "0.4.1"
+version = "0.5.0"
 
 [[package]]
 name = "tokenfold-learn"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "tokenfold-core",
 ]
 
 [[package]]
 name = "tokenfold-output"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "tokenfold-core",
 ]
 
 [[package]]
 name = "tokenfold-proxy"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "clap",
  "serde",
@@ -1089,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-py"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "pyo3",
  "serde_json",
@@ -1098,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-rag"
-version = "0.4.1"
+version = "0.5.0"
 
 [[package]]
 name = "toml"
@@ -1140,6 +1172,18 @@ name = "toml_write"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
+
+[[package]]
+name = "toon-format"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f89570c1a68d73941f728cca32a4345b2ffca36667ad921af336c60309a3e7e"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "typenum"
@@ -1364,7 +1408,7 @@ checksum = "e2e817b7b52d0c7358d3246da9d69935ebb18116b2b102b4230dac079b4862f5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]

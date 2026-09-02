@@ -12,8 +12,9 @@ pub struct CompressionReport {
     pub savings_pct: f64,   // positive percent: 35.3
     pub estimator: EstimatorInfo,
     pub status: Status,
-    pub mode: String,
+    pub preset: String,
     pub format: String,
+    pub output_encoding: String,
     pub task_scope: String,
     pub request_id: Option<String>,
     /// Staged `raw -> RTK -> tokenfold` accounting. `None` for the common
@@ -22,6 +23,8 @@ pub struct CompressionReport {
     pub pipeline: Option<PipelineReport>,
     pub quality: Option<QualityReport>,
     pub budget: Option<BudgetReport>,
+    pub encoding: Option<EncodingReport>,
+    pub pruning: Option<PruningReport>,
     pub cache: Option<CacheReport>,
     pub retrieval: Option<RetrievalReport>,
     pub output_savings: Option<OutputSavingsReport>,
@@ -39,7 +42,7 @@ impl CompressionReport {
         compressed_tokens: usize,
         estimator: EstimatorInfo,
         status: Status,
-        mode: String,
+        preset: String,
         format: String,
         task_scope: String,
         transforms: Vec<TransformReport>,
@@ -53,7 +56,7 @@ impl CompressionReport {
         };
         let savings_pct = savings_ratio * 100.0;
         Self {
-            schema_version: "1.0".to_string(),
+            schema_version: "2.0".to_string(),
             original_tokens,
             compressed_tokens,
             saved_tokens,
@@ -61,13 +64,16 @@ impl CompressionReport {
             savings_pct,
             estimator,
             status,
-            mode,
+            preset,
             format,
+            output_encoding: "native".to_string(),
             task_scope,
             request_id: None,
             pipeline: None,
             quality: None,
             budget: None,
+            encoding: None,
+            pruning: None,
             cache: None,
             retrieval: None,
             output_savings: None,
@@ -136,9 +142,42 @@ pub struct PipelineStageReport {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BudgetReport {
+    pub status: BudgetStatus,
     pub target_tokens: Option<usize>,
     pub protected_floor: usize,
     pub achieved_tokens: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetStatus {
+    NotRequested,
+    Met,
+    BestEffort,
+    Unreachable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EncodingReport {
+    pub codec: String,
+    pub version: String,
+    pub roundtrip_verified: bool,
+    pub tokens_before: usize,
+    pub tokens_after: usize,
+    pub token_delta: i64,
+    pub warnings: Vec<Warning>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PruningReport {
+    pub requested: bool,
+    pub applied: bool,
+    pub preview: bool,
+    pub candidate_items: usize,
+    pub retained_items: usize,
+    pub pruned_items: usize,
+    pub evidence_refs: usize,
+    pub preserve_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -187,7 +226,7 @@ pub enum SkippedReason {
     TargetAlreadyMet,
     NotApplicableToFormat,
     NotEnabledInMode,
-    /// The transform is enabled for this mode/format, but a lossy run (`policy.lossy`) actually
+    /// The transform is enabled for this preset/format, but a lossy run (`policy.lossy`) actually
     /// pruned the payload, and this transform restructures arrays in a way that would move a
     /// `lossy_preserve` path off the array it names. See `pipeline::apply_transforms`, which
     /// defers these until after the lossy stage and only skips them when pruning really applied.
@@ -229,6 +268,7 @@ pub enum WarningCode {
     SecurityFieldAltered,
     HeuristicBudgetUsed,
     PrefixModified,
+    OutputEncodingIncreased,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -316,7 +356,7 @@ mod tests {
         assert_eq!(report.saved_tokens, 6_500);
         assert!((report.savings_ratio - 0.353_260_869_565_217_4).abs() < f64::EPSILON * 10.0);
         assert!((report.savings_pct - 35.326_086_956_521_74).abs() < 1e-9);
-        assert_eq!(report.schema_version, "1.0");
+        assert_eq!(report.schema_version, "2.0");
     }
 
     #[test]
@@ -345,7 +385,7 @@ mod tests {
             10,
             15,
             heuristic_estimator(),
-            Status::BestEffort,
+            Status::Compressed,
             "balanced".to_string(),
             "plain_text".to_string(),
             "general".to_string(),
@@ -361,7 +401,7 @@ mod tests {
             100,
             80,
             heuristic_estimator(),
-            Status::UnreachableTarget,
+            Status::Compressed,
             "balanced".to_string(),
             "plain_text".to_string(),
             "general".to_string(),
@@ -369,7 +409,7 @@ mod tests {
             vec![],
         );
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(json["status"], "unreachable_target");
+        assert_eq!(json["status"], "compressed");
         assert_eq!(json["estimator"]["backend"], "heuristic");
         assert_eq!(json["estimator"]["is_exact"], false);
     }
@@ -406,5 +446,31 @@ mod tests {
         );
         let back: QualityReport = serde_json::from_value(json).unwrap();
         assert_eq!(quality, back);
+    }
+
+    #[test]
+    fn canonical_v2_report_fixture_round_trips_without_schema_drift() {
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/compression_report_v2.json"
+        ))
+        .unwrap();
+        let report: CompressionReport = serde_json::from_value(expected.clone()).unwrap();
+        assert_eq!(serde_json::to_value(report).unwrap(), expected);
+
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/compression_report_v2.schema.json"
+        ))
+        .unwrap();
+        let expected_keys = expected.as_object().unwrap().keys().collect::<Vec<_>>();
+        let schema_keys = schema["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>();
+        assert_eq!(schema_keys, expected_keys);
+        assert_eq!(
+            schema["required"].as_array().unwrap().len(),
+            expected_keys.len()
+        );
     }
 }

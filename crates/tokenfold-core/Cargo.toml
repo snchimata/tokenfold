@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Token-aware compression for LLM payloads: shrink JSON tool-call bodies, command output, and diffs with exact tiktoken accounting and a typed safety report."
+readme = "README.md"
 keywords = ["llm", "tokenizer", "compression", "tiktoken", "token-optimization"]
 categories = ["compression", "text-processing"]
 
@@ -15,6 +16,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 regex = { workspace = true }
 sha2 = { workspace = true }
+toon-format = { workspace = true }
 toml = { workspace = true }
 tiktoken-rs = { workspace = true, optional = true }
 
@@ -35,3 +37,7 @@ harness = false
 [[example]]
 name = "quickstart"
 path = "../../examples/quickstart.rs"
+
+[[example]]
+name = "regenerate_goldens"
+path = "../../examples/regenerate_goldens.rs"

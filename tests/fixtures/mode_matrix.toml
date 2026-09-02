@@ -54,9 +54,9 @@ applicable_formats = ["json"]
 [[transforms]]
 id = "schema_compaction"
 version = "1.0.0"
-conservative_enabled = true
-balanced_enabled = true
-aggressive_enabled = true
+conservative_enabled = false
+balanced_enabled = false
+aggressive_enabled = false
 experimental = false
 max_ratio_conservative = 0.15
 max_ratio_balanced = 0.30
@@ -72,9 +72,9 @@ version = "1.0.0"
 # max_ratio is unrestricted; out of Conservative; ships behind --experimental until its fidelity
 # gate is green; runs before the lossy log_compaction on plaintext/command-output logs.
 conservative_enabled = false
-balanced_enabled = false
-aggressive_enabled = false
-experimental = true
+balanced_enabled = true
+aggressive_enabled = true
+experimental = false
 max_ratio_conservative = 0.0
 max_ratio_balanced = 1.0
 max_ratio_aggressive = 1.0
@@ -88,8 +88,8 @@ version = "1.0.0"
 # draft fidelity threshold cleanly (quality_retention=1.0, contrastive_failure_rate=0.0,
 # critical_token_survival_rate=1.0).
 conservative_enabled = false
-balanced_enabled = true
-aggressive_enabled = true
+balanced_enabled = false
+aggressive_enabled = false
 experimental = false
 max_ratio_conservative = 0.0
 max_ratio_balanced = 0.65    # draft; updated after Phase 2 accuracy@ratio data

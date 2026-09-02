@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use serde_json::json;
-use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, compress};
+use tokenfold_core::{CompressionInput, CompressionPolicy, Preset, compress};
 
 struct CountingAllocator;
 
@@ -106,7 +106,7 @@ fn measure(
     iterations: usize,
 ) -> (f64, f64) {
     let policy = CompressionPolicy::builder()
-        .mode(CompressionMode::Balanced)
+        .preset(Preset::Balanced)
         .build()
         .expect("valid policy");
 
@@ -134,7 +134,7 @@ fn measure_bytes_allocated(
     format_ctor: impl Fn(Vec<u8>) -> CompressionInput,
 ) -> usize {
     let policy = CompressionPolicy::builder()
-        .mode(CompressionMode::Balanced)
+        .preset(Preset::Balanced)
         .build()
         .expect("valid policy");
     let input = format_ctor(input_bytes.to_vec());
