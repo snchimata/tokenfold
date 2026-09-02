@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -86,7 +86,7 @@ jobs:
           name: python-abi3-wheel
           path: dist
       - run: python -m pip install dist/*.whl
-      - run: python -c "import tokenfold; assert tokenfold.CompressionMode.BALANCED"
+      - run: python -c "import tokenfold; assert tokenfold.Preset.BALANCED"
 
   node-api:
     name: node-api (Node ${{ matrix.node }})
@@ -165,7 +165,7 @@ jobs:
           GITLEAKS_ENABLE_SUMMARY: true
 
   # CI gate policy: advisory on merge (gross-regression check only; bench-regression on a
-  # dedicated runner is the release-blocking gate — see release.yml).
+  # dedicated runner is the release-blocking gate â€” see release.yml).
   bench-smoke:
     name: bench-smoke
     runs-on: ubuntu-latest
@@ -177,7 +177,7 @@ jobs:
       - run: cargo bench --workspace --locked
 
   # CI gate policy: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
-  # / API key needed yet — see eval/tasks/FIXTURES.md), so this can safely run on every PR too.
+  # / API key needed yet â€” see eval/tasks/FIXTURES.md), so this can safely run on every PR too.
   fidelity-smoke:
     name: fidelity-smoke
     runs-on: ubuntu-latest
