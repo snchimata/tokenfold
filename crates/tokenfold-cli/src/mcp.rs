@@ -32,13 +32,14 @@ use tokenfold_core::retrieval_store::{
 };
 use tokenfold_core::stats::{self, LedgerStore};
 use tokenfold_core::{
-    CompressionInput, CompressionMode, CompressionPolicy, InputFormat, TokenFoldError,
+    CompressionInput, CompressionPolicy, InputFormat, OutputEncoding, Preset, PruningPolicy,
+    TokenFoldError,
 };
 
-use crate::args::ModeArg;
+use crate::args::PresetArg;
 use crate::format::FormatArg;
 
-const PROTOCOL_VERSION: &str = "2024-11-05";
+const PROTOCOL_VERSION: &str = "2025-11-25";
 
 pub fn serve() -> Result<i32, TokenFoldError> {
     let stdin = std::io::stdin();
@@ -125,13 +126,19 @@ fn tool_input_schema() -> Value {
             },
             "format": {
                 "type": "string",
-                "enum": ["auto", "openai_json", "anthropic_json", "plain_text", "command_output", "git_diff"],
+                "enum": ["auto", "json", "openai_json", "anthropic_json", "plain_text", "command_output", "git_diff"],
             },
-            "mode": {"type": "string", "enum": ["conservative", "balanced", "aggressive"]},
-            "target_tokens": {"type": "integer", "minimum": 0},
-            "store_originals": {
-                "type": "boolean",
-                "description": "Reserved. `true` is rejected until per-request MCP persistence is implemented.",
+            "preset": {"type": "string", "enum": ["conservative", "balanced", "aggressive"]},
+            "target_tokens": {"type": "integer", "minimum": 1},
+            "encoding": {"type": "string", "enum": ["json", "toon"]},
+            "pruning": {
+                "type": "object",
+                "properties": {
+                    "keep_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+                    "preserve_paths": {"type": "array", "items": {"type": "string"}},
+                    "retrieval_store": {"type": "string"},
+                    "retrieval_namespace": {"type": "string"}
+                }
             },
         },
     })
@@ -228,15 +235,11 @@ fn call_compress(arguments: &Value, is_inspect: bool) -> Value {
 
 fn run_compress(arguments: &Value, is_inspect: bool) -> Result<Value, String> {
     let (input, from_messages) = build_input(arguments)?;
-    let policy = build_policy(arguments)?;
+    let policy = build_policy(arguments, is_inspect)?;
     let output = tokenfold_core::compress(input, &policy).map_err(|e| e.to_string())?;
 
     if is_inspect {
-        let preview: String = String::from_utf8_lossy(&output.bytes)
-            .chars()
-            .take(2000)
-            .collect();
-        Ok(json!({"report": output.report, "preview": preview}))
+        Ok(json!({"report": output.report}))
     } else if from_messages {
         let value: Value = serde_json::from_slice(&output.bytes).map_err(|e| e.to_string())?;
         let messages = value.get("messages").cloned().unwrap_or_else(|| json!([]));
@@ -287,24 +290,56 @@ fn build_input(arguments: &Value) -> Result<(CompressionInput, bool), String> {
     }
 }
 
-fn build_policy(arguments: &Value) -> Result<CompressionPolicy, String> {
-    if arguments
-        .get("store_originals")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        return Err(
-            "store_originals=true is not implemented for MCP compression; use the CLI or proxy"
-                .to_string(),
-        );
+fn build_policy(arguments: &Value, is_inspect: bool) -> Result<CompressionPolicy, String> {
+    if arguments.get("store_originals").is_some() {
+        return Err("store_originals was removed; use the typed pruning policy".to_string());
     }
-    let mode = match arguments.get("mode").and_then(Value::as_str) {
-        Some(s) => ModeArg::parse(s)?.to_core(),
-        None => CompressionMode::Balanced,
+    let preset = match arguments.get("preset").and_then(Value::as_str) {
+        Some(s) => PresetArg::parse(s)?.to_core(),
+        None => Preset::Balanced,
     };
-    let mut builder = CompressionPolicy::builder().mode(mode);
+    let mut builder = CompressionPolicy::builder()
+        .preset(preset)
+        .preview(is_inspect);
     if let Some(t) = arguments.get("target_tokens").and_then(Value::as_u64) {
         builder = builder.target_tokens(t as usize);
+    }
+    if let Some(encoding) = arguments.get("encoding").and_then(Value::as_str) {
+        builder = builder.encoding(match encoding {
+            "json" => OutputEncoding::Json,
+            "toon" => OutputEncoding::Toon,
+            value => return Err(format!("unknown encoding: {value}")),
+        });
+    }
+    if let Some(pruning) = arguments.get("pruning") {
+        let preserve_paths = pruning
+            .get("preserve_paths")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map(str::to_owned)
+                            .ok_or("preserve_paths must contain only strings".to_string())
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
+        builder = builder.pruning(PruningPolicy {
+            keep_ratio: pruning.get("keep_ratio").and_then(Value::as_f64),
+            preserve_paths,
+            retrieval_store: pruning
+                .get("retrieval_store")
+                .and_then(Value::as_str)
+                .map(PathBuf::from),
+            retrieval_namespace: pruning
+                .get("retrieval_namespace")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        });
     }
     builder.build().map_err(|e| e.to_string())
 }

@@ -1,12 +1,12 @@
-//! Canonical mode matrix: the single source of truth for which transforms run in which
-//! mode, at what ratio cap, for which task scopes and input formats. `secret_redaction` is
+//! Canonical preset matrix: the single source of truth for which transforms run in which
+//! preset, at what ratio cap, for which task scopes and input formats. `secret_redaction` is
 //! deliberately absent from this table — it runs unconditionally before the pipeline and
 //! cannot be disabled (see `budget::CompressionPolicyBuilder::build`).
 //!
 //! `tests/fixtures/mode_matrix.toml` mirrors this table for cross-surface testing
 //! (this table is authoritative; the fixture must be kept in sync with it).
 
-use crate::budget::{CompressionMode, TaskScope};
+use crate::budget::{Preset, TaskScope};
 use crate::input::InputFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,19 +50,19 @@ pub struct ModeEntry {
 }
 
 impl ModeEntry {
-    pub fn enabled_for(&self, mode: CompressionMode) -> bool {
-        match mode {
-            CompressionMode::Conservative => self.conservative_enabled,
-            CompressionMode::Balanced => self.balanced_enabled,
-            CompressionMode::Aggressive => self.aggressive_enabled,
+    pub fn enabled_for(&self, preset: Preset) -> bool {
+        match preset {
+            Preset::Conservative => self.conservative_enabled,
+            Preset::Balanced => self.balanced_enabled,
+            Preset::Aggressive => self.aggressive_enabled,
         }
     }
 
-    pub fn max_ratio_for(&self, mode: CompressionMode) -> f64 {
-        match mode {
-            CompressionMode::Conservative => self.max_ratio_conservative,
-            CompressionMode::Balanced => self.max_ratio_balanced,
-            CompressionMode::Aggressive => self.max_ratio_aggressive,
+    pub fn max_ratio_for(&self, preset: Preset) -> f64 {
+        match preset {
+            Preset::Conservative => self.max_ratio_conservative,
+            Preset::Balanced => self.max_ratio_balanced,
+            Preset::Aggressive => self.max_ratio_aggressive,
         }
     }
 
@@ -72,7 +72,7 @@ impl ModeEntry {
 }
 
 // Canonical ordered table — order here IS the pipeline execution order (lossless before lossy,
-// higher-savings before lower-savings, within each mode).
+// higher-savings before lower-savings, within each preset).
 //
 // ponytail: `table_compaction` is intentionally omitted. Tabular payloads aren't among this
 // project's dominant input types, so a table transform stays out of scope until a real consumer
@@ -132,9 +132,9 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
     ModeEntry {
         transform_id: TransformId::SchemaCompaction,
         version: "1.0.0",
-        conservative_enabled: true,
-        balanced_enabled: true,
-        aggressive_enabled: true,
+        conservative_enabled: false,
+        balanced_enabled: false,
+        aggressive_enabled: false,
         experimental: false,
         max_ratio_conservative: 0.15,
         max_ratio_balanced: 0.30,
@@ -152,9 +152,9 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
         transform_id: TransformId::LogFieldFold,
         version: "1.0.0",
         conservative_enabled: false,
-        balanced_enabled: false,
-        aggressive_enabled: false,
-        experimental: true,
+        balanced_enabled: true,
+        aggressive_enabled: true,
+        experimental: false,
         max_ratio_conservative: 0.0,
         max_ratio_balanced: 1.0,
         max_ratio_aggressive: 1.0,
@@ -170,8 +170,8 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
         // conservative_enabled stays false — Conservative never runs lossy-with-evidence
         // transforms at all, same convention table_compaction documents.
         conservative_enabled: false,
-        balanced_enabled: true,
-        aggressive_enabled: true,
+        balanced_enabled: false,
+        aggressive_enabled: false,
         experimental: false,
         max_ratio_conservative: 0.0,
         max_ratio_balanced: 0.65, // draft; updated after Phase 2 accuracy@ratio data
@@ -210,11 +210,11 @@ pub static ALL_ENTRIES: &[ModeEntry] = &[
     // here after their fidelity approval / scope decisions land.
 ];
 
-/// Returns the ordered, applicable transform list for a given (mode, task_scope, format).
+/// Returns the ordered, applicable transform list for a given (preset, task_scope, format).
 /// `secret_redaction` is not part of this table: the pipeline always runs it first,
 /// unconditionally, before consulting this function.
 pub fn pipeline_for(
-    mode: CompressionMode,
+    preset: Preset,
     task_scope: TaskScope,
     format: InputFormat,
     experimental: bool,
@@ -224,7 +224,7 @@ pub fn pipeline_for(
     ALL_ENTRIES
         .iter()
         .filter(|e| {
-            let mode_enabled = e.enabled_for(mode);
+            let mode_enabled = e.enabled_for(preset);
             let experimentally_enabled = e.experimental && experimental;
             let explicitly_enabled = (!e.experimental || experimental)
                 && enabled_ids.iter().any(|id| id == e.transform_id.as_str());
@@ -251,7 +251,7 @@ mod tests {
     #[test]
     fn conservative_mode_never_includes_experimental_lossy_transforms() {
         let entries = pipeline_for(
-            CompressionMode::Conservative,
+            Preset::Conservative,
             TaskScope::All,
             InputFormat::PlainText,
             /* experimental */ true,
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn balanced_mode_lossless_transforms_apply_to_openai_json() {
         let entries = pipeline_for(
-            CompressionMode::Balanced,
+            Preset::Balanced,
             TaskScope::All,
             InputFormat::OpenAiJson,
             false,
@@ -278,13 +278,13 @@ mod tests {
         );
         let ids: Vec<_> = entries.iter().map(|e| e.transform_id).collect();
         assert!(ids.contains(&TransformId::JsonMinify));
-        assert!(ids.contains(&TransformId::SchemaCompaction));
+        assert!(!ids.contains(&TransformId::SchemaCompaction));
     }
 
     #[test]
-    fn experimental_flag_enables_log_compaction_for_matching_task_scope() {
+    fn irreversible_log_compaction_stays_out_of_presets() {
         let entries = pipeline_for(
-            CompressionMode::Balanced,
+            Preset::Balanced,
             TaskScope::General,
             InputFormat::CommandOutput,
             true,
@@ -294,14 +294,14 @@ mod tests {
         assert!(
             entries
                 .iter()
-                .any(|e| e.transform_id == TransformId::LogCompaction)
+                .all(|e| e.transform_id != TransformId::LogCompaction)
         );
     }
 
     #[test]
     fn log_compaction_skipped_for_non_applicable_format_even_when_experimental() {
         let entries = pipeline_for(
-            CompressionMode::Balanced,
+            Preset::Balanced,
             TaskScope::General,
             InputFormat::OpenAiJson,
             true,
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn disabled_ids_remove_a_transform_even_when_otherwise_enabled() {
         let entries = pipeline_for(
-            CompressionMode::Balanced,
+            Preset::Balanced,
             TaskScope::All,
             InputFormat::OpenAiJson,
             false,
@@ -336,7 +336,7 @@ mod tests {
     fn diff_compaction_requires_matching_task_scope_even_with_enable_flag() {
         // enable + experimental together still respect task_scope filtering.
         let entries = pipeline_for(
-            CompressionMode::Balanced,
+            Preset::Balanced,
             TaskScope::Debugging,
             InputFormat::GitDiff,
             true,

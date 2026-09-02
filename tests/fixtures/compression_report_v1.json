@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "original_tokens": 4,
+  "compressed_tokens": 4,
+  "saved_tokens": 0,
+  "savings_ratio": 0.0,
+  "savings_pct": 0.0,
+  "estimator": {
+    "backend": "heuristic",
+    "model": null,
+    "is_exact": false
+  },
+  "status": "passthrough",
+  "mode": "balanced",
+  "format": "plain_text",
+  "task_scope": "all",
+  "request_id": null,
+  "pipeline": null,
+  "quality": null,
+  "budget": null,
+  "cache": null,
+  "retrieval": null,
+  "output_savings": null,
+  "bypass": null,
+  "command": null,
+  "ledger": null,
+  "transforms": [],
+  "warnings": []
+}

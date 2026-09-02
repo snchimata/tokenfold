@@ -20,7 +20,7 @@ pub const MIN_SAMPLE_SIZE: usize = 5;
 
 /// One proposed policy change, derived purely from observed [`LedgerRecord`] history.
 ///
-/// `scope` names the group of records the observation was drawn from (currently a bare `mode`
+/// `scope` names the group of records the observation was drawn from (currently a bare `preset`
 /// string, e.g. `"conservative"`, since `LedgerRecord` has no per-transform-id breakdown to
 /// group by anything finer). `observation` is a human-readable summary of what was measured;
 /// `suggestion` is the proposed change; `confidence` is a `0.0..=1.0` score derived from sample
@@ -41,11 +41,11 @@ pub struct PolicyProposal {
 /// (`crate::status::Status` in `tokenfold-core`, see its `passthrough`/`best_effort`/
 /// `unreachable_target` siblings) where `savings_pct` reflects compression that actually applied,
 /// rather than a passthrough or best-effort fallback whose `savings_pct` doesn't mean the same
-/// thing. Records are grouped by `mode`.
+/// thing. Records are grouped by `preset`.
 ///
-/// Exactly one heuristic is implemented today: if the `"conservative"` mode group has at least
+/// Exactly one heuristic is implemented today: if the `"conservative"` preset group has at least
 /// [`MIN_SAMPLE_SIZE`] records and its mean `savings_pct` is below `15.0`, propose trying
-/// `balanced` mode instead. Every other group — or a `"conservative"` group that doesn't meet
+/// `balanced` preset instead. Every other group — or a `"conservative"` group that doesn't meet
 /// the sample-size floor or is already saving enough — produces no proposal. This is
 /// deliberately a single concrete, testable rule rather than a speculative rule engine; new
 /// heuristics should be added the same way, one at a time, once there's a real signal for them.
@@ -54,7 +54,10 @@ pub fn propose_policy_changes(records: &[LedgerRecord]) -> Vec<PolicyProposal> {
         std::collections::BTreeMap::new();
     for record in records {
         if record.status == "compressed" {
-            groups.entry(record.mode.as_str()).or_default().push(record);
+            groups
+                .entry(record.preset.as_str())
+                .or_default()
+                .push(record);
         }
     }
 
@@ -69,9 +72,9 @@ pub fn propose_policy_changes(records: &[LedgerRecord]) -> Vec<PolicyProposal> {
                 proposals.push(PolicyProposal {
                     scope: "conservative".to_string(),
                     observation: format!(
-                        "{sample_size} conservative-mode sessions averaged {mean_savings_pct:.1}% savings"
+                        "{sample_size} conservative-preset sessions averaged {mean_savings_pct:.1}% savings"
                     ),
-                    suggestion: "consider trying balanced mode as your default for higher realized savings"
+                    suggestion: "consider trying balanced preset as your default for higher realized savings"
                         .to_string(),
                     confidence: (sample_size as f64 / 50.0).min(1.0),
                     sample_size,
@@ -88,13 +91,13 @@ pub fn propose_policy_changes(records: &[LedgerRecord]) -> Vec<PolicyProposal> {
 mod tests {
     use super::*;
 
-    fn record(mode: &str, status: &str, savings_pct: f64, request_id: &str) -> LedgerRecord {
+    fn record(preset: &str, status: &str, savings_pct: f64, request_id: &str) -> LedgerRecord {
         LedgerRecord {
             request_id: request_id.to_string(),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
             surface: "cli".to_string(),
             format: "plain_text".to_string(),
-            mode: mode.to_string(),
+            preset: preset.to_string(),
             status: status.to_string(),
             original_tokens: 100,
             compressed_tokens: 90,

@@ -481,25 +481,64 @@ def _ws_strip(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _logical_text(text: str) -> str:
+    """Undo tokenfold's lossless columnar JSON representation before evidence scoring."""
+    try:
+        value = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+
+    def unfold(node):
+        if isinstance(node, dict):
+            if set(node) == {"__tf_cols__", "__tf_rows__"}:
+                cols, rows = node["__tf_cols__"], node["__tf_rows__"]
+                if isinstance(cols, list) and isinstance(rows, list):
+                    return [
+                        {str(key): unfold(value) for key, value in zip(cols, row)}
+                        for row in rows
+                        if isinstance(row, list) and len(row) == len(cols)
+                    ]
+            return {key: unfold(value) for key, value in node.items()}
+        if isinstance(node, list):
+            return [unfold(value) for value in node]
+        return node
+
+    return json.dumps(unfold(value), separators=(",", ":"), ensure_ascii=False)
+
+
 def score_task(kept_text: str, fixture: dict) -> dict:
-    """Deterministic proxy for downstream task success: every critical atom present AND the gold
-    answer span present in the retained context. Not an LLM judge (an LLM judge is
-    reserved for diagnosing failures, never for satisfying a gate).
+    """Deterministic downstream outcome: safety atoms and the answer's source evidence survive.
+
+    `gold_answer` alone is too weak: a detached value can survive after the subject/predicate that
+    makes it meaningful was dropped. Claim faithfulness therefore requires the complete unique
+    source line containing the answer (or an explicit `supporting_evidence` span) to survive too.
+    This is deterministic evidence grounding, not a semantic or LLM judge.
 
     Containment is whitespace-insensitive so a lossless reformat (e.g. a compressor minifying
     `"max_results": 25` to `"max_results":25`) still counts as surviving. Selector baselines keep
     original bytes, so this does not change their scores."""
-    hay = _ws_strip(kept_text)
+    hay = _ws_strip(_logical_text(kept_text))
     atoms = fixture.get("critical_atoms", [])
     survived = sum(1 for a in atoms if _ws_strip(a) in hay)
     atom_survival = survived / len(atoms) if atoms else 1.0
     gold = fixture.get("gold_answer")
     answer_present = 1.0 if (not gold or _ws_strip(gold) in hay) else 0.0
-    success = 1.0 if atom_survival == 1.0 and answer_present == 1.0 else 0.0
+    evidence = fixture.get("supporting_evidence") or next(
+        line for line in fixture["source"].splitlines() if _ws_strip(gold) in _ws_strip(line)
+    )
+    claim_faithfulness = 1.0 if _ws_strip(evidence) in hay else 0.0
+    success = (
+        1.0
+        if atom_survival == 1.0
+        and answer_present == 1.0
+        and claim_faithfulness == 1.0
+        else 0.0
+    )
     return {
         "task_success": success,
         "critical_atom_survival": atom_survival,
         "answer_present": answer_present,
+        "claim_faithfulness": claim_faithfulness,
     }
 
 
@@ -573,7 +612,11 @@ def _mean(xs: list[float]) -> float:
 
 def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
     selector_rows = [
-        run_one(fx, name, r) for name in SELECTORS for r in ratios for fx in fixtures
+        run_one(fx, name, r)
+        for name in SELECTORS
+        for r in ratios
+        for fx in fixtures
+        if fx.get("evaluation_kind", "paired") == "paired"
     ]
     compressor_rows = [
         run_one_compressor(fx, name, r) for name in COMPRESSORS for r in ratios for fx in fixtures
@@ -590,6 +633,9 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
                     "mean_task_success": _mean([x["task_success"] for x in group]),
                     "mean_critical_atom_survival": _mean(
                         [x["critical_atom_survival"] for x in group]
+                    ),
+                    "mean_claim_faithfulness": _mean(
+                        [x["claim_faithfulness"] for x in group]
                     ),
                     "mean_achieved_ratio": _mean([x["achieved_ratio"] for x in group]),
                     "over_budget_count": sum(1 for x in group if x["over_budget"]),
@@ -610,6 +656,9 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
                     "mean_critical_atom_survival": _mean(
                         [x["critical_atom_survival"] for x in avail]
                     ),
+                    "mean_claim_faithfulness": _mean(
+                        [x["claim_faithfulness"] for x in avail]
+                    ),
                     "mean_achieved_ratio": _mean([x["achieved_ratio"] for x in avail]),
                     "over_budget_count": sum(1 for x in avail if x["over_budget"]),
                 }
@@ -618,6 +667,9 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
         "harness": "v0.4-alpha-baselines",
         "tokenizer": TOKENIZER,
         "fixture_count": len(fixtures),
+        "selector_fixture_count": sum(
+            fx.get("evaluation_kind", "paired") == "paired" for fx in fixtures
+        ),
         "selectors": list(SELECTORS),
         "deterministic_selectors": list(DETERMINISTIC_SELECTORS),
         # v0.4-beta: names registered from the gitignored local model module, [] when ML is absent.
@@ -637,9 +689,58 @@ def build_report(fixtures: list[dict], ratios: list[float]) -> dict:
 
 def load_fixtures(tasks_dir: Path) -> list[dict]:
     fixtures = []
+    seen_ids = set()
     for path in sorted(tasks_dir.glob("*.json")):
-        fixtures.append(json.loads(path.read_text(encoding="utf-8")))
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+        _validate_fixture(fixture, path, seen_ids)
+        seen_ids.add(fixture["id"])
+        fixtures.append(fixture)
     return fixtures
+
+
+def _validate_fixture(fixture: dict, path: Path, seen_ids: set[str]) -> None:
+    """Reject fixtures that could make the deterministic scorer pass vacuously.
+
+    The evaluator is only as meaningful as this contract: the task, answer, and safety atoms
+    must all be explicit, non-empty, and grounded in the source. The answer must occur exactly
+    once after the scorer's whitespace normalization, otherwise containment cannot identify one
+    deterministic outcome.
+    """
+    required_strings = ("id", "family", "tier", "source", "query", "gold_answer")
+    for field in required_strings:
+        if not isinstance(fixture.get(field), str) or not fixture[field].strip():
+            raise ValueError(f"{path}: {field} must be a non-empty string")
+    if fixture["id"] in seen_ids:
+        raise ValueError(f"{path}: duplicate fixture id {fixture['id']!r}")
+    if fixture["tier"] != "A":
+        raise ValueError(f"{path}: unsupported provenance tier {fixture['tier']!r}")
+    if fixture.get("evaluation_kind", "paired") not in ("paired", "compressor"):
+        raise ValueError(f"{path}: evaluation_kind must be 'paired' or 'compressor'")
+
+    atoms = fixture.get("critical_atoms")
+    if not isinstance(atoms, list) or not atoms or any(
+        not isinstance(atom, str) or not atom.strip() for atom in atoms
+    ):
+        raise ValueError(f"{path}: critical_atoms must be a non-empty list of strings")
+    if len(atoms) != len(set(atoms)):
+        raise ValueError(f"{path}: critical_atoms must not contain duplicates")
+
+    source = _ws_strip(fixture["source"])
+    gold = _ws_strip(fixture["gold_answer"])
+    if source.count(gold) != 1:
+        raise ValueError(f"{path}: gold_answer must occur exactly once in source")
+    evidence = fixture.get("supporting_evidence")
+    if evidence is not None and (not isinstance(evidence, str) or not evidence.strip()):
+        raise ValueError(f"{path}: supporting_evidence must be a non-empty string")
+    evidence = _ws_strip(evidence) if evidence is not None else gold
+    if source.count(evidence) != 1:
+        raise ValueError(f"{path}: supporting_evidence must occur exactly once in source")
+    for atom in atoms:
+        normalized = _ws_strip(atom)
+        if normalized not in source:
+            raise ValueError(f"{path}: critical atom {atom!r} is not grounded in source")
+        if normalized in gold or gold in normalized:
+            raise ValueError(f"{path}: gold_answer must not also be a critical atom")
 
 
 def _find_tf_ref_hashes(value) -> list[str]:
@@ -802,28 +903,42 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
     failures.extend(_lossy_smoke_checks())
     for fx in fixtures:
         for r in ratios:
-            for name in SELECTORS:
-                res = run_one(fx, name, r)
-                # 1. Deterministic forcing => 100% critical-atom survival for every selector.
-                if res["critical_atom_survival"] != 1.0:
-                    failures.append(
-                        f"{name}/{fx['id']}@{r}: critical_atom_survival="
-                        f"{res['critical_atom_survival']} (must be 1.0)"
-                    )
-                # 2. Ceiling respected (unless the forced floor alone exceeds the budget).
-                if (
-                    name != "keep_all"
-                    and res["achieved_tokens"] > res["budget_tokens"]
-                    and res["forced_floor_tokens"] <= res["budget_tokens"]
+            selector_results = {}
+            if fx.get("evaluation_kind", "paired") == "paired":
+                for name in SELECTORS:
+                    res = run_one(fx, name, r)
+                    selector_results[name] = res
+                    # 1. Deterministic forcing => 100% critical-atom survival for every selector.
+                    if res["critical_atom_survival"] != 1.0:
+                        failures.append(
+                            f"{name}/{fx['id']}@{r}: critical_atom_survival="
+                            f"{res['critical_atom_survival']} (must be 1.0)"
+                        )
+                    # 2. Ceiling respected (unless the forced floor alone exceeds the budget).
+                    if (
+                        name != "keep_all"
+                        and res["achieved_tokens"] > res["budget_tokens"]
+                        and res["forced_floor_tokens"] <= res["budget_tokens"]
+                    ):
+                        failures.append(
+                            f"{name}/{fx['id']}@{r}: achieved {res['achieved_tokens']} > budget "
+                            f"{res['budget_tokens']} while floor fit"
+                        )
+                # 3. keep_all is the upper bound: full task success.
+                top = selector_results["keep_all"]
+                if top["task_success"] != 1.0:
+                    failures.append(f"keep_all/{fx['id']}@{r}: task_success != 1.0")
+                # Every paired fixture must produce a real task outcome at the tightest requested
+                # ceiling: at least one deterministic pruning baseline fails while keep_all passes.
+                if r == min(ratios) and all(
+                    selector_results[name]["task_success"] == 1.0
+                    for name in DETERMINISTIC_SELECTORS
+                    if name != "keep_all"
                 ):
                     failures.append(
-                        f"{name}/{fx['id']}@{r}: achieved {res['achieved_tokens']} > budget "
-                        f"{res['budget_tokens']} while floor fit"
+                        f"{fx['id']}@{r}: no deterministic pruning baseline fails the task; "
+                        "fixture is non-discriminating"
                     )
-            # 3. keep_all is the upper bound: full task success.
-            top = run_one(fx, "keep_all", r)
-            if top["task_success"] != 1.0:
-                failures.append(f"keep_all/{fx['id']}@{r}: task_success != 1.0")
             # 4. Compressor baselines stay best-effort on budget/ratio (a real CLI subprocess,
             # not gated the way the pure-Python selectors above are), but critical-content
             # survival is a real data-safety property, not a ratio nicety, and a lossy
@@ -849,6 +964,12 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
                     failures.append(
                         f"{name}/{fx['id']}@{r}: critical_atom_survival="
                         f"{res['critical_atom_survival']} (must be 1.0)"
+                    )
+                if res["task_success"] != 1.0:
+                    failures.append(
+                        f"{name}/{fx['id']}@{r}: deterministic task outcome failed "
+                        f"(answer_present={res['answer_present']}, "
+                        f"claim_faithfulness={res['claim_faithfulness']})"
                     )
             # 5. Opting into lossy must never come out WORSE than not opting in. Hitting a
             # budget stays best-effort (check 4's comment), but "I accepted data loss and got a
@@ -876,7 +997,12 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
     artifact = {
         "gate": "pass" if not failures else "fail",
         "tokenizer": TOKENIZER,
-        "checked": len(fixtures) * len(ratios) * (len(SELECTORS) + len(COMPRESSORS)),
+        "checked": len(ratios)
+        * (
+            sum(fx.get("evaluation_kind", "paired") == "paired" for fx in fixtures)
+            * len(SELECTORS)
+            + len(fixtures) * len(COMPRESSORS)
+        ),
         # Compressor baselines stay best-effort on hitting a budget/ratio (a real CLI subprocess
         # can legitimately fall short) -- but critical-content survival IS gated for every
         # available compressor (see check 4 above), not just reported.
@@ -898,14 +1024,21 @@ def _print_summary(report: dict) -> None:
     )
     print(f"# learned selectors: {', '.join(learned)}")
     print(f"# {report['fixture_count']} fixtures  ratios={report['ratios']}\n")
-    print(f"{'baseline':<24}{'ratio':>6}{'task':>7}{'crit':>7}{'achieved':>10}{'over':>6}")
+    print(
+        f"{'baseline':<24}{'ratio':>6}{'task':>7}{'claim':>7}"
+        f"{'crit':>7}{'achieved':>10}{'over':>6}"
+    )
     for s in report["summary"]:
         if s["kind"] == "compressor" and s.get("available", 0) == 0:
-            print(f"{s['baseline']:<24}{s['target_ratio']:>6}{'n/a':>7}{'n/a':>7}{'n/a':>10}{'-':>6}")
+            print(
+                f"{s['baseline']:<24}{s['target_ratio']:>6}{'n/a':>7}{'n/a':>7}"
+                f"{'n/a':>7}{'n/a':>10}{'-':>6}"
+            )
             continue
         print(
             f"{s['baseline']:<24}{s['target_ratio']:>6}{s['mean_task_success']:>7}"
-            f"{s['mean_critical_atom_survival']:>7}{s['mean_achieved_ratio']:>10}"
+            f"{s['mean_claim_faithfulness']:>7}{s['mean_critical_atom_survival']:>7}"
+            f"{s['mean_achieved_ratio']:>10}"
             f"{s['over_budget_count']:>6}"
         )
 
@@ -929,8 +1062,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    ratios = [float(x) for x in args.ratios.split(",") if x.strip()]
-    fixtures = load_fixtures(Path(args.tasks_dir))
+    try:
+        ratios = [float(x) for x in args.ratios.split(",") if x.strip()]
+    except ValueError:
+        ratios = []
+    if not ratios or any(not math.isfinite(r) or r <= 0.0 or r > 1.0 for r in ratios):
+        print("ratios must be comma-separated numbers in (0, 1]", file=sys.stderr)
+        return 2
+    try:
+        fixtures = load_fixtures(Path(args.tasks_dir))
+    except (OSError, ValueError) as error:
+        print(f"invalid fixture corpus: {error}", file=sys.stderr)
+        return 2
     if not fixtures:
         print(f"no fixtures found in {args.tasks_dir}", file=sys.stderr)
         return 2

@@ -10,7 +10,7 @@
 //! would before sending it to a model, then prints the token accounting and the typed
 //! safety report that tokenfold returns for every transformation.
 
-use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, compress};
+use tokenfold_core::{CompressionInput, CompressionPolicy, Preset, compress};
 
 // The payloads sit beside this file. Embedding them with include_str! keeps this example
 // runnable from any working directory.
@@ -32,7 +32,7 @@ fn compress_openai_body() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Pick a policy. Balanced is the safe default; JSON minification and schema
     //    compaction are on, lossy transforms stay gated behind a fidelity check.
     let policy = CompressionPolicy::builder()
-        .mode(CompressionMode::Balanced)
+        .preset(Preset::Balanced)
         .build()?;
 
     // 3. Compress. You get back the rewritten bytes plus a CompressionReport.
@@ -51,7 +51,7 @@ fn compress_openai_body() -> Result<(), Box<dyn std::error::Error>> {
 fn compress_json_data() -> Result<(), Box<dyn std::error::Error>> {
     let input = CompressionInput::json(API_RESPONSE.as_bytes().to_vec());
     let policy = CompressionPolicy::builder()
-        .mode(CompressionMode::Balanced)
+        .preset(Preset::Balanced)
         .build()?;
     let out = compress(input, &policy)?;
 

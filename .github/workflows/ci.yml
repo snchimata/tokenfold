@@ -86,7 +86,7 @@ jobs:
           name: python-abi3-wheel
           path: dist
       - run: python -m pip install dist/*.whl
-      - run: python -c "import tokenfold; assert tokenfold.CompressionMode.BALANCED"
+      - run: python -c "import tokenfold; assert tokenfold.Preset.BALANCED"
 
   node-api:
     name: node-api (Node ${{ matrix.node }})

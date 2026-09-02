@@ -1,0 +1,93 @@
+{
+  "schema_version": "2.0",
+  "original_tokens": 28,
+  "compressed_tokens": 28,
+  "saved_tokens": 0,
+  "savings_ratio": 0.0,
+  "savings_pct": 0.0,
+  "estimator": {
+    "backend": "tiktoken",
+    "model": "o200k_base",
+    "is_exact": true
+  },
+  "status": "passthrough",
+  "preset": "balanced",
+  "format": "json",
+  "output_encoding": "json",
+  "task_scope": "all",
+  "request_id": null,
+  "pipeline": null,
+  "quality": null,
+  "budget": {
+    "status": "not_requested",
+    "target_tokens": null,
+    "protected_floor": 0,
+    "achieved_tokens": 28
+  },
+  "encoding": null,
+  "pruning": null,
+  "cache": null,
+  "retrieval": null,
+  "output_savings": null,
+  "bypass": null,
+  "command": null,
+  "ledger": null,
+  "transforms": [
+    {
+      "id": "secret_redaction",
+      "version": "1.0.0",
+      "tokens_before": 28,
+      "tokens_after": 28,
+      "saved_tokens": 0,
+      "savings_ratio": 0.0,
+      "elapsed_micros": null,
+      "status": "no_op",
+      "skipped_reason": null,
+      "warnings": []
+    },
+    {
+      "id": "json_minify",
+      "version": "1.0.0",
+      "tokens_before": 28,
+      "tokens_after": 28,
+      "saved_tokens": 0,
+      "savings_ratio": 0.0,
+      "elapsed_micros": null,
+      "status": "skipped",
+      "skipped_reason": "not_applicable_to_format",
+      "warnings": []
+    },
+    {
+      "id": "json_field_fold",
+      "version": "1.0.0",
+      "tokens_before": 28,
+      "tokens_after": 28,
+      "saved_tokens": 0,
+      "savings_ratio": 0.0,
+      "elapsed_micros": null,
+      "status": "skipped",
+      "skipped_reason": "not_applicable_to_format",
+      "warnings": []
+    },
+    {
+      "id": "json_value_dict",
+      "version": "1.0.0",
+      "tokens_before": 28,
+      "tokens_after": 28,
+      "saved_tokens": 0,
+      "savings_ratio": 0.0,
+      "elapsed_micros": null,
+      "status": "skipped",
+      "skipped_reason": "not_applicable_to_format",
+      "warnings": []
+    }
+  ],
+  "warnings": [
+    {
+      "code": "unredacted_content_possible",
+      "severity": "info",
+      "transform": "secret_redaction",
+      "message": "redaction is best-effort; it is not a guarantee that no secret survives"
+    }
+  ]
+}

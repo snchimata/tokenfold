@@ -27,7 +27,7 @@ use tokenfold_core::retrieval_store::{
     RetrievalOutcome, RetrievalStore, parse_retrieval_reference,
 };
 use tokenfold_core::status::Status;
-use tokenfold_core::{CompressionInput, CompressionMode, CompressionPolicy, InputFormat};
+use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, Preset};
 
 type BodyReader = Box<dyn Read>;
 
@@ -35,7 +35,7 @@ pub struct ProxyConfig {
     pub upstream: String,
     pub max_body_bytes: usize,
     pub compress: bool,
-    pub mode: CompressionMode,
+    pub preset: Preset,
     pub target_tokens: Option<usize>,
     /// Retrieval-store backend passed to `RetrievalStore::open` for `/v1/retrieve*` and
     /// `X-TokenFold-Store-Originals`-triggered storage on `/v1/compress`/passthrough.
@@ -268,14 +268,14 @@ fn build_policy(
     headers: &[Header],
     value: &Value,
 ) -> Result<CompressionPolicy, String> {
-    let mode = match value.get("mode").and_then(Value::as_str) {
-        Some("conservative") => CompressionMode::Conservative,
-        Some("balanced") => CompressionMode::Balanced,
-        Some("aggressive") => CompressionMode::Aggressive,
-        Some(other) => return Err(format!("unknown mode: {other}")),
-        None => config.mode,
+    let preset = match value.get("preset").and_then(Value::as_str) {
+        Some("conservative") => Preset::Conservative,
+        Some("balanced") => Preset::Balanced,
+        Some("aggressive") => Preset::Aggressive,
+        Some(other) => return Err(format!("unknown preset: {other}")),
+        None => config.preset,
     };
-    let mut builder = CompressionPolicy::builder().mode(mode);
+    let mut builder = CompressionPolicy::builder().preset(preset);
     let target = value
         .get("target_tokens")
         .and_then(Value::as_u64)
@@ -364,7 +364,7 @@ fn handle_passthrough(
         && content_type.to_ascii_lowercase().contains("json")
         && let Some(format) = detect_passthrough_format(&forward_body)
     {
-        let mut builder = CompressionPolicy::builder().mode(config.mode);
+        let mut builder = CompressionPolicy::builder().preset(config.preset);
         if let Some(target) = config.target_tokens {
             builder = builder.target_tokens(target);
         }
@@ -771,7 +771,7 @@ fn report_headers(report: &CompressionReport, request_id: String) -> Vec<Header>
         ("X-TokenFold-Applied", applied.join(",")),
         ("X-TokenFold-Applied-Versions", applied_versions.join(",")),
         ("X-TokenFold-Request-Id", request_id),
-        ("X-TokenFold-Mode", report.mode.clone()),
+        ("X-TokenFold-Preset", report.preset.clone()),
         ("X-TokenFold-Format", report.format.clone()),
     ]
     .into_iter()
@@ -783,7 +783,5 @@ fn status_label(status: &Status) -> &'static str {
     match status {
         Status::Compressed => "compressed",
         Status::Passthrough => "passthrough",
-        Status::BestEffort => "best_effort",
-        Status::UnreachableTarget => "unreachable_target",
     }
 }

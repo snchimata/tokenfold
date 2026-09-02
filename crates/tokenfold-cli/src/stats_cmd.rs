@@ -97,14 +97,18 @@ fn file_mtime_timestamp(path: &Path) -> String {
 
 /// Dispatches to JSON, CSV, or a short human summary, in that precedence order (both flags set
 /// prefers JSON, since `--json` is a global flag shared by every subcommand).
-pub fn print_summary(summary: &StatsSummary, json: bool, csv: bool) {
+pub fn print_summary(summary: &StatsSummary, json: bool, csv: bool) -> Result<(), TokenFoldError> {
     if json {
-        println!("{}", serde_json::to_string_pretty(summary).unwrap());
+        let text = serde_json::to_string_pretty(summary).map_err(|e| {
+            TokenFoldError::InternalError(format!("failed to serialize stats JSON: {e}"))
+        })?;
+        println!("{text}");
     } else if csv {
         print!("{}", stats::to_csv(summary));
     } else {
         print!("{}", render_human(summary));
     }
+    Ok(())
 }
 
 fn render_human(summary: &StatsSummary) -> String {

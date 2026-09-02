@@ -9,9 +9,9 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use tokenfold_core::{CompressionMode, InputFormat, TaskScope, TokenFoldError};
+use tokenfold_core::{InputFormat, Preset, TaskScope, TokenFoldError};
 
-use crate::args::{ModeArg, TaskScopeArg};
+use crate::args::{PresetArg, TaskScopeArg};
 use crate::format::FormatArg;
 
 #[derive(Debug, Default, Deserialize)]
@@ -19,7 +19,6 @@ use crate::format::FormatArg;
 struct RawConfig {
     compression: CompressionSection,
     output: OutputSection,
-    safety: SafetySection,
     retrieval: RetrievalSection,
     analytics: AnalyticsSection,
     filters: FiltersSection,
@@ -28,7 +27,7 @@ struct RawConfig {
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct CompressionSection {
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
     format: Option<String>,
     task_scope: Option<TaskScopeArg>,
@@ -44,12 +43,6 @@ struct OutputSection {
     no_color: bool,
     quiet: bool,
     json: bool,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct SafetySection {
-    unsafe_disable_redaction: bool,
 }
 
 /// `[retrieval]` — settings for the reversible evidence store. `store_originals`/`namespace`
@@ -95,14 +88,13 @@ struct FiltersSection {
 
 #[derive(Debug, Clone, Default)]
 pub struct CliOverrides {
-    pub mode: Option<ModeArg>,
+    pub preset: Option<PresetArg>,
     pub target_tokens: Option<usize>,
     pub format: Option<FormatArg>,
     pub disable: Vec<String>,
     pub json: bool,
     pub no_color: bool,
     pub quiet: bool,
-    pub unsafe_disable_redaction: bool,
     pub experimental: bool,
     pub task_scope: Option<TaskScopeArg>,
     pub enable: Vec<String>,
@@ -112,7 +104,7 @@ pub struct CliOverrides {
 
 #[derive(Debug, Clone)]
 pub struct Effective {
-    pub mode: CompressionMode,
+    pub preset: Preset,
     pub target_tokens: Option<usize>,
     /// `None` means the user did not pin a format: sniff it per-input (see `format::detect_format`).
     pub format: Option<InputFormat>,
@@ -120,7 +112,6 @@ pub struct Effective {
     pub disabled: Vec<String>,
     pub experimental: bool,
     pub enable: Vec<String>,
-    pub unsafe_disable_redaction: bool,
     pub preserve_latest_user_message: bool,
     pub no_color: bool,
     pub quiet: bool,
@@ -159,17 +150,17 @@ pub fn resolve(
 ) -> Result<Resolved, TokenFoldError> {
     let (cfg, config_path) = load(explicit_config)?;
 
-    let mode = match overrides.mode {
+    let preset = match overrides.preset {
         Some(m) => m.to_core(),
-        None => match env_string("TOKENFOLD_COMPRESSION_MODE") {
-            Some(s) => ModeArg::parse(&s)
+        None => match env_string("TOKENFOLD_COMPRESSION_PRESET") {
+            Some(s) => PresetArg::parse(&s)
                 .map_err(TokenFoldError::ConfigError)?
                 .to_core(),
             None => cfg
                 .compression
-                .mode
-                .map(ModeArg::to_core)
-                .unwrap_or(CompressionMode::Balanced),
+                .preset
+                .map(PresetArg::to_core)
+                .unwrap_or(Preset::Balanced),
         },
     };
 
@@ -237,12 +228,6 @@ pub fn resolve(
         overrides.experimental,
         "TOKENFOLD_COMPRESSION_EXPERIMENTAL",
         cfg.compression.experimental,
-    )?;
-
-    let unsafe_disable_redaction = resolve_bool(
-        overrides.unsafe_disable_redaction,
-        "TOKENFOLD_SAFETY_UNSAFE_DISABLE_REDACTION",
-        cfg.safety.unsafe_disable_redaction,
     )?;
 
     let preserve_latest_user_message = if let Some(v) =
@@ -406,14 +391,13 @@ pub fn resolve(
 
     Ok(Resolved {
         effective: Effective {
-            mode,
+            preset,
             target_tokens,
             format,
             task_scope,
             disabled,
             experimental,
             enable,
-            unsafe_disable_redaction,
             preserve_latest_user_message,
             no_color,
             quiet,
@@ -609,33 +593,33 @@ mod tests {
         let path = std::env::temp_dir().join("tokenfold_cli_test_config.toml");
         std::fs::write(
             &path,
-            "[compression]\nmode = \"aggressive\"\ntarget_tokens = 50\n[output]\njson = true\n",
+            "[compression]\npreset = \"aggressive\"\ntarget_tokens = 50\n[output]\njson = true\n",
         )
         .unwrap();
 
         let resolved = resolve(&CliOverrides::default(), Some(&path)).unwrap();
-        assert_eq!(resolved.effective.mode, CompressionMode::Aggressive);
+        assert_eq!(resolved.effective.preset, Preset::Aggressive);
         assert_eq!(resolved.effective.target_tokens, Some(50));
         assert!(resolved.effective.json);
 
         unsafe {
             std::env::set_var("TOKENFOLD_OUTPUT_JSON", "false");
-            std::env::set_var("TOKENFOLD_COMPRESSION_MODE", "conservative");
+            std::env::set_var("TOKENFOLD_COMPRESSION_PRESET", "conservative");
         }
         let resolved = resolve(&CliOverrides::default(), Some(&path)).unwrap();
         assert!(!resolved.effective.json);
-        assert_eq!(resolved.effective.mode, CompressionMode::Conservative);
+        assert_eq!(resolved.effective.preset, Preset::Conservative);
         unsafe {
             std::env::remove_var("TOKENFOLD_OUTPUT_JSON");
-            std::env::remove_var("TOKENFOLD_COMPRESSION_MODE");
+            std::env::remove_var("TOKENFOLD_COMPRESSION_PRESET");
         }
 
         let overrides = CliOverrides {
-            mode: Some(ModeArg::Balanced),
+            preset: Some(PresetArg::Balanced),
             ..Default::default()
         };
         let resolved = resolve(&overrides, Some(&path)).unwrap();
-        assert_eq!(resolved.effective.mode, CompressionMode::Balanced);
+        assert_eq!(resolved.effective.preset, Preset::Balanced);
 
         std::fs::remove_file(&path).ok();
     }

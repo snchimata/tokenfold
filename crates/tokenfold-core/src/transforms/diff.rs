@@ -68,7 +68,7 @@ fn flush_dropped_run(out: &mut Vec<String>, dropped_run: &mut usize, marker_noun
 /// `keep_line_bodies` is `false`) collapse consecutive runs into a single evidence marker
 /// line, so the marker is emitted once per run of dropped lines rather than once per line:
 ///
-/// - `keep_line_bodies == true`: only context lines can ever be dropped in this mode, so the
+/// - `keep_line_bodies == true`: only context lines can ever be dropped in this preset, so the
 ///   marker reads `"[N context lines dropped]"`.
 /// - `keep_line_bodies == false` (the header-only form — valid only when the caller's
 ///   `TaskScope` is `ChangeSummary`; that policy decision is made by the caller, not here):

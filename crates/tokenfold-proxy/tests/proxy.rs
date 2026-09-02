@@ -600,7 +600,7 @@ fn sample_ledger_record() -> tokenfold_core::stats::LedgerRecord {
         timestamp: "2026-01-01T00:00:00Z".to_string(),
         surface: "cli".to_string(),
         format: "plain_text".to_string(),
-        mode: "balanced".to_string(),
+        preset: "balanced".to_string(),
         status: "compressed".to_string(),
         original_tokens: 1000,
         compressed_tokens: 600,

@@ -10,9 +10,8 @@ PowerShell:
 
 This drives the `tokenfold` binary via subprocess so it runs against any install,
 standard library only, no extra dependencies. The same knobs are available
-in-process from the Python binding (`compress(..., lossy=LossyPath.HEURISTIC)`
-plus `retrieve()`) and from the TypeScript package (`compress(input, { lossy:
-"heuristic" })` plus `retrieve()`).
+in-process from the Python binding (`compress(..., pruning=PruningPolicy(...))`)
+and from the TypeScript package (`compress(input, { pruning: {...} })`).
 
 Everything runs against a throwaway retrieval store in a temp directory, so it
 never touches the one your real runs use, and cleans up after itself.
@@ -41,8 +40,7 @@ if not TOKENFOLD:
 
 
 def run(config, *args, capture_report=True):
-    """Invoke the CLI. With `--json`, the payload goes to stdout and the receipt to
-    stderr when `--output` is used, so the two never have to be untangled."""
+    """Invoke the CLI using the deterministic payload/receipt stream contract."""
     proc = subprocess.run(
         [TOKENFOLD, "--config", str(config), *args],
         capture_output=True,
@@ -50,7 +48,8 @@ def run(config, *args, capture_report=True):
     )
     if not capture_report:
         return proc.stdout
-    stream = proc.stderr if any(a == "--output" for a in args) else proc.stdout
+    command = next((arg for arg in args if arg in {"compress", "inspect"}), None)
+    stream = proc.stderr if command == "compress" else proc.stdout
     return json.loads(stream)
 
 
@@ -74,24 +73,24 @@ def main(work: Path) -> None:
     #    so the columnar transform, which needs a uniform key set per row, cannot fold
     #    them and only whitespace minification applies.
     print("== 1. lossless only ==")
-    r = run(config, "--json", *common, "--output", str(work / "lossless.json"))
+    r = run(config, *common, "--output", str(work / "lossless.json"))
     print(f"   {pct(r)}")
     applied = [t["id"] for t in r["transforms"] if t["status"] == "applied"]
     print(f"   applied: {', '.join(applied)}")
 
-    lossy_flags = ["--lossy", "heuristic", "--lossy-ratio", "0.35"]
+    pruning_flags = ["--prune", "--keep-ratio", "0.35"]
 
-    # 2. --dry-run projects selection and token savings using the same content-
+    # 2. inspect projects selection and token savings using the same content-
     #    safety checks, without opening the real filesystem store. A later real
     #    run may keep more rows if the filesystem itself refuses a write.
-    print("\n== 2. preview what --lossy would do (writes nothing) ==")
-    r = run(config, "--json", *common, "--dry-run", *lossy_flags)
+    print("\n== 2. preview what --prune would do (writes nothing) ==")
+    r = run(config, "inspect", str(FEED), "--format", "json", *pruning_flags)
     print(f"   projected: {pct(r)}")
     print(f"   retrieval: {r['retrieval']}  <- a preview never writes")
     assert not (work / "store").exists(), "preview must not create the store"
 
     print("\n== 3. compress for real ==")
-    r = run(config, "--json", *common, "--output", str(work / "lossy.json"), *lossy_flags)
+    r = run(config, *common, "--output", str(work / "lossy.json"), *pruning_flags)
     prune = next(t for t in r["transforms"] if t["id"] == "json_prune")
     print(f"   {pct(r)}")
     print(f"   json_prune: {prune['status']}")
@@ -132,21 +131,21 @@ def main(work: Path) -> None:
     assert restored_event in original_events, "retrieved bytes must contain an original event"
     print(f"   {restored.decode('utf-8').strip()[:160]}...")
 
-    print("\n== 6. --lossy-preserve protects an array outright ==")
+    print("\n== 6. --preserve protects an array outright ==")
     payload = run(
-        config, *common, "--quiet", *lossy_flags, "--lossy-preserve", "events",
+        config, *common, "--quiet", *pruning_flags, "--preserve", "events",
         capture_report=False,
     )
     marker_count = payload.count(b"$tf_ref")
-    assert marker_count == 0, "--lossy-preserve events must prevent every drop"
-    print(f"   markers with --lossy-preserve events: {marker_count}")
+    assert marker_count == 0, "--preserve events must prevent every drop"
+    print(f"   markers with --preserve events: {marker_count}")
 
     # 7. Uniform records fold well, so pruning them would be strictly worse.
     #    tokenfold computes both branches and keeps the better one.
     print("\n== 7. it declines when lossless already wins ==")
     uniform = ["compress", str(UNIFORM), "--format", "json", "--quiet"]
     a = run(config, *uniform, capture_report=False)
-    b = run(config, *uniform, *lossy_flags, capture_report=False)
+    b = run(config, *uniform, *pruning_flags, capture_report=False)
     assert a == b, "lossy must fall back to the lossless output here"
     print("   identical output -- nothing dropped, because dropping would not have helped")
 
@@ -187,16 +186,14 @@ def main(work: Path) -> None:
     showcase_out = work / "max-showcase.compact.json"
     r = run(
         config,
-        "--json",
         "compress",
         str(showcase),
         "--format",
         "json",
         "--output",
         str(showcase_out),
-        "--lossy",
-        "heuristic",
-        "--lossy-ratio",
+        "--prune",
+        "--keep-ratio",
         "0.02",
     )
     compact = json.loads(showcase_out.read_text(encoding="utf-8"))["results"]

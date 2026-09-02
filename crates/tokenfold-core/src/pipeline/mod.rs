@@ -4,13 +4,14 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use crate::budget::{CompressionMode, CompressionPolicy, TaskScope, protected_segments};
+use crate::budget::{CompressionPolicy, Preset, TaskScope, protected_segments};
 use crate::errors::TokenFoldError;
 use crate::input::{CompressionInput, CompressionOutput, InputFormat};
 use crate::modes::{self, ModeEntry, TransformId};
 use crate::report::{
-    BudgetReport, CompressionReport, QualityReport, RetrievalReport, Severity, SkippedReason,
-    TransformReport, TransformStatus, Warning, WarningCode,
+    BudgetReport, BudgetStatus, CompressionReport, EncodingReport, PruningReport, QualityReport,
+    RetrievalReport, Severity, SkippedReason, TransformReport, TransformStatus, Warning,
+    WarningCode,
 };
 use crate::retrieval_store::{self, RetrievalStore};
 use crate::safety;
@@ -47,42 +48,95 @@ pub fn compress_with_estimator(
     // policy can't silently bypass the same invariants (e.g. lossy-without-durable-retrieval)
     // the builder enforces for free.
     policy.validate()?;
+    if matches!(
+        input.format,
+        InputFormat::Json | InputFormat::OpenAiJson | InputFormat::AnthropicJson
+    ) {
+        serde_json::from_slice::<Value>(&input.bytes)
+            .map_err(|error| TokenFoldError::InvalidInput(format!("invalid JSON: {error}")))?;
+    }
     let original_tokens = estimator.count_bytes(&input.bytes);
     let target = policy.target_tokens;
-    let estimator_info = estimator.info();
-
     // Whole-payload reversible evidence store, best-effort. Runs against the full pre-transform
     // input regardless of which status path below is taken, so it must be computed up front.
     let retrieval = maybe_store_originals(&input.bytes, input.format, policy);
 
-    // Passthrough is checked before any transform (including redaction) runs: the budget planner
-    // contract requires input bytes to stay byte-for-byte unchanged when the input already fits.
-    if let Some(t) = target
-        && original_tokens <= t
-    {
-        let mut warnings = Vec::new();
-        if !estimator_info.is_exact {
-            warnings.push(heuristic_budget_warning());
-        }
-        let mut report = CompressionReport::new(
-            original_tokens,
-            original_tokens,
-            estimator_info,
-            Status::Passthrough,
-            mode_label(policy.mode).to_string(),
-            format_label(input.format).to_string(),
-            task_scope_label(policy.task_scope).to_string(),
-            Vec::new(),
-            warnings,
-        );
-        report.retrieval = retrieval;
-        return Ok(CompressionOutput {
-            bytes: input.bytes,
-            report,
-        });
-    }
+    let format = input.format;
+    let mut output =
+        apply_transforms(input, policy, estimator, original_tokens, target, retrieval)?;
+    apply_output_encoding(&mut output, format, policy, estimator)?;
+    Ok(output)
+}
 
-    apply_transforms(input, policy, estimator, original_tokens, target, retrieval)
+fn apply_output_encoding(
+    output: &mut CompressionOutput,
+    format: InputFormat,
+    policy: &CompressionPolicy,
+    estimator: &dyn TokenEstimator,
+) -> Result<(), TokenFoldError> {
+    use crate::codec::OutputEncoding;
+    if policy.encoding == OutputEncoding::Toon {
+        if format != InputFormat::Json {
+            return Err(TokenFoldError::InvalidInput(
+                "TOON encoding is only valid for generic JSON input".to_string(),
+            ));
+        }
+        let tokens_before = estimator.count_bytes(&output.bytes);
+        let encoded = crate::codec::encode_toon(&output.bytes)?;
+        let tokens_after = estimator.count_bytes(&encoded);
+        let token_delta = tokens_after as i64 - tokens_before as i64;
+        let mut encoding_warnings = Vec::new();
+        if token_delta > 0 {
+            let warning = Warning {
+                code: WarningCode::OutputEncodingIncreased,
+                severity: Severity::Warn,
+                transform: None,
+                message: format!("explicit TOON encoding increased output by {token_delta} tokens"),
+            };
+            output.report.warnings.push(warning.clone());
+            encoding_warnings.push(warning);
+        }
+        output.bytes = encoded;
+        output.report.output_encoding = "toon".to_string();
+        output.report.compressed_tokens = tokens_after;
+        output.report.saved_tokens = output.report.original_tokens.saturating_sub(tokens_after);
+        output.report.savings_ratio = if output.report.original_tokens == 0 {
+            0.0
+        } else {
+            output.report.saved_tokens as f64 / output.report.original_tokens as f64
+        };
+        output.report.savings_pct = output.report.savings_ratio * 100.0;
+        output.report.encoding = Some(EncodingReport {
+            codec: "toon".to_string(),
+            version: "4.1".to_string(),
+            roundtrip_verified: true,
+            tokens_before,
+            tokens_after,
+            token_delta,
+            warnings: encoding_warnings,
+        });
+        if let Some(budget) = &mut output.report.budget {
+            budget.achieved_tokens = tokens_after;
+            budget.status =
+                budget_status(budget.target_tokens, budget.protected_floor, tokens_after);
+        }
+    } else {
+        output.report.output_encoding = if format == InputFormat::Json {
+            "json".to_string()
+        } else {
+            "native".to_string()
+        };
+    }
+    Ok(())
+}
+
+fn budget_status(target: Option<usize>, floor: usize, achieved: usize) -> BudgetStatus {
+    match target {
+        None => BudgetStatus::NotRequested,
+        Some(target) if target < floor => BudgetStatus::Unreachable,
+        Some(target) if achieved <= target => BudgetStatus::Met,
+        Some(_) => BudgetStatus::BestEffort,
+    }
 }
 
 /// When `policy.store_originals` is set, persists the full pre-transform input to the
@@ -166,52 +220,33 @@ fn apply_transforms(
     }
 
     // Step 1: secret_redaction — mandatory, always first, cannot be disabled via `disabled`
-    // (CompressionPolicyBuilder::build rejects that). The only bypass is the CLI-only
-    // `unsafe_disable_redaction` escape hatch, which emits a Critical warning instead.
-    let mut bytes;
-    if policy.unsafe_disable_redaction {
-        bytes = input.bytes.clone();
-        warnings.push(Warning {
-            code: WarningCode::UnredactedContentPossible,
-            severity: Severity::Critical,
-            transform: Some("secret_redaction".to_string()),
-            message: "redaction was disabled via unsafe_disable_redaction; output may contain unredacted secrets".to_string(),
-        });
-        transform_reports.push(skipped_at(
-            "secret_redaction",
-            "1.0.0",
-            original_tokens,
-            SkippedReason::DisabledByUser,
-        ));
-    } else {
-        let outcome = transforms::redaction::redact(&input.bytes);
-        let tokens_after = estimator.count_bytes(&outcome.bytes);
-        warnings.push(Warning {
-            code: WarningCode::UnredactedContentPossible,
-            severity: Severity::Info,
-            transform: Some("secret_redaction".to_string()),
-            message: "redaction is best-effort; it is not a guarantee that no secret survives"
-                .to_string(),
-        });
-        transform_reports.push(TransformReport {
-            id: "secret_redaction".to_string(),
-            version: "1.0.0".to_string(),
-            tokens_before: original_tokens,
-            tokens_after,
-            saved_tokens: original_tokens.saturating_sub(tokens_after),
-            savings_ratio: ratio(original_tokens, tokens_after),
-            elapsed_micros: None,
-            status: if outcome.redacted_count > 0 {
-                TransformStatus::Applied
-            } else {
-                TransformStatus::NoOp
-            },
-            skipped_reason: None,
-            warnings: Vec::new(),
-        });
-        bytes = outcome.bytes;
-    }
-
+    // (CompressionPolicyBuilder::build rejects that).
+    let outcome = transforms::redaction::redact(&input.bytes);
+    let tokens_after = estimator.count_bytes(&outcome.bytes);
+    warnings.push(Warning {
+        code: WarningCode::UnredactedContentPossible,
+        severity: Severity::Info,
+        transform: Some("secret_redaction".to_string()),
+        message: "redaction is best-effort; it is not a guarantee that no secret survives"
+            .to_string(),
+    });
+    transform_reports.push(TransformReport {
+        id: "secret_redaction".to_string(),
+        version: "1.0.0".to_string(),
+        tokens_before: original_tokens,
+        tokens_after,
+        saved_tokens: original_tokens.saturating_sub(tokens_after),
+        savings_ratio: ratio(original_tokens, tokens_after),
+        elapsed_micros: None,
+        status: if outcome.redacted_count > 0 {
+            TransformStatus::Applied
+        } else {
+            TransformStatus::NoOp
+        },
+        skipped_reason: None,
+        warnings: Vec::new(),
+    });
+    let mut bytes = outcome.bytes;
     // Protected content is computed against the POST-redaction view: redaction may
     // legitimately alter protected content that itself contained a secret, so later
     // transforms are held to "survives redaction", not "survives the original bytes".
@@ -236,14 +271,19 @@ fn apply_transforms(
             original_tokens,
             current_tokens,
             estimator_info,
-            Status::UnreachableTarget,
-            mode_label(policy.mode).to_string(),
+            if bytes == input.bytes {
+                Status::Passthrough
+            } else {
+                Status::Compressed
+            },
+            mode_label(policy.preset).to_string(),
             format_label(input.format).to_string(),
             task_scope_label(policy.task_scope).to_string(),
             transform_reports,
             warnings,
         );
         report.budget = Some(BudgetReport {
+            status: BudgetStatus::Unreachable,
             target_tokens: target,
             protected_floor: floor,
             achieved_tokens: current_tokens,
@@ -252,7 +292,7 @@ fn apply_transforms(
         return Ok(CompressionOutput { bytes, report });
     }
 
-    // Step 2: mode-matrix-selected transforms, in canonical order, stopping early once the
+    // Step 2: preset-matrix-selected transforms, in canonical order, stopping early once the
     // target is met (the pipeline's "early exit" rule).
     //
     // When `--lossy` is set, `json_field_fold`/`json_value_dict` are DEFERRED past the lossy
@@ -278,7 +318,7 @@ fn apply_transforms(
             )
     };
     let entries = modes::pipeline_for(
-        policy.mode,
+        policy.preset,
         policy.task_scope,
         input.format,
         policy.experimental,
@@ -368,6 +408,7 @@ fn apply_transforms(
                 estimator,
                 &protected,
                 &mut retrieval,
+                target,
             )?;
             lossy_applied = lossy_report.status == TransformStatus::Applied;
             if lossy_applied {
@@ -401,10 +442,10 @@ fn apply_transforms(
         }
     }
 
-    let status = match target {
-        None => Status::BestEffort,
-        Some(t) if current_tokens <= t => Status::Compressed,
-        Some(_) => Status::BestEffort,
+    let status = if bytes == input.bytes {
+        Status::Passthrough
+    } else {
+        Status::Compressed
     };
 
     let mut report = CompressionReport::new(
@@ -412,13 +453,14 @@ fn apply_transforms(
         current_tokens,
         estimator_info,
         status,
-        mode_label(policy.mode).to_string(),
+        mode_label(policy.preset).to_string(),
         format_label(input.format).to_string(),
         task_scope_label(policy.task_scope).to_string(),
         transform_reports,
         warnings,
     );
     report.budget = Some(BudgetReport {
+        status: budget_status(target, floor, current_tokens),
         target_tokens: target,
         protected_floor: floor,
         achieved_tokens: current_tokens,
@@ -440,11 +482,48 @@ fn apply_transforms(
         });
     }
     report.retrieval = retrieval;
+    report.pruning = policy.lossy.map(|_| {
+        let pruned_items = count_retrieval_markers(&bytes);
+        PruningReport {
+            requested: true,
+            applied: lossy_applied,
+            preview: policy.preview,
+            candidate_items: count_array_items(&bytes),
+            retained_items: count_array_items(&bytes).saturating_sub(pruned_items),
+            pruned_items,
+            evidence_refs: if policy.preview { 0 } else { pruned_items },
+            preserve_paths: policy.lossy_preserve.clone(),
+        }
+    });
     Ok(CompressionOutput { bytes, report })
 }
 
-/// One iteration of the mode-matrix transform loop: budget early-exit, run, regression check,
-/// mode ratio cap, safety validation, and the matching `TransformReport`. Extracted so the
+fn count_retrieval_markers(bytes: &[u8]) -> usize {
+    fn walk(value: &Value) -> usize {
+        match value {
+            Value::Object(map) => {
+                usize::from(map.contains_key("$tf_ref")) + map.values().map(walk).sum::<usize>()
+            }
+            Value::Array(items) => items.iter().map(walk).sum(),
+            _ => 0,
+        }
+    }
+    serde_json::from_slice::<Value>(bytes).map_or(0, |value| walk(&value))
+}
+
+fn count_array_items(bytes: &[u8]) -> usize {
+    fn walk(value: &Value) -> usize {
+        match value {
+            Value::Object(map) => map.values().map(walk).sum(),
+            Value::Array(items) => items.len() + items.iter().map(walk).sum::<usize>(),
+            _ => 0,
+        }
+    }
+    serde_json::from_slice::<Value>(bytes).map_or(0, |value| walk(&value))
+}
+
+/// One iteration of the preset-matrix transform loop: budget early-exit, run, regression check,
+/// preset ratio cap, safety validation, and the matching `TransformReport`. Extracted so the
 /// deferred lossy-safe entries (see `apply_transforms`) replay through the exact same gates
 /// instead of a second copy that could drift from this one.
 #[allow(clippy::too_many_arguments)]
@@ -472,7 +551,7 @@ fn run_transform_entry(
     }
 
     let tokens_before = *current_tokens;
-    let max_ratio = entry.max_ratio_for(policy.mode);
+    let max_ratio = entry.max_ratio_for(policy.preset);
 
     let candidate = match apply_single_transform(entry.transform_id, bytes, policy) {
         Ok(candidate) => candidate,
@@ -559,9 +638,9 @@ fn apply_single_transform(
             transforms::json_dict::dict_json(bytes).map_err(|e| e.to_string())
         }
         TransformId::SchemaCompaction => {
-            // ponytail: a fixed example cap for now; per-mode example counts are a future
+            // ponytail: a fixed example cap for now; per-preset example counts are a future
             // config knob (schema compaction only requires the kept-example count be
-            // controlled by mode config, not that distinct values ship per mode yet).
+            // controlled by preset config, not that distinct values ship per preset yet).
             transforms::schema::compact_schema(bytes, 1).map_err(|e| e.to_string())
         }
         TransformId::LogFieldFold => {
@@ -595,6 +674,7 @@ fn apply_lossy_reduction(
     estimator: &dyn TokenEstimator,
     protected: &[Vec<u8>],
     retrieval: &mut Option<RetrievalReport>,
+    target: Option<usize>,
 ) -> Result<(Vec<u8>, usize, TransformReport), TokenFoldError> {
     let noop = |status, reason| TransformReport {
         id: transforms::json_prune::TRANSFORM_ID.to_string(),
@@ -630,12 +710,39 @@ fn apply_lossy_reduction(
         ));
     }
 
-    let options = transforms::json_prune::LossyOptions {
+    let mut options = transforms::json_prune::LossyOptions {
         preserve_paths: policy.lossy_preserve.clone(),
         ratio: policy.lossy_ratio,
         namespace: policy.retrieval_namespace.clone(),
     };
-    let outcome = match transforms::json_prune::prune(bytes, &options, estimator) {
+    let mut selected = transforms::json_prune::prune(bytes, &options, estimator);
+    if let Some(target) = target
+        && let Ok(Some(minimum)) = &selected
+        && estimator.count_bytes(&serde_json::to_vec(&minimum.json).unwrap_or_default()) <= target
+    {
+        let mut low = policy.lossy_ratio;
+        let mut high = 1.0;
+        for _ in 0..12 {
+            let ratio = (low + high) / 2.0;
+            options.ratio = ratio;
+            let candidate = transforms::json_prune::prune(bytes, &options, estimator);
+            let meets = candidate
+                .as_ref()
+                .ok()
+                .and_then(Option::as_ref)
+                .is_some_and(|outcome| {
+                    estimator.count_bytes(&serde_json::to_vec(&outcome.json).unwrap_or_default())
+                        <= target
+                });
+            if meets {
+                low = ratio;
+                selected = candidate;
+            } else {
+                high = ratio;
+            }
+        }
+    }
+    let outcome = match selected {
         Ok(Some(outcome)) => outcome,
         Ok(None) => {
             return Ok((
@@ -985,11 +1092,11 @@ fn ratio(before: usize, after: usize) -> f64 {
     }
 }
 
-fn mode_label(mode: CompressionMode) -> &'static str {
-    match mode {
-        CompressionMode::Conservative => "conservative",
-        CompressionMode::Balanced => "balanced",
-        CompressionMode::Aggressive => "aggressive",
+fn mode_label(preset: Preset) -> &'static str {
+    match preset {
+        Preset::Conservative => "conservative",
+        Preset::Balanced => "balanced",
+        Preset::Aggressive => "aggressive",
     }
 }
 

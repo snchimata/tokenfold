@@ -87,7 +87,7 @@ pub struct LedgerRecord {
     pub timestamp: String,
     pub surface: String,
     pub format: String,
-    pub mode: String,
+    pub preset: String,
     pub status: String,
     pub original_tokens: usize,
     pub compressed_tokens: usize,
@@ -163,7 +163,7 @@ pub fn record_from_report(
         timestamp,
         surface,
         format: report.format.clone(),
-        mode: report.mode.clone(),
+        preset: report.preset.clone(),
         status: status_label(&report.status),
         original_tokens: report.original_tokens,
         compressed_tokens: report.compressed_tokens,
@@ -363,7 +363,7 @@ pub fn to_csv(summary: &StatsSummary) -> String {
     ));
     out.push('\n');
     out.push_str(
-        "request_id,timestamp,surface,format,mode,status,original_tokens,compressed_tokens,\
+        "request_id,timestamp,surface,format,preset,status,original_tokens,compressed_tokens,\
          saved_tokens,savings_pct,bypass_reason,project_hash\n",
     );
     for r in &summary.recent_requests {
@@ -373,7 +373,7 @@ pub fn to_csv(summary: &StatsSummary) -> String {
             csv_field(&r.timestamp),
             csv_field(&r.surface),
             csv_field(&r.format),
-            csv_field(&r.mode),
+            csv_field(&r.preset),
             csv_field(&r.status),
             r.original_tokens,
             r.compressed_tokens,
@@ -700,7 +700,7 @@ mod tests {
             100,
             120,
             "command_output",
-            Status::BestEffort,
+            Status::Compressed,
             heuristic_estimator(),
         );
         report.command = Some(CommandReport {
@@ -767,7 +767,7 @@ mod tests {
             Status::Passthrough,
             heuristic_estimator(),
         );
-        let mut diff = cli_report(300, 200, "git_diff", Status::BestEffort, exact_estimator());
+        let mut diff = cli_report(300, 200, "git_diff", Status::Compressed, exact_estimator());
         diff.transforms.push(crate::report::TransformReport {
             id: "diff_compaction".to_string(),
             version: "1.0.0".to_string(),
@@ -827,7 +827,7 @@ mod tests {
                 1000,
                 400,
                 "command_output",
-                Status::BestEffort,
+                Status::Compressed,
                 exact_estimator(),
             );
             r.command = Some(CommandReport {
@@ -852,7 +852,7 @@ mod tests {
                 1000,
                 1000,
                 "command_output",
-                Status::BestEffort,
+                Status::Compressed,
                 exact_estimator(),
             );
             r.command = Some(CommandReport {
@@ -953,7 +953,7 @@ mod tests {
         assert_eq!(json["recent_requests"][0]["request_id"], "tc-7f3a2b1c");
 
         // No arbitrary payload text ever enters the summary: every string in it is drawn from
-        // a fixed short vocabulary (ids, ISO timestamps, format/mode/status labels, hashes).
+        // a fixed short vocabulary (ids, ISO timestamps, format/preset/status labels, hashes).
         let serialized = serde_json::to_string(&summary).unwrap();
         assert!(!serialized.contains("hello world"));
 
@@ -988,7 +988,7 @@ mod tests {
             timestamp: timestamp.to_string(),
             surface: "cli".to_string(),
             format: "plain_text".to_string(),
-            mode: "balanced".to_string(),
+            preset: "balanced".to_string(),
             status: "compressed".to_string(),
             original_tokens: 100,
             compressed_tokens: 60,

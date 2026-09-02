@@ -1,9 +1,9 @@
 //! Python binding for `tokenfold-core`.
 //!
 //! Naming convention: Python-facing enum variant names use
-//! `ALL_CAPS` (e.g. `CompressionMode.BALANCED`), while the underlying Rust enums
-//! (`tokenfold_core::CompressionMode`, etc.) keep Rust's `PascalCase` convention
-//! (`CompressionMode::Balanced`). The `#[pyo3(name = "...")]` attributes below are what
+//! `ALL_CAPS` (e.g. `Preset.BALANCED`), while the underlying Rust enums
+//! (`tokenfold_core::Preset`, etc.) keep Rust's `PascalCase` convention
+//! (`Preset::Balanced`). The `#[pyo3(name = "...")]` attributes below are what
 //! does that renaming at the FFI boundary.
 //!
 //! pyo3 0.22's `#[pyfunction]`/`#[pymethods]`/`create_exception!` macro expansions predate
@@ -20,15 +20,14 @@ use std::path::PathBuf;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::create_exception;
-use pyo3::exceptions::{PyException, PyOSError};
+use pyo3::exceptions::{PyException, PyOSError, PyUnicodeDecodeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
-use tokenfold_core::report::TransformStatus;
 use tokenfold_core::retrieval_store::{RetrievalOutcome, RetrievalStore};
 use tokenfold_core::{
-    CompressionInput, CompressionMode as CoreMode, CompressionOutput as CoreOutput,
-    CompressionPolicy as CorePolicy, InputFormat as CoreFormat, LossyPath as CoreLossyPath,
+    CompressionInput, CompressionOutput as CoreOutput, CompressionPolicy as CorePolicy,
+    InputFormat as CoreFormat, LossyPath as CoreLossyPath, Preset as CorePreset,
     Status as CoreStatus, TokenFoldError as CoreError,
 };
 
@@ -49,6 +48,7 @@ create_exception!(tokenfold, InternalError, TokenFoldError);
 // `//` comment, not `///`: `create_exception!` doesn't attach outer doc comments to the item
 // it generates, so a doc comment here would just be a `-D warnings`-tripping dead comment.
 create_exception!(tokenfold, RetrievalError, TokenFoldError);
+create_exception!(tokenfold, BudgetUnmetError, TokenFoldError);
 
 /// Maps `tokenfold_core::TokenFoldError` to the Python exception hierarchy above. `Io`
 /// maps to the builtin `OSError`, not `InternalError`: an I/O failure is the caller's
@@ -70,9 +70,9 @@ fn map_err(err: CoreError) -> PyErr {
 // Enums
 // ---------------------------------------------------------------------------------------
 
-#[pyclass(name = "CompressionMode", eq, from_py_object)]
+#[pyclass(name = "Preset", eq, from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PyCompressionMode {
+pub enum PyPreset {
     #[pyo3(name = "CONSERVATIVE")]
     Conservative,
     #[pyo3(name = "BALANCED")]
@@ -81,34 +81,32 @@ pub enum PyCompressionMode {
     Aggressive,
 }
 
-impl From<PyCompressionMode> for CoreMode {
-    fn from(m: PyCompressionMode) -> Self {
+impl From<PyPreset> for CorePreset {
+    fn from(m: PyPreset) -> Self {
         match m {
-            PyCompressionMode::Conservative => CoreMode::Conservative,
-            PyCompressionMode::Balanced => CoreMode::Balanced,
-            PyCompressionMode::Aggressive => CoreMode::Aggressive,
+            PyPreset::Conservative => CorePreset::Conservative,
+            PyPreset::Balanced => CorePreset::Balanced,
+            PyPreset::Aggressive => CorePreset::Aggressive,
         }
     }
 }
 
-impl From<CoreMode> for PyCompressionMode {
-    fn from(m: CoreMode) -> Self {
+impl From<CorePreset> for PyPreset {
+    fn from(m: CorePreset) -> Self {
         match m {
-            CoreMode::Conservative => PyCompressionMode::Conservative,
-            CoreMode::Balanced => PyCompressionMode::Balanced,
-            CoreMode::Aggressive => PyCompressionMode::Aggressive,
+            CorePreset::Conservative => PyPreset::Conservative,
+            CorePreset::Balanced => PyPreset::Balanced,
+            CorePreset::Aggressive => PyPreset::Aggressive,
         }
     }
 }
 
-fn parse_mode_str(s: &str) -> PyResult<CoreMode> {
+fn parse_preset_str(s: &str) -> PyResult<CorePreset> {
     match s.to_ascii_uppercase().as_str() {
-        "CONSERVATIVE" => Ok(CoreMode::Conservative),
-        "BALANCED" => Ok(CoreMode::Balanced),
-        "AGGRESSIVE" => Ok(CoreMode::Aggressive),
-        other => Err(ConfigError::new_err(format!(
-            "unknown CompressionMode: {other:?}"
-        ))),
+        "CONSERVATIVE" => Ok(CorePreset::Conservative),
+        "BALANCED" => Ok(CorePreset::Balanced),
+        "AGGRESSIVE" => Ok(CorePreset::Aggressive),
+        other => Err(ConfigError::new_err(format!("unknown Preset: {other:?}"))),
     }
 }
 
@@ -129,6 +127,24 @@ pub enum PyInputFormat {
     CommandOutput,
     #[pyo3(name = "GIT_DIFF")]
     GitDiff,
+}
+
+#[pyclass(name = "Encoding", eq, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PyEncoding {
+    #[pyo3(name = "JSON")]
+    Json,
+    #[pyo3(name = "TOON")]
+    Toon,
+}
+
+impl From<PyEncoding> for tokenfold_core::OutputEncoding {
+    fn from(value: PyEncoding) -> Self {
+        match value {
+            PyEncoding::Json => Self::Json,
+            PyEncoding::Toon => Self::Toon,
+        }
+    }
 }
 
 impl From<PyInputFormat> for CoreFormat {
@@ -167,10 +183,6 @@ pub enum PyStatus {
     Compressed,
     #[pyo3(name = "PASSTHROUGH")]
     Passthrough,
-    #[pyo3(name = "BEST_EFFORT")]
-    BestEffort,
-    #[pyo3(name = "UNREACHABLE_TARGET")]
-    UnreachableTarget,
 }
 
 impl From<CoreStatus> for PyStatus {
@@ -178,8 +190,6 @@ impl From<CoreStatus> for PyStatus {
         match s {
             CoreStatus::Compressed => PyStatus::Compressed,
             CoreStatus::Passthrough => PyStatus::Passthrough,
-            CoreStatus::BestEffort => PyStatus::BestEffort,
-            CoreStatus::UnreachableTarget => PyStatus::UnreachableTarget,
         }
     }
 }
@@ -220,19 +230,19 @@ fn parse_lossy_str(s: &str) -> PyResult<CoreLossyPath> {
     }
 }
 
-/// Accepts either the `CompressionMode` enum or a (case-insensitive) string, matching the
-/// public `mode: CompressionMode | str` signature.
+/// Accepts either the `Preset` enum or a (case-insensitive) string, matching the
+/// public `preset: Preset | str` signature.
 #[derive(FromPyObject)]
-enum ModeArg {
-    Enum(PyCompressionMode),
+enum PresetArg {
+    Enum(PyPreset),
     Str(String),
 }
 
-impl ModeArg {
-    fn resolve(self) -> PyResult<CoreMode> {
+impl PresetArg {
+    fn resolve(self) -> PyResult<CorePreset> {
         match self {
-            ModeArg::Enum(m) => Ok(m.into()),
-            ModeArg::Str(s) => parse_mode_str(&s),
+            PresetArg::Enum(m) => Ok(m.into()),
+            PresetArg::Str(s) => parse_preset_str(&s),
         }
     }
 }
@@ -243,6 +253,27 @@ impl ModeArg {
 enum FormatArg {
     Enum(PyInputFormat),
     Str(String),
+}
+
+#[derive(FromPyObject)]
+enum EncodingArg {
+    Enum(PyEncoding),
+    Str(String),
+}
+
+impl EncodingArg {
+    fn resolve(self) -> PyResult<tokenfold_core::OutputEncoding> {
+        match self {
+            Self::Enum(value) => Ok(value.into()),
+            Self::Str(value) if value.eq_ignore_ascii_case("json") => {
+                Ok(tokenfold_core::OutputEncoding::Json)
+            }
+            Self::Str(value) if value.eq_ignore_ascii_case("toon") => {
+                Ok(tokenfold_core::OutputEncoding::Toon)
+            }
+            Self::Str(value) => Err(ConfigError::new_err(format!("unknown Encoding: {value:?}"))),
+        }
+    }
 }
 
 impl FormatArg {
@@ -279,6 +310,48 @@ enum PayloadArg {
     Str(String),
 }
 
+#[pyclass(name = "PruningPolicy", from_py_object)]
+#[derive(Clone)]
+pub struct PyPruningPolicy {
+    keep_ratio: Option<f64>,
+    preserve_paths: Vec<String>,
+    retrieval_store: Option<PathBuf>,
+    retrieval_namespace: Option<String>,
+}
+
+#[pymethods]
+impl PyPruningPolicy {
+    #[new]
+    #[pyo3(signature = (keep_ratio=None, preserve_paths=None, retrieval_store=None, retrieval_namespace=None))]
+    fn new(
+        keep_ratio: Option<f64>,
+        preserve_paths: Option<Vec<String>>,
+        retrieval_store: Option<PathBuf>,
+        retrieval_namespace: Option<String>,
+    ) -> PyResult<Self> {
+        if keep_ratio.is_some_and(|ratio| !(0.0 < ratio && ratio <= 1.0)) {
+            return Err(ConfigError::new_err(
+                "keep_ratio must be greater than 0 and at most 1",
+            ));
+        }
+        Ok(Self {
+            keep_ratio,
+            preserve_paths: preserve_paths.unwrap_or_default(),
+            retrieval_store,
+            retrieval_namespace,
+        })
+    }
+
+    #[getter]
+    fn keep_ratio(&self) -> Option<f64> {
+        self.keep_ratio
+    }
+    #[getter]
+    fn preserve_paths(&self) -> Vec<String> {
+        self.preserve_paths.clone()
+    }
+}
+
 impl PayloadArg {
     fn into_bytes(self) -> Vec<u8> {
         match self {
@@ -302,11 +375,10 @@ impl PyCompressionPolicy {
     #[new]
     #[pyo3(signature = (
         target_tokens=None,
-        mode=None,
+        preset=None,
         disable=None,
         reserve_output_tokens=None,
         preserve_latest_user_message=None,
-        unsafe_disable_redaction=false,
         experimental=false,
         enable=None,
         store_originals=false,
@@ -321,11 +393,10 @@ impl PyCompressionPolicy {
     #[allow(clippy::too_many_arguments)]
     fn new(
         target_tokens: Option<usize>,
-        mode: Option<ModeArg>,
+        preset: Option<PresetArg>,
         disable: Option<Vec<String>>,
         reserve_output_tokens: Option<usize>,
         preserve_latest_user_message: Option<bool>,
-        unsafe_disable_redaction: bool,
         experimental: bool,
         enable: Option<Vec<String>>,
         store_originals: bool,
@@ -341,8 +412,8 @@ impl PyCompressionPolicy {
         if let Some(t) = target_tokens {
             builder = builder.target_tokens(t);
         }
-        if let Some(m) = mode {
-            builder = builder.mode(m.resolve()?);
+        if let Some(m) = preset {
+            builder = builder.preset(m.resolve()?);
         }
         for id in disable.unwrap_or_default() {
             builder = builder.disable(id);
@@ -353,7 +424,6 @@ impl PyCompressionPolicy {
         if let Some(p) = preserve_latest_user_message {
             builder = builder.preserve_latest_user_message(p);
         }
-        builder = builder.unsafe_disable_redaction(unsafe_disable_redaction);
         builder = builder.experimental(experimental);
         for id in enable.unwrap_or_default() {
             builder = builder.enable(id);
@@ -385,8 +455,8 @@ impl PyCompressionPolicy {
     }
 
     #[getter]
-    fn mode(&self) -> PyCompressionMode {
-        self.0.mode.into()
+    fn preset(&self) -> PyPreset {
+        self.0.preset.into()
     }
 
     #[getter]
@@ -460,7 +530,7 @@ pub struct PyCompressionReport {
     #[pyo3(get)]
     status: PyStatus,
     #[pyo3(get)]
-    mode: String,
+    preset: String,
     #[pyo3(get)]
     format: String,
     #[pyo3(get)]
@@ -501,7 +571,7 @@ fn report_to_py(
             savings_pct: report.savings_pct,
             estimator,
             status: report.status.clone().into(),
-            mode: report.mode.clone(),
+            preset: report.preset.clone(),
             format: report.format.clone(),
             task_scope: report.task_scope.clone(),
             warnings: report.warnings.iter().map(|w| w.message.clone()).collect(),
@@ -525,15 +595,16 @@ pub struct PyCompressionResult {
 
 #[pymethods]
 impl PyCompressionResult {
-    fn saved_pct(&self, py: Python<'_>) -> f64 {
-        self.report.borrow(py).savings_pct
+    #[getter]
+    fn text(&self, py: Python<'_>) -> PyResult<String> {
+        let bytes = self.payload.bind(py).as_bytes();
+        std::str::from_utf8(bytes)
+            .map(str::to_owned)
+            .map_err(|e| PyUnicodeDecodeError::new_err(e.to_string()))
     }
 
-    fn is_over_budget(&self, py: Python<'_>) -> bool {
-        matches!(
-            self.report.borrow(py).status,
-            PyStatus::BestEffort | PyStatus::UnreachableTarget
-        )
+    fn saved_pct(&self, py: Python<'_>) -> f64 {
+        self.report.borrow(py).savings_pct
     }
 }
 
@@ -628,7 +699,7 @@ fn py_to_json(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
 #[allow(clippy::too_many_arguments)]
 fn effective_policy(
     policy: Option<&PyCompressionPolicy>,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
     lossy: Option<LossyArg>,
@@ -639,11 +710,11 @@ fn effective_policy(
     let base = policy.map(|p| &p.0);
     let mut builder = CorePolicy::builder().preview(preview);
 
-    let resolved_mode = match mode {
+    let resolved_mode = match preset {
         Some(m) => m.resolve()?,
-        None => base.map(|p| p.mode).unwrap_or(CoreMode::Balanced),
+        None => base.map(|p| p.preset).unwrap_or(CorePreset::Balanced),
     };
-    builder = builder.mode(resolved_mode);
+    builder = builder.preset(resolved_mode);
 
     let resolved_target = target_tokens.or_else(|| base.and_then(|p| p.target_tokens));
     if let Some(t) = resolved_target {
@@ -676,7 +747,6 @@ fn effective_policy(
     if let Some(p) = base {
         builder = builder.reserve_output_tokens(p.reserve_output_tokens);
         builder = builder.preserve_latest_user_message(p.preserve_latest_user_message);
-        builder = builder.unsafe_disable_redaction(p.unsafe_disable_redaction);
         builder = builder.experimental(p.experimental);
         for id in &p.enable {
             builder = builder.enable(id.clone());
@@ -687,9 +757,6 @@ fn effective_policy(
         builder = builder.retrieval_backend(p.retrieval_backend.clone());
         builder = builder.retrieval_store_path(p.retrieval_store_path.clone());
         builder = builder.task_scope(p.task_scope);
-        if let Some(cb) = p.cache_boundary {
-            builder = builder.cache_boundary(cb);
-        }
     }
     builder.build().map_err(map_err)
 }
@@ -721,7 +788,7 @@ fn run_compress(
     format: CoreFormat,
     payload: PayloadArg,
     policy: Option<&PyCompressionPolicy>,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
     disable: Option<Vec<String>>,
     lossy: Option<LossyArg>,
@@ -729,6 +796,10 @@ fn run_compress(
     lossy_preserve: Option<Vec<String>>,
     allow_heuristic_budget: bool,
     dry_run: bool,
+    encoding: Option<EncodingArg>,
+    retrieval_store: Option<PathBuf>,
+    retrieval_namespace: Option<String>,
+    require_target: bool,
 ) -> PyResult<PyCompressionResult> {
     let bytes = payload.into_bytes();
     // `dry_run` (i.e. `inspect()`) must be side-effect-free for real, not merely in what it
@@ -738,9 +809,9 @@ fn run_compress(
     // retrieval store. `preview` is the switch that actually stops the write, in core, before it
     // happens; the payload substitution below stays as the presentation half of the same
     // contract.
-    let resolved_policy = effective_policy(
+    let mut resolved_policy = effective_policy(
         policy,
-        mode,
+        preset,
         target_tokens,
         disable,
         lossy,
@@ -748,6 +819,23 @@ fn run_compress(
         lossy_preserve,
         dry_run,
     )?;
+    if let Some(encoding) = encoding {
+        resolved_policy.encoding = encoding.resolve()?;
+    }
+    if retrieval_store.is_some() {
+        resolved_policy.retrieval_store_path = retrieval_store;
+    }
+    if let Some(namespace) = retrieval_namespace {
+        resolved_policy.retrieval_namespace = namespace;
+    }
+    if resolved_policy.lossy.is_some() {
+        resolved_policy.pruning = Some(tokenfold_core::PruningPolicy {
+            keep_ratio: Some(resolved_policy.lossy_ratio),
+            preserve_paths: resolved_policy.lossy_preserve.clone(),
+            retrieval_store: resolved_policy.retrieval_store_path.clone(),
+            retrieval_namespace: Some(resolved_policy.retrieval_namespace.clone()),
+        });
+    }
     let input = CompressionInput {
         format,
         bytes: bytes.clone(),
@@ -758,6 +846,23 @@ fn run_compress(
         resolved_policy.target_tokens,
         allow_heuristic_budget,
     )?;
+    if require_target
+        && out.report.budget.as_ref().is_some_and(|budget| {
+            matches!(
+                budget.status,
+                tokenfold_core::report::BudgetStatus::BestEffort
+                    | tokenfold_core::report::BudgetStatus::Unreachable
+            )
+        })
+    {
+        let receipt = report_to_py(py, &out.report)?;
+        let error = BudgetUnmetError::new_err(format!(
+            "token budget unmet: achieved {} tokens",
+            out.report.compressed_tokens
+        ));
+        error.value(py).setattr("receipt", receipt)?;
+        return Err(error);
+    }
     let payload_override = if dry_run {
         Some(bytes.as_slice())
     } else {
@@ -771,286 +876,172 @@ fn run_compress(
 // ---------------------------------------------------------------------------------------
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None, disable=None, allow_heuristic_budget=false, lossy=None, lossy_ratio=None, lossy_preserve=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
 #[allow(clippy::too_many_arguments)]
 fn compress(
     py: Python<'_>,
     payload: PayloadArg,
-    policy: Option<PyRef<'_, PyCompressionPolicy>>,
     format: Option<FormatArg>,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
-    disable: Option<Vec<String>>,
-    allow_heuristic_budget: bool,
-    // Opt-in LOSSY JSON array-item pruning, mirroring the CLI's `--lossy`/`--lossy-ratio`/
-    // `--lossy-preserve` flags. Only ever has an effect when `format` resolves to `JSON` --
-    // core silently no-ops it (`NotApplicableToFormat`) on every other format, exactly as the
-    // CLI does. See `CompressionPolicy.lossy` for the full contract (recoverable via
-    // `retrieve()`, requires a durable `filesystem` retrieval backend).
-    lossy: Option<LossyArg>,
-    lossy_ratio: Option<f64>,
-    lossy_preserve: Option<Vec<String>>,
+    require_target: bool,
+    encoding: Option<EncodingArg>,
+    pruning: Option<PyRef<'_, PyPruningPolicy>>,
 ) -> PyResult<PyCompressionResult> {
+    if require_target && target_tokens.is_none() {
+        return Err(ConfigError::new_err(
+            "require_target requires target_tokens",
+        ));
+    }
+    if pruning.is_some()
+        && target_tokens.is_none()
+        && pruning.as_ref().and_then(|p| p.keep_ratio).is_none()
+    {
+        return Err(ConfigError::new_err(
+            "pruning requires target_tokens or keep_ratio",
+        ));
+    }
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
         .unwrap_or(CoreFormat::Auto);
+    let (ratio, preserve, store, namespace) =
+        pruning.as_ref().map_or((None, None, None, None), |p| {
+            (
+                p.keep_ratio.or(Some(0.0)),
+                Some(p.preserve_paths.clone()),
+                p.retrieval_store.clone(),
+                p.retrieval_namespace.clone(),
+            )
+        });
     run_compress(
         py,
         resolved_format,
         payload,
-        policy.as_deref(),
-        mode,
+        None,
+        preset,
         target_tokens,
-        disable,
-        lossy,
-        lossy_ratio,
-        lossy_preserve,
-        allow_heuristic_budget,
+        None,
+        pruning.map(|_| LossyArg::Str("heuristic".to_string())),
+        ratio,
+        preserve,
         false,
+        false,
+        encoding,
+        store,
+        namespace,
+        require_target,
     )
 }
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, format=None, mode=None, target_tokens=None, lossy=None, lossy_ratio=None, lossy_preserve=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
 #[allow(clippy::too_many_arguments)]
 fn inspect(
     py: Python<'_>,
     payload: PayloadArg,
-    policy: Option<PyRef<'_, PyCompressionPolicy>>,
     format: Option<FormatArg>,
-    mode: Option<ModeArg>,
+    preset: Option<PresetArg>,
     target_tokens: Option<usize>,
-    // Preview what `--lossy` would do without writing anything: `run_compress`'s `dry_run=true`
-    // sets `CompressionPolicy.preview`, which routes every store() call in the pipeline
-    // (including the lossy stage's) through a throwaway in-memory probe instead of the real
-    // retrieval backend -- so a dropped item that a real run would refuse to persist (e.g.
-    // secret-shaped content) gets put back here too, same as a real run would.
-    lossy: Option<LossyArg>,
-    lossy_ratio: Option<f64>,
-    lossy_preserve: Option<Vec<String>>,
-) -> PyResult<PyCompressionResult> {
+    require_target: bool,
+    encoding: Option<EncodingArg>,
+    pruning: Option<PyRef<'_, PyPruningPolicy>>,
+) -> PyResult<Py<PyCompressionReport>> {
+    if require_target && target_tokens.is_none() {
+        return Err(ConfigError::new_err(
+            "require_target requires target_tokens",
+        ));
+    }
+    if pruning.is_some()
+        && target_tokens.is_none()
+        && pruning.as_ref().and_then(|p| p.keep_ratio).is_none()
+    {
+        return Err(ConfigError::new_err(
+            "pruning requires target_tokens or keep_ratio",
+        ));
+    }
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
         .unwrap_or(CoreFormat::Auto);
-    run_compress(
+    let (ratio, preserve, store, namespace) =
+        pruning.as_ref().map_or((None, None, None, None), |p| {
+            (
+                p.keep_ratio.or(Some(0.0)),
+                Some(p.preserve_paths.clone()),
+                p.retrieval_store.clone(),
+                p.retrieval_namespace.clone(),
+            )
+        });
+    let result = run_compress(
         py,
         resolved_format,
         payload,
-        policy.as_deref(),
-        mode,
+        None,
+        preset,
         target_tokens,
         None,
-        lossy,
-        lossy_ratio,
-        lossy_preserve,
-        // inspect() never applies compression, so a fail-closed budget gate would only get
-        // in the way of a dry-run preview; always let it through.
+        pruning.map(|_| LossyArg::Str("heuristic".to_string())),
+        ratio,
+        preserve,
         true,
         true,
-    )
+        encoding,
+        store,
+        namespace,
+        require_target,
+    )?;
+    Ok(result.report)
 }
-
-#[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, mode=None, target_tokens=None, disable=None, allow_heuristic_budget=false))]
-#[allow(clippy::too_many_arguments)]
-fn compress_openai_payload(
-    py: Python<'_>,
-    payload: PayloadArg,
-    policy: Option<PyRef<'_, PyCompressionPolicy>>,
-    mode: Option<ModeArg>,
-    target_tokens: Option<usize>,
-    disable: Option<Vec<String>>,
-    allow_heuristic_budget: bool,
-) -> PyResult<PyCompressionResult> {
-    run_compress(
-        py,
-        CoreFormat::OpenAiJson,
-        payload,
-        policy.as_deref(),
-        mode,
-        target_tokens,
-        disable,
-        // Lossy pruning only ever applies to generic JSON (core no-ops it on every other
-        // format), so this convenience wrapper doesn't expose it as its own kwarg -- always
-        // None, not a passthrough.
-        None,
-        None,
-        None,
-        allow_heuristic_budget,
-        false,
-    )
-}
-
-#[pyfunction]
-#[pyo3(signature = (payload, *, policy=None, mode=None, target_tokens=None, disable=None, allow_heuristic_budget=false))]
-#[allow(clippy::too_many_arguments)]
-fn compress_anthropic_payload(
-    py: Python<'_>,
-    payload: PayloadArg,
-    policy: Option<PyRef<'_, PyCompressionPolicy>>,
-    mode: Option<ModeArg>,
-    target_tokens: Option<usize>,
-    disable: Option<Vec<String>>,
-    allow_heuristic_budget: bool,
-) -> PyResult<PyCompressionResult> {
-    run_compress(
-        py,
-        CoreFormat::AnthropicJson,
-        payload,
-        policy.as_deref(),
-        mode,
-        target_tokens,
-        disable,
-        None,
-        None,
-        None,
-        allow_heuristic_budget,
-        false,
-    )
-}
-
-// ---------------------------------------------------------------------------------------
-// compress_messages: the message-oriented wrapper over the bytes-first core API.
-// ---------------------------------------------------------------------------------------
-
-#[pyclass(name = "MessagesCompressionResult")]
-pub struct PyMessagesCompressionResult {
-    #[pyo3(get)]
-    payload: Py<PyBytes>,
-    #[pyo3(get)]
-    report: Py<PyCompressionReport>,
-    #[pyo3(get)]
-    messages: Py<PyAny>,
-    #[pyo3(get)]
-    tokens_before: usize,
-    #[pyo3(get)]
-    tokens_after: usize,
-    #[pyo3(get)]
-    tokens_saved: usize,
-    #[pyo3(get)]
-    savings_pct: f64,
-    #[pyo3(get)]
-    transforms_applied: Vec<String>,
-    #[pyo3(get)]
-    retrieval_hashes: Vec<String>,
-}
-
-#[pyfunction]
-#[pyo3(signature = (messages, *, model="gpt-4.1", token_budget=None, mode=None))]
-fn compress_messages(
-    py: Python<'_>,
-    messages: &Bound<'_, PyList>,
-    // `model` is accepted for API compatibility with the documented signature, but
-    // `tokenfold_core::compress` doesn't yet route estimator choice by model name (it
-    // always tries `o200k_base` when the `tiktoken` feature is compiled in) -- recorded
-    // honestly rather than faking model-specific tokenization.
-    model: &str,
-    token_budget: Option<usize>,
-    mode: Option<ModeArg>,
-) -> PyResult<PyMessagesCompressionResult> {
-    let _ = model;
-    let mut messages_json = Vec::with_capacity(messages.len());
-    for item in messages.iter() {
-        messages_json.push(py_to_json(&item)?);
-    }
-    let payload_value = serde_json::json!({ "messages": messages_json });
-    let payload_bytes = serde_json::to_vec(&payload_value)
-        .map_err(|e| InvalidInputError::new_err(e.to_string()))?;
-
-    let resolved_mode = match mode {
-        Some(m) => m.resolve()?,
-        None => CoreMode::Balanced,
-    };
-    let mut builder = CorePolicy::builder().mode(resolved_mode);
-    if let Some(budget) = token_budget {
-        builder = builder.target_tokens(budget);
-    }
-    let policy = builder.build().map_err(map_err)?;
-
-    let input = CompressionInput {
-        format: CoreFormat::OpenAiJson,
-        bytes: payload_bytes,
-    };
-    let out = tokenfold_core::compress(input, &policy).map_err(map_err)?;
-
-    let compressed_value: serde_json::Value = serde_json::from_slice(&out.bytes).map_err(|e| {
-        InternalError::new_err(format!("compressed payload was not valid JSON: {e}"))
-    })?;
-    let messages_value = compressed_value
-        .get("messages")
-        .cloned()
-        .unwrap_or(serde_json::Value::Array(Vec::new()));
-    let messages_out = json_to_py(py, &messages_value)?;
-
-    let transforms_applied = out
-        .report
-        .transforms
-        .iter()
-        .filter(|t| t.status == TransformStatus::Applied)
-        .map(|t| t.id.clone())
-        .collect();
-
-    let tokens_before = out.report.original_tokens;
-    let tokens_after = out.report.compressed_tokens;
-    let tokens_saved = out.report.saved_tokens;
-    let savings_pct = out.report.savings_pct;
-    let report = report_to_py(py, &out.report)?;
-    let payload = PyBytes::new(py, &out.bytes).unbind();
-
-    Ok(PyMessagesCompressionResult {
-        payload,
-        report,
-        messages: messages_out,
-        tokens_before,
-        tokens_after,
-        tokens_saved,
-        savings_pct,
-        transforms_applied,
-        // RetrievalReport carries no per-entry content hash yet -- the same gap that stops
-        // `tokenfold_retrieve` from resolving a bare report reference -- so this is always
-        // empty rather than fabricated.
-        retrieval_hashes: Vec::new(),
-    })
-}
-
 // ---------------------------------------------------------------------------------------
 // retrieve: restores a payload previously persisted by `store_originals=True` or `lossy`,
 // mirroring `tokenfold retrieve`: accepts a raw hash, legacy text marker, or serialized JSON
 // `$tf_ref` marker through the `hash` argument. CompressionReport paths remain CLI-only.
 // ---------------------------------------------------------------------------------------
 
+#[pyfunction]
+#[pyo3(signature = (payload, *, from_format="auto"))]
+fn decode(py: Python<'_>, payload: PayloadArg, from_format: &str) -> PyResult<Py<PyBytes>> {
+    let from = match from_format.to_ascii_lowercase().as_str() {
+        "auto" => tokenfold_core::DecodeFormat::Auto,
+        "json" => tokenfold_core::DecodeFormat::Json,
+        "toon" => tokenfold_core::DecodeFormat::Toon,
+        "text" => tokenfold_core::DecodeFormat::Text,
+        value => {
+            return Err(ConfigError::new_err(format!(
+                "unknown decode format: {value:?}"
+            )));
+        }
+    };
+    let decoded = tokenfold_core::decode(&payload.into_bytes(), from).map_err(map_err)?;
+    Ok(PyBytes::new(py, &decoded).unbind())
+}
+
 /// Restore bytes by raw SHA-256 hash, legacy text marker, or serialized JSON `$tf_ref` marker.
 /// An explicit `namespace` overrides a namespace embedded in a marker.
 #[pyfunction]
-#[pyo3(signature = (hash, *, namespace=None, backend=None, retrieval_store_path=None, policy=None))]
+#[pyo3(signature = (reference, *, retrieval_store=None, namespace=None))]
 fn retrieve(
     py: Python<'_>,
-    hash: String,
+    reference: &Bound<'_, PyAny>,
+    retrieval_store: Option<PathBuf>,
     namespace: Option<String>,
-    backend: Option<String>,
-    retrieval_store_path: Option<PathBuf>,
-    policy: Option<PyRef<'_, PyCompressionPolicy>>,
 ) -> PyResult<Py<PyBytes>> {
-    let base = policy.as_deref().map(|p| &p.0);
+    let reference = match reference.extract::<String>() {
+        Ok(value) => value,
+        Err(_) => serde_json::to_string(&py_to_json(reference)?)
+            .map_err(|error| InvalidInputError::new_err(error.to_string()))?,
+    };
     let reference =
-        tokenfold_core::retrieval_store::parse_retrieval_reference(&hash).map_err(map_err)?;
+        tokenfold_core::retrieval_store::parse_retrieval_reference(&reference).map_err(map_err)?;
     let resolved_namespace = namespace
         .or(reference.namespace)
-        .or_else(|| base.map(|p| p.retrieval_namespace.clone()))
         .unwrap_or_else(|| "default".to_string());
-    let resolved_backend = backend
-        .or_else(|| base.map(|p| p.retrieval_backend.clone()))
-        .unwrap_or_else(|| "filesystem".to_string());
-    let resolved_store_path =
-        retrieval_store_path.or_else(|| base.and_then(|p| p.retrieval_store_path.clone()));
 
     // Hash algorithm is hardcoded "sha256" here for the same reason every call site in
     // tokenfold-core is: it is the only implemented option (`RetrievalStore::open` rejects
     // "blake3" as a documented, not-yet-built scope cut).
-    let store =
-        RetrievalStore::open(&resolved_backend, "sha256", resolved_store_path).map_err(map_err)?;
+    let store = RetrievalStore::open("filesystem", "sha256", retrieval_store).map_err(map_err)?;
 
     match store.retrieve(&reference.hash, &resolved_namespace) {
         RetrievalOutcome::Found(bytes) => Ok(PyBytes::new(py, &bytes).unbind()),
@@ -1071,15 +1062,14 @@ fn retrieve(
 
 #[pymodule]
 fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyCompressionMode>()?;
+    m.add_class::<PyPreset>()?;
     m.add_class::<PyInputFormat>()?;
+    m.add_class::<PyEncoding>()?;
     m.add_class::<PyStatus>()?;
-    m.add_class::<PyLossyPath>()?;
-    m.add_class::<PyCompressionPolicy>()?;
+    m.add_class::<PyPruningPolicy>()?;
     m.add_class::<PyEstimatorInfo>()?;
     m.add_class::<PyCompressionReport>()?;
     m.add_class::<PyCompressionResult>()?;
-    m.add_class::<PyMessagesCompressionResult>()?;
 
     m.add("TokenFoldError", py.get_type::<TokenFoldError>())?;
     m.add("InvalidInputError", py.get_type::<InvalidInputError>())?;
@@ -1088,12 +1078,11 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("ConfigError", py.get_type::<ConfigError>())?;
     m.add("InternalError", py.get_type::<InternalError>())?;
     m.add("RetrievalError", py.get_type::<RetrievalError>())?;
+    m.add("BudgetUnmetError", py.get_type::<BudgetUnmetError>())?;
 
     m.add_function(wrap_pyfunction!(compress, m)?)?;
     m.add_function(wrap_pyfunction!(inspect, m)?)?;
-    m.add_function(wrap_pyfunction!(compress_openai_payload, m)?)?;
-    m.add_function(wrap_pyfunction!(compress_anthropic_payload, m)?)?;
-    m.add_function(wrap_pyfunction!(compress_messages, m)?)?;
+    m.add_function(wrap_pyfunction!(decode, m)?)?;
     m.add_function(wrap_pyfunction!(retrieve, m)?)?;
     Ok(())
 }

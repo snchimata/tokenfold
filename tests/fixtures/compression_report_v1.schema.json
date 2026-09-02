@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenfold.dev/schema/compression-report-1.0.json",
+  "title": "Tokenfold CompressionReport 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "original_tokens", "compressed_tokens", "saved_tokens",
+    "savings_ratio", "savings_pct", "estimator", "status", "mode", "format",
+    "task_scope", "request_id", "pipeline", "quality", "budget", "cache",
+    "retrieval", "output_savings", "bypass", "command", "ledger", "transforms", "warnings"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "original_tokens": { "$ref": "#/$defs/nonNegativeInteger" },
+    "compressed_tokens": { "$ref": "#/$defs/nonNegativeInteger" },
+    "saved_tokens": { "$ref": "#/$defs/nonNegativeInteger" },
+    "savings_ratio": { "type": "number", "minimum": 0 },
+    "savings_pct": { "type": "number", "minimum": 0 },
+    "estimator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "model", "is_exact"],
+      "properties": {
+        "backend": { "type": "string" },
+        "model": { "type": ["string", "null"] },
+        "is_exact": { "type": "boolean" }
+      }
+    },
+    "status": { "enum": ["compressed", "passthrough", "best_effort", "unreachable_target"] },
+    "mode": { "type": "string" },
+    "format": { "type": "string" },
+    "task_scope": { "type": "string" },
+    "request_id": { "type": ["string", "null"] },
+    "pipeline": { "$ref": "#/$defs/nullableObject" },
+    "quality": { "$ref": "#/$defs/nullableObject" },
+    "budget": { "$ref": "#/$defs/nullableObject" },
+    "cache": { "$ref": "#/$defs/nullableObject" },
+    "retrieval": { "$ref": "#/$defs/nullableObject" },
+    "output_savings": { "$ref": "#/$defs/nullableObject" },
+    "bypass": { "$ref": "#/$defs/nullableObject" },
+    "command": { "$ref": "#/$defs/nullableObject" },
+    "ledger": { "$ref": "#/$defs/nullableObject" },
+    "transforms": { "type": "array", "items": { "type": "object" } },
+    "warnings": { "type": "array", "items": { "type": "object" } }
+  },
+  "$defs": {
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "nullableObject": { "type": ["object", "null"] }
+  }
+}

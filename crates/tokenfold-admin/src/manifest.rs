@@ -44,7 +44,7 @@ fn canonical_message(manifest: &ReleaseManifest) -> Vec<u8> {
 /// Verifies that `manifest.signature_b64` is a genuine ed25519 signature by the key in
 /// `public_key_bytes` over the canonical message described on [`ReleaseManifest`].
 ///
-/// Returns `Err` describing the problem for any failure mode: malformed base64, a decoded
+/// Returns `Err` describing the problem for any failure preset: malformed base64, a decoded
 /// signature of the wrong length, an invalid public key, or a signature that does not verify.
 /// Returns `Ok(())` only on genuine cryptographic success.
 pub fn verify_manifest(

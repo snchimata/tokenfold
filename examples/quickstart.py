@@ -1,100 +1,36 @@
-"""Real-world quickstart for the `tokenfold` Python package.
-
-Install the binding, then run this file:
-
-    pip install tokenfold          # or: maturin develop -m crates/tokenfold-py/Cargo.toml
-    python examples/quickstart.py
-
-It shows the three things you'll actually do in an app:
-
-  1. compress_messages(...) — hand it your OpenAI-style chat list, get a compressed
-     list back plus exact token accounting, ready to send to a model.
-  2. compress(...) — compress a raw request body (bytes/str) for any supported format.
-  3. compress(..., format="JSON") — compress generic JSON *data* (API responses,
-     records, logs), not just message payloads. Losslessly folds repeated keys and values.
-
-Every call returns a typed report: before/after tokens, which transforms ran, and any
-safety warnings. tokenfold never silently drops content — you get receipts.
-
-Everything here is lossless: these calls only ever restructure data, never discard it.
-Lossy array pruning is opt-in and stays off unless you ask for it
-(`compress(..., lossy=LossyPath.HEURISTIC)`) — see `examples/lossy_pruning.py`
-for that end to end.
-"""
+﻿"""Minimal Python quickstart for Tokenfold's bytes-first v2 interface."""
 
 import json
 from pathlib import Path
 
 import tokenfold
 
-# The same payload the Rust example uses (examples/openai_payload.json).
-PAYLOAD = json.loads((Path(__file__).parent / "openai_payload.json").read_text())
+HERE = Path(__file__).parent
 
 
-def compress_a_message_list() -> None:
-    """The common case: you have a `messages` list bound for the Chat Completions API."""
-    result = tokenfold.compress_messages(
-        PAYLOAD["messages"],
-        model="gpt-4o",
-        mode="BALANCED",
-    )
-
-    print("== compress_messages ==")
+def show(label: str, report: tokenfold.CompressionReport) -> None:
+    print(f"== {label} ==")
     print(
-        f"tokens:     {result.tokens_before} -> {result.tokens_after} "
-        f"({result.tokens_saved} saved, {result.savings_pct:.1f}%)"
-    )
-    print(f"transforms: {', '.join(result.transforms_applied) or '(none applied)'}")
-
-    # `result.messages` is the compressed list — send it straight to your provider:
-    #   client.chat.completions.create(model="gpt-4o", messages=result.messages)
-    print(f"messages:   {len(result.messages)} message(s) ready to send\n")
-
-
-def compress_a_raw_body() -> None:
-    """Compress a full request body (here, the whole OpenAI JSON incl. the tool schema)."""
-    result = tokenfold.compress(
-        json.dumps(PAYLOAD),
-        format="OPENAI_JSON",
-        mode="BALANCED",
-    )
-    report = result.report
-
-    print("== compress (raw OpenAI body) ==")
-    # `best_effort` here means "no target_tokens to confirm against", not a failure:
-    # `compressed` is reserved for runs that provably met a target you asked for.
-    print(f"status:     {report.status}")
-    print(
-        f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
+        f"tokens: {report.original_tokens} -> {report.compressed_tokens} "
         f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)"
     )
-    print(f"estimator:  {report.estimator.backend} (exact: {report.estimator.is_exact})")
-    if report.warnings:
-        for w in report.warnings:
-            print(f"  warning: {w}")
-    # result.payload is the compressed bytes; report.raw has the full JSON report.
-    print(f"payload:    {len(result.payload)} bytes\n")
 
 
-def compress_generic_json_data() -> None:
-    """Compress a JSON API response (not a message payload)."""
-    data = (Path(__file__).parent / "api_response.json").read_text()
-    result = tokenfold.compress(data, format="JSON", mode="BALANCED")
-    report = result.report
+body = (HERE / "openai_payload.json").read_bytes()
+result = tokenfold.compress(
+    body,
+    format=tokenfold.InputFormat.OPENAI_JSON,
+    preset=tokenfold.Preset.BALANCED,
+)
+show("OpenAI request", result.report)
+print(f"payload: {len(result.payload)} bytes\n")
 
-    print("== compress (generic JSON data) ==")
-    print(
-        f"tokens:     {report.original_tokens} -> {report.compressed_tokens} "
-        f"({report.saved_tokens} saved, {report.savings_pct:.1f}%)"
-    )
-    applied = [t["id"] for t in report.raw["transforms"] if t["status"] == "applied"]
-    print(f"transforms: {', '.join(applied)}")
-    # result.payload is the compressed JSON (columnar + value dictionary), losslessly
-    # reversible — every stage is round-trip gated before it's applied.
-    print(f"payload:    {len(result.payload)} bytes\n")
+data = (HERE / "api_response.json").read_bytes()
+receipt = tokenfold.inspect(data, format=tokenfold.InputFormat.JSON)
+show("generic JSON preview", receipt)
 
-
-if __name__ == "__main__":
-    compress_a_message_list()
-    compress_a_raw_body()
-    compress_generic_json_data()
+toon_input = json.dumps({"users": [{"id": 1}, {"id": 2}]}).encode()
+encoded = tokenfold.compress(toon_input, format="json", encoding=tokenfold.Encoding.TOON)
+restored = tokenfold.decode(encoded.payload, from_format="toon")
+assert json.loads(restored) == json.loads(toon_input)
+show("explicit TOON", encoded.report)
