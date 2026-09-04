@@ -150,38 +150,14 @@ def main(work: Path) -> None:
     print("   identical output -- nothing dropped, because dropping would not have helped")
 
     # 8. A ceiling showcase, not the default recommendation. Long rows amortize
-    #    each retrieval marker's fixed cost, so an aggressive 2% keep hint can
-    #    cross 90%. The planted 503 must still win the deterministic ranking.
-    print("\n== 8. maximum-compression showcase (>90%) ==")
-    words = (
-        "architecture service request response cache database worker queue shard region "
-        "latency throughput retry successful normal analysis record document content "
-        "result relevance source context metadata"
-    ).split()
-    results = []
-    for i in range(100):
-        snippet = " ".join(
-            words[(i * 7 + j * 11 + j * j) % len(words)] for j in range(800)
-        )
-        row = {
-            "rank": i + 1,
-            "title": f"Result {i + 1}: operational analysis for service shard {i % 17}",
-            "url": f"https://example.test/docs/{i + 1}",
-            "snippet": snippet,
-            "success": True,
-            "status_code": 200,
-        }
-        if i == 37:
-            row.update(success=False, status_code=503, error_count=4)
-        results.append(row)
-
-    showcase = work / "max-showcase.json"
-    showcase.write_text(
-        json.dumps(
-            {"query": "service reliability analysis", "results": results},
-            separators=(",", ":"),
-        ),
-        encoding="utf-8",
+    #    each retrieval marker's fixed cost, so a 2% keep hint on the bundled
+    #    100-row, 3,000-word fixture crosses 96%. The planted 503 must still
+    #    win the deterministic ranking.
+    print("\n== 8. maximum-compression showcase (>=96%) ==")
+    showcase = HERE / "max_showcase.json"
+    assert showcase.is_file(), (
+        "examples/max_showcase.json is missing; regenerate with "
+        "python tmp/build_showcase.py"
     )
     showcase_out = work / "max-showcase.compact.json"
     r = run(
@@ -199,7 +175,7 @@ def main(work: Path) -> None:
     compact = json.loads(showcase_out.read_text(encoding="utf-8"))["results"]
     kept = [row for row in compact if "$tf_ref" not in row]
     markers = [row for row in compact if "$tf_ref" in row]
-    assert r["savings_pct"] >= 90.0, "showcase must continue to substantiate the headline"
+    assert r["savings_pct"] >= 96.0, "showcase must continue to substantiate the headline"
     assert any(row.get("status_code") == 503 for row in kept), "the planted 503 must survive"
     print(f"   {pct(r)}")
     print(f"   results:    {len(kept)} kept, {len(markers)} retrieval markers")

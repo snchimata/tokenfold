@@ -1,0 +1,132 @@
+{
+  "tokenizer": {
+    "backend": "tiktoken",
+    "encoding": "o200k_base",
+    "exact": true
+  },
+  "headroom_revision": "4c9c29c421224920dee682a0cb0c688c1c71e64e",
+  "tokenfold_revision": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+  "manifest": "eval/research/provider_corpus/manifest.json",
+  "files": [
+    {
+      "id": "flat-users",
+      "shape": "flat-uniform",
+      "input": "eval/research/toon_corpus/flat_users.json",
+      "original_tokens": 826,
+      "tokenfold": {
+        "tokens": 366,
+        "saved_pct": 55.69,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 826,
+        "saved_pct": 0.0,
+        "json_value_equal": true
+      },
+      "token_winner": "tokenfold"
+    },
+    {
+      "id": "api-response",
+      "shape": "nested-uniform",
+      "input": "examples/api_response.json",
+      "original_tokens": 3812,
+      "tokenfold": {
+        "tokens": 1376,
+        "saved_pct": 63.9,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 3812,
+        "saved_pct": 0.0,
+        "json_value_equal": true
+      },
+      "token_winner": "tokenfold"
+    },
+    {
+      "id": "incident-feed",
+      "shape": "semi-uniform",
+      "input": "examples/incident_feed.json",
+      "original_tokens": 7216,
+      "tokenfold": {
+        "tokens": 6144,
+        "saved_pct": 14.86,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 6963,
+        "saved_pct": 3.51,
+        "json_value_equal": false
+      },
+      "token_winner": "tokenfold"
+    },
+    {
+      "id": "openai-payload",
+      "shape": "deeply-nested",
+      "input": "examples/openai_payload.json",
+      "original_tokens": 346,
+      "tokenfold": {
+        "tokens": 229,
+        "saved_pct": 33.82,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 335,
+        "saved_pct": 3.18,
+        "json_value_equal": false
+      },
+      "token_winner": "tokenfold"
+    },
+    {
+      "id": "compression-report",
+      "shape": "nested-record",
+      "input": "tests/fixtures/compression_report_v1.json",
+      "original_tokens": 195,
+      "tokenfold": {
+        "tokens": 128,
+        "saved_pct": 34.36,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 195,
+        "saved_pct": 0.0,
+        "json_value_equal": true
+      },
+      "token_winner": "tokenfold"
+    },
+    {
+      "id": "compression-report-schema",
+      "shape": "deeply-nested-schema",
+      "input": "tests/fixtures/compression_report_v1.schema.json",
+      "original_tokens": 676,
+      "tokenfold": {
+        "tokens": 472,
+        "saved_pct": 30.18,
+        "exact_recovery": true
+      },
+      "headroom": {
+        "tokens": 676,
+        "saved_pct": 0.0,
+        "json_value_equal": true
+      },
+      "token_winner": "tokenfold"
+    }
+  ],
+  "totals": {
+    "original_tokens": 13071,
+    "tokenfold": {
+      "tokens": 8715,
+      "saved_pct": 33.33
+    },
+    "headroom": {
+      "tokens": 12807,
+      "saved_pct": 2.02
+    },
+    "tokenfold_wins": 6,
+    "headroom_wins": 0
+  },
+  "limitations": [
+    "This compares each project's default local generic-JSON API, not hosted proxy behavior.",
+    "Token counts use one external tokenizer so both outputs are measured identically.",
+    "Tokenfold exactness is checked after decode; Headroom is checked as emitted JSON."
+  ]
+}

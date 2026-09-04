@@ -1,0 +1,1202 @@
+[
+  {
+    "timestamp": "2026-09-02T12:00:00Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "degraded",
+    "request_count": 1200,
+    "error_count": 0,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:00:01Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1213,
+    "error_count": 1,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:00:02Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1226,
+    "error_count": 2,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:00:03Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1239,
+    "error_count": 3,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:00:04Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1252,
+    "error_count": 4,
+    "p95_ms": 149
+  },
+  {
+    "timestamp": "2026-09-02T12:00:05Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1265,
+    "error_count": 5,
+    "p95_ms": 150
+  },
+  {
+    "timestamp": "2026-09-02T12:00:06Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1278,
+    "error_count": 6,
+    "p95_ms": 151
+  },
+  {
+    "timestamp": "2026-09-02T12:00:07Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1291,
+    "error_count": 7,
+    "p95_ms": 152
+  },
+  {
+    "timestamp": "2026-09-02T12:00:08Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1304,
+    "error_count": 8,
+    "p95_ms": 153
+  },
+  {
+    "timestamp": "2026-09-02T12:00:09Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1317,
+    "error_count": 9,
+    "p95_ms": 154
+  },
+  {
+    "timestamp": "2026-09-02T12:00:10Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1330,
+    "error_count": 10,
+    "p95_ms": 155
+  },
+  {
+    "timestamp": "2026-09-02T12:00:11Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1343,
+    "error_count": 0,
+    "p95_ms": 156
+  },
+  {
+    "timestamp": "2026-09-02T12:00:12Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1356,
+    "error_count": 1,
+    "p95_ms": 157
+  },
+  {
+    "timestamp": "2026-09-02T12:00:13Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1369,
+    "error_count": 2,
+    "p95_ms": 158
+  },
+  {
+    "timestamp": "2026-09-02T12:00:14Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1382,
+    "error_count": 3,
+    "p95_ms": 159
+  },
+  {
+    "timestamp": "2026-09-02T12:00:15Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1395,
+    "error_count": 4,
+    "p95_ms": 160
+  },
+  {
+    "timestamp": "2026-09-02T12:00:16Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1408,
+    "error_count": 5,
+    "p95_ms": 161
+  },
+  {
+    "timestamp": "2026-09-02T12:00:17Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "degraded",
+    "request_count": 1421,
+    "error_count": 6,
+    "p95_ms": 162
+  },
+  {
+    "timestamp": "2026-09-02T12:00:18Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1434,
+    "error_count": 7,
+    "p95_ms": 163
+  },
+  {
+    "timestamp": "2026-09-02T12:00:19Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1447,
+    "error_count": 8,
+    "p95_ms": 164
+  },
+  {
+    "timestamp": "2026-09-02T12:00:20Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1460,
+    "error_count": 9,
+    "p95_ms": 165
+  },
+  {
+    "timestamp": "2026-09-02T12:00:21Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1473,
+    "error_count": 10,
+    "p95_ms": 166
+  },
+  {
+    "timestamp": "2026-09-02T12:00:22Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1486,
+    "error_count": 0,
+    "p95_ms": 167
+  },
+  {
+    "timestamp": "2026-09-02T12:00:23Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1499,
+    "error_count": 1,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:00:24Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1512,
+    "error_count": 2,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:00:25Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1525,
+    "error_count": 3,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:00:26Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1538,
+    "error_count": 4,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:00:27Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1551,
+    "error_count": 5,
+    "p95_ms": 149
+  },
+  {
+    "timestamp": "2026-09-02T12:00:28Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1564,
+    "error_count": 6,
+    "p95_ms": 150
+  },
+  {
+    "timestamp": "2026-09-02T12:00:29Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1577,
+    "error_count": 7,
+    "p95_ms": 151
+  },
+  {
+    "timestamp": "2026-09-02T12:00:30Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1590,
+    "error_count": 8,
+    "p95_ms": 152
+  },
+  {
+    "timestamp": "2026-09-02T12:00:31Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1603,
+    "error_count": 9,
+    "p95_ms": 153
+  },
+  {
+    "timestamp": "2026-09-02T12:00:32Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1616,
+    "error_count": 10,
+    "p95_ms": 154
+  },
+  {
+    "timestamp": "2026-09-02T12:00:33Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1629,
+    "error_count": 0,
+    "p95_ms": 155
+  },
+  {
+    "timestamp": "2026-09-02T12:00:34Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "degraded",
+    "request_count": 1642,
+    "error_count": 1,
+    "p95_ms": 156
+  },
+  {
+    "timestamp": "2026-09-02T12:00:35Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1655,
+    "error_count": 2,
+    "p95_ms": 157
+  },
+  {
+    "timestamp": "2026-09-02T12:00:36Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1668,
+    "error_count": 3,
+    "p95_ms": 158
+  },
+  {
+    "timestamp": "2026-09-02T12:00:37Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1681,
+    "error_count": 4,
+    "p95_ms": 159
+  },
+  {
+    "timestamp": "2026-09-02T12:00:38Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1694,
+    "error_count": 5,
+    "p95_ms": 160
+  },
+  {
+    "timestamp": "2026-09-02T12:00:39Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1707,
+    "error_count": 6,
+    "p95_ms": 161
+  },
+  {
+    "timestamp": "2026-09-02T12:00:40Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1720,
+    "error_count": 7,
+    "p95_ms": 162
+  },
+  {
+    "timestamp": "2026-09-02T12:00:41Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1733,
+    "error_count": 8,
+    "p95_ms": 163
+  },
+  {
+    "timestamp": "2026-09-02T12:00:42Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1746,
+    "error_count": 9,
+    "p95_ms": 164
+  },
+  {
+    "timestamp": "2026-09-02T12:00:43Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1759,
+    "error_count": 10,
+    "p95_ms": 165
+  },
+  {
+    "timestamp": "2026-09-02T12:00:44Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1772,
+    "error_count": 0,
+    "p95_ms": 166
+  },
+  {
+    "timestamp": "2026-09-02T12:00:45Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1785,
+    "error_count": 1,
+    "p95_ms": 167
+  },
+  {
+    "timestamp": "2026-09-02T12:00:46Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1798,
+    "error_count": 2,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:00:47Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1811,
+    "error_count": 3,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:00:48Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1824,
+    "error_count": 4,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:00:49Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1837,
+    "error_count": 5,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:00:50Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1850,
+    "error_count": 6,
+    "p95_ms": 149
+  },
+  {
+    "timestamp": "2026-09-02T12:00:51Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "degraded",
+    "request_count": 1863,
+    "error_count": 7,
+    "p95_ms": 150
+  },
+  {
+    "timestamp": "2026-09-02T12:00:52Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1876,
+    "error_count": 8,
+    "p95_ms": 151
+  },
+  {
+    "timestamp": "2026-09-02T12:00:53Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1889,
+    "error_count": 9,
+    "p95_ms": 152
+  },
+  {
+    "timestamp": "2026-09-02T12:00:54Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1902,
+    "error_count": 10,
+    "p95_ms": 153
+  },
+  {
+    "timestamp": "2026-09-02T12:00:55Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1915,
+    "error_count": 0,
+    "p95_ms": 154
+  },
+  {
+    "timestamp": "2026-09-02T12:00:56Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1928,
+    "error_count": 1,
+    "p95_ms": 155
+  },
+  {
+    "timestamp": "2026-09-02T12:00:57Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1941,
+    "error_count": 2,
+    "p95_ms": 156
+  },
+  {
+    "timestamp": "2026-09-02T12:00:58Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1954,
+    "error_count": 3,
+    "p95_ms": 157
+  },
+  {
+    "timestamp": "2026-09-02T12:00:59Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 1967,
+    "error_count": 4,
+    "p95_ms": 158
+  },
+  {
+    "timestamp": "2026-09-02T12:01:00Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 1980,
+    "error_count": 5,
+    "p95_ms": 159
+  },
+  {
+    "timestamp": "2026-09-02T12:01:01Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 1993,
+    "error_count": 6,
+    "p95_ms": 160
+  },
+  {
+    "timestamp": "2026-09-02T12:01:02Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2006,
+    "error_count": 7,
+    "p95_ms": 161
+  },
+  {
+    "timestamp": "2026-09-02T12:01:03Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2019,
+    "error_count": 8,
+    "p95_ms": 162
+  },
+  {
+    "timestamp": "2026-09-02T12:01:04Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2032,
+    "error_count": 9,
+    "p95_ms": 163
+  },
+  {
+    "timestamp": "2026-09-02T12:01:05Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2045,
+    "error_count": 10,
+    "p95_ms": 164
+  },
+  {
+    "timestamp": "2026-09-02T12:01:06Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2058,
+    "error_count": 0,
+    "p95_ms": 165
+  },
+  {
+    "timestamp": "2026-09-02T12:01:07Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2071,
+    "error_count": 1,
+    "p95_ms": 166
+  },
+  {
+    "timestamp": "2026-09-02T12:01:08Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "degraded",
+    "request_count": 2084,
+    "error_count": 2,
+    "p95_ms": 167
+  },
+  {
+    "timestamp": "2026-09-02T12:01:09Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2097,
+    "error_count": 3,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:01:10Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2110,
+    "error_count": 4,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:01:11Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2123,
+    "error_count": 5,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:01:12Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2136,
+    "error_count": 6,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:01:13Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2149,
+    "error_count": 7,
+    "p95_ms": 149
+  },
+  {
+    "timestamp": "2026-09-02T12:01:14Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2162,
+    "error_count": 8,
+    "p95_ms": 150
+  },
+  {
+    "timestamp": "2026-09-02T12:01:15Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2175,
+    "error_count": 9,
+    "p95_ms": 151
+  },
+  {
+    "timestamp": "2026-09-02T12:01:16Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2188,
+    "error_count": 10,
+    "p95_ms": 152
+  },
+  {
+    "timestamp": "2026-09-02T12:01:17Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2201,
+    "error_count": 0,
+    "p95_ms": 153
+  },
+  {
+    "timestamp": "2026-09-02T12:01:18Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2214,
+    "error_count": 1,
+    "p95_ms": 154
+  },
+  {
+    "timestamp": "2026-09-02T12:01:19Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2227,
+    "error_count": 2,
+    "p95_ms": 155
+  },
+  {
+    "timestamp": "2026-09-02T12:01:20Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2240,
+    "error_count": 3,
+    "p95_ms": 156
+  },
+  {
+    "timestamp": "2026-09-02T12:01:21Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2253,
+    "error_count": 4,
+    "p95_ms": 157
+  },
+  {
+    "timestamp": "2026-09-02T12:01:22Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2266,
+    "error_count": 5,
+    "p95_ms": 158
+  },
+  {
+    "timestamp": "2026-09-02T12:01:23Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2279,
+    "error_count": 6,
+    "p95_ms": 159
+  },
+  {
+    "timestamp": "2026-09-02T12:01:24Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2292,
+    "error_count": 7,
+    "p95_ms": 160
+  },
+  {
+    "timestamp": "2026-09-02T12:01:25Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "degraded",
+    "request_count": 2305,
+    "error_count": 8,
+    "p95_ms": 161
+  },
+  {
+    "timestamp": "2026-09-02T12:01:26Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2318,
+    "error_count": 9,
+    "p95_ms": 162
+  },
+  {
+    "timestamp": "2026-09-02T12:01:27Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2331,
+    "error_count": 10,
+    "p95_ms": 163
+  },
+  {
+    "timestamp": "2026-09-02T12:01:28Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2344,
+    "error_count": 0,
+    "p95_ms": 164
+  },
+  {
+    "timestamp": "2026-09-02T12:01:29Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2357,
+    "error_count": 1,
+    "p95_ms": 165
+  },
+  {
+    "timestamp": "2026-09-02T12:01:30Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2370,
+    "error_count": 2,
+    "p95_ms": 166
+  },
+  {
+    "timestamp": "2026-09-02T12:01:31Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2383,
+    "error_count": 3,
+    "p95_ms": 167
+  },
+  {
+    "timestamp": "2026-09-02T12:01:32Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2396,
+    "error_count": 4,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:01:33Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2409,
+    "error_count": 5,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:01:34Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2422,
+    "error_count": 6,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:01:35Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2435,
+    "error_count": 7,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:01:36Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2448,
+    "error_count": 8,
+    "p95_ms": 149
+  },
+  {
+    "timestamp": "2026-09-02T12:01:37Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2461,
+    "error_count": 9,
+    "p95_ms": 150
+  },
+  {
+    "timestamp": "2026-09-02T12:01:38Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2474,
+    "error_count": 10,
+    "p95_ms": 151
+  },
+  {
+    "timestamp": "2026-09-02T12:01:39Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2487,
+    "error_count": 0,
+    "p95_ms": 152
+  },
+  {
+    "timestamp": "2026-09-02T12:01:40Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2500,
+    "error_count": 1,
+    "p95_ms": 153
+  },
+  {
+    "timestamp": "2026-09-02T12:01:41Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2513,
+    "error_count": 2,
+    "p95_ms": 154
+  },
+  {
+    "timestamp": "2026-09-02T12:01:42Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "degraded",
+    "request_count": 2526,
+    "error_count": 3,
+    "p95_ms": 155
+  },
+  {
+    "timestamp": "2026-09-02T12:01:43Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2539,
+    "error_count": 4,
+    "p95_ms": 156
+  },
+  {
+    "timestamp": "2026-09-02T12:01:44Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2552,
+    "error_count": 5,
+    "p95_ms": 157
+  },
+  {
+    "timestamp": "2026-09-02T12:01:45Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2565,
+    "error_count": 6,
+    "p95_ms": 158
+  },
+  {
+    "timestamp": "2026-09-02T12:01:46Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2578,
+    "error_count": 7,
+    "p95_ms": 159
+  },
+  {
+    "timestamp": "2026-09-02T12:01:47Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2591,
+    "error_count": 8,
+    "p95_ms": 160
+  },
+  {
+    "timestamp": "2026-09-02T12:01:48Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2604,
+    "error_count": 9,
+    "p95_ms": 161
+  },
+  {
+    "timestamp": "2026-09-02T12:01:49Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2617,
+    "error_count": 10,
+    "p95_ms": 162
+  },
+  {
+    "timestamp": "2026-09-02T12:01:50Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2630,
+    "error_count": 0,
+    "p95_ms": 163
+  },
+  {
+    "timestamp": "2026-09-02T12:01:51Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2643,
+    "error_count": 1,
+    "p95_ms": 164
+  },
+  {
+    "timestamp": "2026-09-02T12:01:52Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2656,
+    "error_count": 2,
+    "p95_ms": 165
+  },
+  {
+    "timestamp": "2026-09-02T12:01:53Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2669,
+    "error_count": 3,
+    "p95_ms": 166
+  },
+  {
+    "timestamp": "2026-09-02T12:01:54Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2682,
+    "error_count": 4,
+    "p95_ms": 167
+  },
+  {
+    "timestamp": "2026-09-02T12:01:55Z",
+    "service": "search",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2695,
+    "error_count": 5,
+    "p95_ms": 145
+  },
+  {
+    "timestamp": "2026-09-02T12:01:56Z",
+    "service": "api-gateway",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "ok",
+    "request_count": 2708,
+    "error_count": 6,
+    "p95_ms": 146
+  },
+  {
+    "timestamp": "2026-09-02T12:01:57Z",
+    "service": "billing",
+    "environment": "production",
+    "region": "us-east-1",
+    "status": "ok",
+    "request_count": 2721,
+    "error_count": 7,
+    "p95_ms": 147
+  },
+  {
+    "timestamp": "2026-09-02T12:01:58Z",
+    "service": "catalog",
+    "environment": "production",
+    "region": "us-west-2",
+    "status": "ok",
+    "request_count": 2734,
+    "error_count": 8,
+    "p95_ms": 148
+  },
+  {
+    "timestamp": "2026-09-02T12:01:59Z",
+    "service": "search",
+    "environment": "production",
+    "region": "eu-west-1",
+    "status": "degraded",
+    "request_count": 2747,
+    "error_count": 9,
+    "p95_ms": 149
+  }
+]
