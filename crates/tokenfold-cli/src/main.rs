@@ -635,12 +635,13 @@ fn receipt_bytes(
     let mut bytes = match format {
         ReceiptFormatArg::Json => json_pretty(report)?.into_bytes(),
         ReceiptFormatArg::Text => format!(
-            "status: {:?}\nbudget: {:?}\noriginal_tokens: {}\ncompressed_tokens: {}\nsaved_tokens: {}\npreset: {}\nencoding: {}",
+            "status: {:?}\nbudget: {:?}\noriginal_tokens: {}\ncompressed_tokens: {}\nsaved_tokens: {}\nsavings_pct: {:.1}\npreset: {}\nencoding: {}",
             report.status,
             report.budget.as_ref().map(|b| b.status),
             report.original_tokens,
             report.compressed_tokens,
             report.saved_tokens,
+            report.savings_pct,
             report.preset,
             report.output_encoding,
         ).into_bytes(),

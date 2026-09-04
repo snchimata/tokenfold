@@ -23,7 +23,7 @@ try:  # Optional, as in the other evaluation harnesses.
         return len(_ENCODING.encode(text))
 
     TOKENIZER = {"backend": "tiktoken", "model": "o200k_base", "is_exact": True}
-except Exception:
+except Exception:  # noqa: BLE001 - optional research dependency
 
     def count_tokens(text: str) -> int:
         return (len(text.encode("utf-8")) + 3) // 4 if text else 0
@@ -88,7 +88,9 @@ def load_cases(inputs: list[Path], manifest: Path | None) -> list[dict]:
         return [{"id": path.stem, "path": path, "shape": None} for path in inputs]
     document = json.loads(manifest.read_text(encoding="utf-8"))
     if document.get("version") != 1 or not isinstance(document.get("cases"), list):
-        raise ValueError("TOON corpus manifest must contain version=1 and a cases array")
+        raise ValueError(
+            "TOON corpus manifest must contain version=1 and a cases array"
+        )
     cases = []
     for case in document["cases"]:
         if not all(key in case for key in ("id", "path", "shape")):
@@ -101,8 +103,13 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("inputs", nargs="*", type=Path, help="JSON files to benchmark")
     parser.add_argument("--manifest", type=Path, help="versioned corpus manifest")
-    parser.add_argument("--runs", type=int, default=3, help="codec runs per file (default: 3)")
-    parser.add_argument("--output", type=Path, help="write the JSON report instead of stdout")
+    parser.add_argument(
+        "--runs", type=int, default=3, help="codec runs per file (default: 3)"
+    )
+    parser.add_argument(
+        "--output", type=Path, help="write the JSON report instead of stdout"
+    )
+    parser.add_argument("--tokenfold-revision", required=True)
     parser.add_argument(
         "--require-exact",
         action="store_true",
@@ -117,8 +124,12 @@ def main(argv=None) -> int:
         parser.error("exact counting requires the eval 'exact' extra (tiktoken)")
 
     research_dir = Path(__file__).resolve().parent
-    local_toon = research_dir / "node_modules" / ".bin" / (
-        "toon.cmd" if os.name == "nt" else "toon"
+    repository_root = research_dir.parents[1]
+    local_toon = (
+        research_dir
+        / "node_modules"
+        / ".bin"
+        / ("toon.cmd" if os.name == "nt" else "toon")
     )
     if local_toon.exists():
         toon, toon_runner = [str(local_toon)], "local npm dependency"
@@ -157,32 +168,36 @@ def main(argv=None) -> int:
         source = path.read_text(encoding="utf-8")
         value = json.loads(source)
         compact, compact_encode_ms = measure_python(
-            lambda: json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+            lambda value=value: json.dumps(
+                value, ensure_ascii=False, separators=(",", ":")
+            ),
             args.runs,
         )
         compact_tokens = count_tokens(compact)
         compact_bytes = len(compact.encode("utf-8"))
         compact_value, compact_decode_ms = measure_python(
-            lambda: json.loads(compact), args.runs
+            lambda compact=compact: json.loads(compact), args.runs
         )
 
         tokenfold_text, tokenfold_ms = measure(
-            tokenfold
-            + ["compress", "-", "--format", "json", "--quiet", "--unsafe-disable-redaction"],
+            tokenfold + ["compress", "-", "--format", "json", "--quiet"],
             source,
             args.runs,
         )
-        tokenfold_value, tokenfold_decode_ms = measure_python(
-            lambda: json.loads(tokenfold_text), args.runs
+        tokenfold_decoded, tokenfold_decode_ms = measure(
+            tokenfold + ["decode", "-", "--from", "json"], tokenfold_text, args.runs
         )
+        tokenfold_value = json.loads(tokenfold_decoded)
         toon_text, toon_ms = measure(toon + ["--encode", "-"], source, args.runs)
-        decoded, toon_decode_ms = measure(toon + ["--decode", "-"], toon_text, args.runs)
+        decoded, toon_decode_ms = measure(
+            toon + ["--decode", "-"], toon_text, args.runs
+        )
         toon_value = json.loads(decoded)
 
         rows.append(
             {
                 "id": case["id"],
-                "input": str(path),
+                "input": path.relative_to(repository_root).as_posix(),
                 "shape": case["shape"],
                 "compact_json": {
                     "tokens": compact_tokens,
@@ -199,7 +214,7 @@ def main(argv=None) -> int:
                         tokenfold_ms,
                         tokenfold_decode_ms,
                     ),
-                    "json_value_equal": tokenfold_value == value,
+                    "exact_recovery": tokenfold_value == value,
                 },
                 "toon": {
                     **format_result(
@@ -243,11 +258,14 @@ def main(argv=None) -> int:
                 sum(row[name]["decode_median_ms"] for row in rows), 3
             ),
         }
+    totals["tokenfold"]["wins_vs_toon"] = sum(
+        row["tokenfold"]["tokens"] < row["toon"]["tokens"] for row in rows
+    )
     report = {
         "tokenizer": TOKENIZER,
         "toon_cli_version": TOON_VERSION,
         "toon_runner": toon_runner,
-        "tokenfold_source": "current checkout",
+        "source_commit": args.tokenfold_revision,
         "runs_per_input": args.runs,
         "files": rows,
         "totals": totals,

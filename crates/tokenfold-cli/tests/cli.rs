@@ -55,6 +55,28 @@ fn compress_reads_stdin_and_keeps_payload_on_stdout() {
     assert_eq!(out.stdout, b"hello world, this is plain text input");
 }
 
+#[test]
+fn text_receipt_includes_savings_percentage() {
+    let input = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/api_response.json"
+    );
+    let out = Command::new(bin())
+        .args([
+            "inspect",
+            input,
+            "--format",
+            "json",
+            "--receipt-format",
+            "text",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("savings_pct: 63.9"), "stdout was: {stdout}");
+}
+
 /// Regression test for a bug an adversarial review caught: `--dry-run` routes to the same code
 /// path as `inspect`, which used to hardcode `lossy: None` regardless of what the user passed,
 /// silently making `--dry-run --lossy ...` preview nothing about the lossy stage at all.
@@ -818,6 +840,38 @@ fn v2_toon_compress_decodes_to_original_json_value() {
     let input = br#"{"users":[{"id":1,"name":"Ada"},{"id":2,"name":"Lin"}]}"#;
     let compressed = run_stdin(
         &["compress", "--format", "json", "--encoding", "toon"],
+        input,
+    );
+    assert!(
+        compressed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compressed.stderr)
+    );
+    let decoded = run_stdin(&["decode", "--from", "toon"], &compressed.stdout);
+    assert!(
+        decoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&decoded.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&decoded.stdout).unwrap(),
+        serde_json::from_slice::<serde_json::Value>(input).unwrap(),
+    );
+}
+
+#[test]
+fn toon_metrics_example_round_trips() {
+    let input = include_bytes!("../../../examples/toon_metrics.json");
+    let compressed = run_stdin(
+        &[
+            "compress",
+            "--format",
+            "json",
+            "--preset",
+            "conservative",
+            "--encoding",
+            "toon",
+        ],
         input,
     );
     assert!(
