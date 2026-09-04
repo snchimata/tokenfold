@@ -1,12 +1,11 @@
 {
   "version": 1,
   "cases": [
-    {"id": "flat-users", "path": "flat_users.json", "shape": "flat-uniform"},
+    {"id": "flat-users", "path": "../toon_corpus/flat_users.json", "shape": "flat-uniform"},
     {"id": "api-response", "path": "../../../examples/api_response.json", "shape": "nested-uniform"},
     {"id": "incident-feed", "path": "../../../examples/incident_feed.json", "shape": "semi-uniform"},
     {"id": "openai-payload", "path": "../../../examples/openai_payload.json", "shape": "deeply-nested"},
     {"id": "compression-report", "path": "../../../tests/fixtures/compression_report_v1.json", "shape": "nested-record"},
-    {"id": "compression-report-schema", "path": "../../../tests/fixtures/compression_report_v1.schema.json", "shape": "deeply-nested-schema"},
-    {"id": "toon-metrics", "path": "../../../examples/toon_metrics.json", "shape": "flat-wide-metrics"}
+    {"id": "compression-report-schema", "path": "../../../tests/fixtures/compression_report_v1.schema.json", "shape": "deeply-nested-schema"}
   ]
 }

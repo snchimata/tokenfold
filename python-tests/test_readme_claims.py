@@ -111,8 +111,65 @@ def test_every_headline_metric_has_versioned_provenance():
         ratio = str(int(float(budget) * 100))
         row = re.compile(
             rf"\| {ratio}% \| \*\*{values['task_success']:.1f}%\*\* \| "
-            rf"{values['bm25']:.1f}% \| \*\*\+{values['lift']:.1f}%\*\* \|"
+            rf"{values['kompress_native']:.1f}% \| "
+            rf"{values['kompress_relevance']:.1f}% \| "
+            rf"{values['bm25']:.1f}% \| "
+            rf"\*\*\+{values['lift_vs_best_pp']:.1f} pp\*\* \|"
         )
         assert row.search(readme), f"README Select metric row for {ratio}% is missing or stale"
     revision = manifest["select"]["model_revision"]
     assert revision in manifest["select"]["source"]
+
+
+def test_provider_comparison_matches_checked_in_report():
+    if not README.is_file():
+        pytest.skip("repository files not present; nothing to check")
+    manifest = json.loads(METRICS.read_text(encoding="utf-8"))["provider_comparison"]
+    report = json.loads((REPO_ROOT / manifest["source"]).read_text(encoding="utf-8"))
+    totals = report["totals"]
+    assert report["source_commit"] == manifest["source_commit"]
+    assert report["headroom_revision"] == manifest["headroom_revision"]
+    assert len(report["files"]) == manifest["fixtures"]
+    assert totals["tokenfold_wins"] == manifest["tokenfold_wins"]
+    assert totals["original_tokens"] == manifest["original_tokens"]
+    assert totals["tokenfold"]["tokens"] == manifest["tokenfold_tokens"]
+    assert totals["headroom"]["tokens"] == manifest["headroom_tokens"]
+    assert sum(row["tokenfold"]["exact_recovery"] for row in report["files"]) == manifest[
+        "tokenfold_exact_recovery"
+    ]
+    assert sum(row["headroom"]["json_value_equal"] for row in report["files"]) == manifest[
+        "headroom_value_equal"
+    ]
+    readme = README.read_text(encoding="utf-8")
+    assert (
+        f"| Six-fixture corpus | {manifest['original_tokens']:,} | "
+        f"**{manifest['tokenfold_tokens']:,} (33.3% saved)** | "
+        f"{manifest['headroom_tokens']:,} (2.0%) |"
+    ) in readme
+
+
+def test_toon_comparison_matches_checked_in_report():
+    manifest = json.loads(METRICS.read_text(encoding="utf-8"))["toon_comparison"]
+    report = json.loads((REPO_ROOT / manifest["source"]).read_text(encoding="utf-8"))
+    totals = report["totals"]
+    assert report["source_commit"] == manifest["source_commit"]
+    assert report["toon_cli_version"] == manifest["toon_cli_version"]
+    assert len(report["files"]) == manifest["fixtures"]
+    assert totals["compact_json"]["tokens"] == manifest["compact_json_tokens"]
+    assert totals["tokenfold"]["tokens"] == manifest["tokenfold_tokens"]
+    assert totals["toon"]["tokens"] == manifest["toon_tokens"]
+    assert totals["tokenfold"]["wins_vs_toon"] == manifest["tokenfold_wins"]
+    readme = README.read_text(encoding="utf-8")
+    assert (
+        f"| **Tokenfold JSON** | **{manifest['tokenfold_tokens']:,}** | "
+        "**21.3% fewer** |"
+    ) in readme
+    assert (
+        f"| Official TOON CLI {manifest['toon_cli_version']} | "
+        f"{manifest['toon_tokens']:,} | 8.6% fewer |"
+    ) in readme
+
+
+def test_readme_is_ascii():
+    text = README.read_text(encoding="utf-8")
+    assert text.isascii(), "README.md contains non-ASCII characters"

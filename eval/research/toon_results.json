@@ -1,0 +1,252 @@
+{
+  "tokenizer": {
+    "backend": "tiktoken",
+    "model": "o200k_base",
+    "is_exact": true
+  },
+  "toon_cli_version": "4.1.1",
+  "toon_runner": "local npm dependency",
+  "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+  "runs_per_input": 5,
+  "files": [
+    {
+      "id": "flat-users",
+      "input": "eval/research/toon_corpus/flat_users.json",
+      "shape": "flat-uniform",
+      "compact_json": {
+        "tokens": 586,
+        "bytes": 1955,
+        "encode_median_ms": 0.0121,
+        "decode_median_ms": 0.0103,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 366,
+        "bytes": 1175,
+        "vs_compact_json_percent": -37.54,
+        "vs_compact_json_bytes_percent": -39.9,
+        "encode_median_ms": 87.628,
+        "decode_median_ms": 3.843,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 377,
+        "bytes": 1021,
+        "vs_compact_json_percent": -35.67,
+        "vs_compact_json_bytes_percent": -47.77,
+        "encode_median_ms": 47.361,
+        "decode_median_ms": 57.574,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "api-response",
+      "input": "examples/api_response.json",
+      "shape": "nested-uniform",
+      "compact_json": {
+        "tokens": 2366,
+        "bytes": 7965,
+        "encode_median_ms": 0.034,
+        "decode_median_ms": 0.0273,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 1376,
+        "bytes": 3512,
+        "vs_compact_json_percent": -41.84,
+        "vs_compact_json_bytes_percent": -55.91,
+        "encode_median_ms": 95.552,
+        "decode_median_ms": 4.06,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 2839,
+        "bytes": 8839,
+        "vs_compact_json_percent": 19.99,
+        "vs_compact_json_bytes_percent": 10.97,
+        "encode_median_ms": 49.765,
+        "decode_median_ms": 55.376,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "incident-feed",
+      "input": "examples/incident_feed.json",
+      "shape": "semi-uniform",
+      "compact_json": {
+        "tokens": 6144,
+        "bytes": 26111,
+        "encode_median_ms": 0.0705,
+        "decode_median_ms": 0.0521,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 6144,
+        "bytes": 26111,
+        "vs_compact_json_percent": 0.0,
+        "vs_compact_json_bytes_percent": 0.0,
+        "encode_median_ms": 102.204,
+        "decode_median_ms": 4.121,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 6579,
+        "bytes": 26772,
+        "vs_compact_json_percent": 7.08,
+        "vs_compact_json_bytes_percent": 2.53,
+        "encode_median_ms": 48.986,
+        "decode_median_ms": 53.243,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "openai-payload",
+      "input": "examples/openai_payload.json",
+      "shape": "deeply-nested",
+      "compact_json": {
+        "tokens": 229,
+        "bytes": 988,
+        "encode_median_ms": 0.0069,
+        "decode_median_ms": 0.0051,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 229,
+        "bytes": 988,
+        "vs_compact_json_percent": 0.0,
+        "vs_compact_json_bytes_percent": 0.0,
+        "encode_median_ms": 86.489,
+        "decode_median_ms": 3.761,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 237,
+        "bytes": 1023,
+        "vs_compact_json_percent": 3.49,
+        "vs_compact_json_bytes_percent": 3.54,
+        "encode_median_ms": 47.103,
+        "decode_median_ms": 47.874,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "compression-report",
+      "input": "tests/fixtures/compression_report_v1.json",
+      "shape": "nested-record",
+      "compact_json": {
+        "tokens": 128,
+        "bytes": 457,
+        "encode_median_ms": 0.0037,
+        "decode_median_ms": 0.0034,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 128,
+        "bytes": 457,
+        "vs_compact_json_percent": 0.0,
+        "vs_compact_json_bytes_percent": 0.0,
+        "encode_median_ms": 86.531,
+        "decode_median_ms": 3.706,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 131,
+        "bytes": 420,
+        "vs_compact_json_percent": 2.34,
+        "vs_compact_json_bytes_percent": -8.1,
+        "encode_median_ms": 46.407,
+        "decode_median_ms": 50.369,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "compression-report-schema",
+      "input": "tests/fixtures/compression_report_v1.schema.json",
+      "shape": "deeply-nested-schema",
+      "compact_json": {
+        "tokens": 472,
+        "bytes": 1841,
+        "encode_median_ms": 0.01,
+        "decode_median_ms": 0.0119,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 472,
+        "bytes": 1841,
+        "vs_compact_json_percent": 0.0,
+        "vs_compact_json_bytes_percent": 0.0,
+        "encode_median_ms": 90.556,
+        "decode_median_ms": 3.765,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 517,
+        "bytes": 1877,
+        "vs_compact_json_percent": 9.53,
+        "vs_compact_json_bytes_percent": 1.96,
+        "encode_median_ms": 47.039,
+        "decode_median_ms": 48.605,
+        "round_trip_equal": true
+      }
+    },
+    {
+      "id": "toon-metrics",
+      "input": "examples/toon_metrics.json",
+      "shape": "flat-wide-metrics",
+      "compact_json": {
+        "tokens": 6310,
+        "bytes": 20429,
+        "encode_median_ms": 0.0726,
+        "decode_median_ms": 0.066,
+        "json_value_equal": true
+      },
+      "tokenfold": {
+        "tokens": 4061,
+        "bytes": 9394,
+        "vs_compact_json_percent": -35.64,
+        "vs_compact_json_bytes_percent": -54.02,
+        "encode_median_ms": 102.195,
+        "decode_median_ms": 4.242,
+        "exact_recovery": true
+      },
+      "toon": {
+        "tokens": 4161,
+        "bytes": 8393,
+        "vs_compact_json_percent": -34.06,
+        "vs_compact_json_bytes_percent": -58.92,
+        "encode_median_ms": 47.78,
+        "decode_median_ms": 60.796,
+        "round_trip_equal": true
+      }
+    }
+  ],
+  "totals": {
+    "compact_json": {
+      "tokens": 16235,
+      "bytes": 59746,
+      "encode_median_ms_sum": 0.21,
+      "decode_median_ms_sum": 0.176
+    },
+    "tokenfold": {
+      "tokens": 12776,
+      "bytes": 43478,
+      "vs_compact_json_percent": -21.31,
+      "vs_compact_json_bytes_percent": -27.23,
+      "encode_median_ms_sum": 651.155,
+      "decode_median_ms_sum": 27.498,
+      "wins_vs_toon": 7
+    },
+    "toon": {
+      "tokens": 14841,
+      "bytes": 48345,
+      "vs_compact_json_percent": -8.59,
+      "vs_compact_json_bytes_percent": -19.08,
+      "encode_median_ms_sum": 334.441,
+      "decode_median_ms_sum": 373.837
+    }
+  },
+  "limitations": [
+    "CLI startup is included in TOON and Tokenfold latency.",
+    "Python JSON timings are in-process and are not directly comparable to CLI timings."
+  ]
+}

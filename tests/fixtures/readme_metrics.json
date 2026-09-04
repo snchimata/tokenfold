@@ -2,7 +2,12 @@
   "schema_version": 1,
   "repository_commit": "eabbf63805e137fc4c7a8b74e5f02aef4fb842b7",
   "compression": {
-    "search_rag": { "reduction_pct": 91.7, "command": "python examples/lossy_pruning.py" },
+    "search_rag": {
+      "reduction_pct": 96.3,
+      "fixture": "examples/max_showcase.json",
+      "sha256": "96a78d9f0be391196db641e62324956c7efa0a60414c1d3236c2ebd78ddae633",
+      "command": "python examples/lossy_pruning.py"
+    },
     "repetitive_json": { "reduction_pct": 67.6, "source": "CHANGELOG.md benchmark record" },
     "api_responses": {
       "reduction_pct": 63.9,
@@ -11,14 +16,36 @@
     },
     "tool_schemas": { "reduction_pct": 45.6, "source": "crates/tokenfold-core/benches/compression_bench.rs" }
   },
+  "provider_comparison": {
+    "source": "eval/research/provider_results.json",
+    "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+    "headroom_revision": "4c9c29c421224920dee682a0cb0c688c1c71e64e",
+    "fixtures": 6,
+    "tokenfold_wins": 6,
+    "original_tokens": 13071,
+    "tokenfold_tokens": 8715,
+    "headroom_tokens": 12807,
+    "tokenfold_exact_recovery": 6,
+    "headroom_value_equal": 4
+  },
+  "toon_comparison": {
+    "source": "eval/research/toon_results.json",
+    "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+    "toon_cli_version": "4.1.1",
+    "fixtures": 7,
+    "compact_json_tokens": 16235,
+    "tokenfold_tokens": 12776,
+    "toon_tokens": 14841,
+    "tokenfold_wins": 7
+  },
   "select": {
     "status": "external_source_reported",
     "model_revision": "38778684b6643ce28a2014f214301fddc8a69595",
     "source": "https://huggingface.co/snchimata/tokenfold-select/blob/38778684b6643ce28a2014f214301fddc8a69595/README.md",
     "budgets": {
-      "0.50": { "task_success": 86.3, "bm25": 79.4, "lift": 8.7 },
-      "0.25": { "task_success": 70.3, "bm25": 60.7, "lift": 15.8 },
-      "0.10": { "task_success": 39.9, "bm25": 37.7, "lift": 5.8 }
+      "0.50": { "task_success": 86.3, "kompress_native": 66.5, "kompress_relevance": 80.5, "bm25": 79.4, "lift": 8.7, "lift_vs_best_pp": 5.8 },
+      "0.25": { "task_success": 70.3, "kompress_native": 47.2, "kompress_relevance": 61.5, "bm25": 60.7, "lift": 15.8, "lift_vs_best_pp": 8.8 },
+      "0.10": { "task_success": 39.9, "kompress_native": 30.4, "kompress_relevance": 37.7, "bm25": 37.7, "lift": 5.8, "lift_vs_best_pp": 2.2 }
     },
     "reproduction_gap": "The external model card does not publish dataset hashes, seeds, dependency revisions, command, or environment; these figures are not reproduced by Core CI."
   }
