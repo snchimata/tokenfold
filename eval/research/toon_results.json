@@ -6,7 +6,7 @@
   },
   "toon_cli_version": "4.1.1",
   "toon_runner": "local npm dependency",
-  "tokenfold_revision": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+  "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
   "runs_per_input": 5,
   "files": [
     {

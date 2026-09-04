@@ -127,7 +127,7 @@ def test_provider_comparison_matches_checked_in_report():
     manifest = json.loads(METRICS.read_text(encoding="utf-8"))["provider_comparison"]
     report = json.loads((REPO_ROOT / manifest["source"]).read_text(encoding="utf-8"))
     totals = report["totals"]
-    assert report["tokenfold_revision"] == manifest["tokenfold_revision"]
+    assert report["source_commit"] == manifest["source_commit"]
     assert report["headroom_revision"] == manifest["headroom_revision"]
     assert len(report["files"]) == manifest["fixtures"]
     assert totals["tokenfold_wins"] == manifest["tokenfold_wins"]
@@ -152,7 +152,7 @@ def test_toon_comparison_matches_checked_in_report():
     manifest = json.loads(METRICS.read_text(encoding="utf-8"))["toon_comparison"]
     report = json.loads((REPO_ROOT / manifest["source"]).read_text(encoding="utf-8"))
     totals = report["totals"]
-    assert report["tokenfold_revision"] == manifest["tokenfold_revision"]
+    assert report["source_commit"] == manifest["source_commit"]
     assert report["toon_cli_version"] == manifest["toon_cli_version"]
     assert len(report["files"]) == manifest["fixtures"]
     assert totals["compact_json"]["tokens"] == manifest["compact_json_tokens"]

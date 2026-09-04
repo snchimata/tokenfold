@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "tokenizer": {"backend": "tiktoken", "encoding": "o200k_base", "exact": True},
         "headroom_revision": args.headroom_revision,
-        "tokenfold_revision": args.tokenfold_revision,
+        "source_commit": args.tokenfold_revision,
         "manifest": args.manifest.relative_to(root).as_posix(),
         "files": rows,
         "totals": {

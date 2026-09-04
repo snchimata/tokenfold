@@ -18,7 +18,7 @@
   },
   "provider_comparison": {
     "source": "eval/research/provider_results.json",
-    "tokenfold_revision": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+    "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
     "headroom_revision": "4c9c29c421224920dee682a0cb0c688c1c71e64e",
     "fixtures": 6,
     "tokenfold_wins": 6,
@@ -30,7 +30,7 @@
   },
   "toon_comparison": {
     "source": "eval/research/toon_results.json",
-    "tokenfold_revision": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+    "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
     "toon_cli_version": "4.1.1",
     "fixtures": 7,
     "compact_json_tokens": 16235,

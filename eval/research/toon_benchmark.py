@@ -265,7 +265,7 @@ def main(argv=None) -> int:
         "tokenizer": TOKENIZER,
         "toon_cli_version": TOON_VERSION,
         "toon_runner": toon_runner,
-        "tokenfold_revision": args.tokenfold_revision,
+        "source_commit": args.tokenfold_revision,
         "runs_per_input": args.runs,
         "files": rows,
         "totals": totals,

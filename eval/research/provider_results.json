@@ -5,7 +5,7 @@
     "exact": true
   },
   "headroom_revision": "4c9c29c421224920dee682a0cb0c688c1c71e64e",
-  "tokenfold_revision": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
+  "source_commit": "c1c2c8fc4cb7284a96a1fb52086bc9bc01541989",
   "manifest": "eval/research/provider_corpus/manifest.json",
   "files": [
     {
