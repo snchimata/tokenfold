@@ -34,8 +34,8 @@ jobs:
         if: matrix.language == 'rust'
       - uses: github/codeql-action/analyze@v4
 
-  parser-property-fuzz:
-    name: Scheduled parser/property fuzzing
+  parser-property-stress:
+    name: Scheduled parser/property stress
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 6 * * 1'
     runs-on: ubuntu-latest
     env:

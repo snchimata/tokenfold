@@ -138,11 +138,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --locked -- golden
 
-  # CI gate policy: advisory on PR, blocking on push to main.
+  # CI gate policy: blocking on pull requests and on push to main.
   security:
     name: security
     runs-on: ubuntu-latest
-    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -185,3 +184,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: python eval/run_fidelity.py --gate --profile smoke-first-consumer
+
+  # Evaluation-evidence repair: the lossy adapter is migrated to the shipped v0.5
+  # --prune/--keep-ratio/--preserve flags (contract tests guard the harness), and the
+  # human quality audit must be complete and non-stale (--check) before merging.
+  eval-harness:
+    name: eval-harness
+    runs-on: ubuntu-latest
+    env:
+      TOKENFOLD_LEARNED_MODULE: json
+      TOKENFOLD_BIN: ${{ github.workspace }}/target/release/tokenfold
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release --locked -p tokenfold-cli
+      - run: python eval/test_baseline_fixture_contract.py
+      - run: python eval/test_baseline_cli.py
+      - run: python eval/test_audit_quality_sample.py
+      - run: python eval/run_baselines.py --gate
+      - run: python eval/audit_quality_sample.py --check

@@ -29,6 +29,8 @@
         "required_status_checks": [
           { "context": "lint" },
           { "context": "test" },
+          { "context": "security" },
+          { "context": "eval-harness" },
           { "context": "node-api (Node 22)" },
           { "context": "node-api (Node 24)" },
           { "context": "coverage" },

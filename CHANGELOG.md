@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Add a concise v0.4 → v0.5 migration matrix
+  (`docs/migration-v0.4-to-v0.5.md`) covering Rust, CLI, Python, TypeScript,
+  receipts, redaction, and exit codes.
+- Make the `security` CI job blocking on pull requests, require its status in
+  the `main` ruleset so it must be re-applied by a maintainer, and document the
+  deliberate single-maintainer review policy (no automatic second reviewer).
+- Migrate the v0.4 baseline harness's lossy adapter to the v0.5 CLI surface
+  (`--prune`/`--keep-ratio`/`--preserve`, and `--retrieval-namespace`), add the
+  harness contract tests and a strict `audit_quality_sample.py --check`
+  (reviewer metadata must parse, the reviewed commit must resolve in the
+  repository, sampled fixtures must match, no pending items) to pull-request CI. The full baseline `--gate` remains red on the v0.5
+  corpus until the v0.4-era fixtures are revalidated against current lossless
+  output — tracked as the follow-up evaluation-evidence repair.
+
 ## [0.5.0] - 2026-09-02
 
 - **Breaking:** replace compression modes with reversible `Preset` values across Rust, CLI,

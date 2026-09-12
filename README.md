@@ -137,6 +137,12 @@ tokenfold inspect payload.json --format json
 tokenfold compress payload.json --format json --output payload.compact.json
 ```
 
+Upgrading from v0.4? The
+[v0.4 -> v0.5 migration matrix](docs/migration-v0.4-to-v0.5.md) maps every
+interface change (`--mode` -> `--preset`, the `--lossy-*` family ->
+`--prune`/`--keep-ratio`/`--preserve`, removed redaction bypass, exit codes 7
+and 8).
+
 For direct Python calls, use the same Core engine and typed receipt:
 
 ```python
@@ -558,6 +564,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --locked
 python eval/run_fidelity.py --gate --profile smoke-first-consumer
+python eval/test_baseline_fixture_contract.py
+python eval/audit_quality_sample.py --check
 cd packages/tokenfold && npm ci && npm test
 ```
 

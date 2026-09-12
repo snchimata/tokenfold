@@ -1,12 +1,11 @@
 //! Reversible evidence store and retrieval: content-addressed storage of pre-transform
 //! originals, plus the `[retrieval]` `tokenfold.toml` schema block that configures it.
 //!
-//! Granularity in this pass is whole-payload, not per-span: `pipeline.rs` stores the entire
-//! pre-transform input under its SHA-256 content hash when `CompressionPolicy.store_originals`
-//! is set and the payload contains no secret-shaped content. Per-span inline
-//! `[tokenfold:retrieve ...]` markers are an explicitly out-of-scope future enhancement (see
-//! the marker grammar's own fallback rule: "If a format cannot carry markers safely, markers
-//! live only in `CompressionReport.retrieval`").
+//! Whole-payload storage is optional; recoverable JSON pruning additionally stores each
+//! omitted item through `store_batch()` before emitting an inline `$tf_ref` marker.
+//! Batches fail closed on ordinary I/O errors. Filesystem operations share an OS file lock;
+//! process termination can leave staged/orphan entries, never a successfully returned partial
+//! payload. Original bytes containing detected secrets are rejected at the store boundary.
 //!
 //! Hash algorithm is SHA-256 only in this pass; `blake3` is a documented, rejected scope cut
 //! (see [`RetrievalStore::open`]). Backends are `memory` (in-process, used in tests) and

@@ -17,3 +17,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tiny_http = "0.12"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+# std has no portable signal-handler API; used only by the proxy shutdown boundary.
+ctrlc = { version = "3.5", features = ["termination"] }

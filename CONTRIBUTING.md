@@ -99,19 +99,65 @@ could opt out of classic branch protection. If you need an escape hatch, add a
 
 ## Required status checks
 
-`main-protection.json` requires: `lint`, `test`, `node-api (Node 22)`,
-`node-api (Node 24)`, `coverage`, and the three `golden-cross-platform` matrix
-legs.
+`main-protection.json` requires: `lint`, `test`, `security`, `eval-harness`,
+`node-api (Node 22)`, `node-api (Node 24)`, `coverage`, and the three
+`golden-cross-platform` matrix legs.
 
-Three CI jobs are deliberately **not** required, because they cannot gate a PR:
+`security` used to be advisory on PR (its old `continue-on-error` condition),
+but that gap is closed: the job is now blocking on pull requests as well, so it
+is listed above as a required check.
+
+Two CI jobs are deliberately **not** required, because they cannot gate a PR:
 
 | Job | Why it is not required |
 |---|---|
 | `bench-smoke` | `if: github.event_name == 'push'` — never runs on a PR, so requiring it would block every PR forever |
-| `security` | `continue-on-error` on PRs — always reports success there |
 | `fidelity-smoke` | `continue-on-error` on PRs — always reports success there |
 
-The last two follow the existing "advisory on PR, blocking on push to `main`"
+`fidelity-smoke` follows the "advisory on PR, blocking on push to `main`"
 policy in [ci.yml](.github/workflows/ci.yml). Now that everything reaches `main`
-through a merge, their blocking tier fires *after* the merge rather than
-preventing it. Removing the `continue-on-error` conditions would close that gap.
+through a merge, its blocking tier fires *after* the merge rather than
+preventing it.
+
+**Review policy:** `main-protection.json` sets `required_approving_review_count`
+to `0`. This is a deliberate choice, not an oversight: this is a
+single-maintainer project, so an automatic approving review would block every PR
+(a second reviewer is not available). The merge gate is instead the required
+status checks above plus a deliberate maintainer review of the PR. Do not raise
+the approval count expecting an automatic second reviewer — there is no one to
+fill that role. If a real second reviewer becomes available, raise the count in
+`main-protection.json` and re-apply the ruleset.
+
+
+## Evaluation and human review
+
+The required `eval-harness` job runs the current CLI contract, deterministic
+structural-evidence gate, audit-validator tests and human-audit check. It stays
+red until a real reviewer resolves stale fixture sign-off; do not bypass it by
+refreshing hashes or inventing reviewer metadata. Audit metadata requires a named
+reviewer, UTC ISO-8601 timestamp, full reviewed commit and exact generator command.
+The check validates provenance syntax and current fixture bytes, not identity or
+truth of the human attestation. In addition to parsing, the recorded reviewed
+commit must be a 40-hex hash that resolves in the repository (`git cat-file`),
+the timestamp must be a valid past UTC ISO-8601 instant, and the reviewer name
+must not be a placeholder such as `Developer`. Generate a separate pending file
+with `python eval/audit_quality_sample.py --output pending-audit.md`; overwriting an
+existing audit requires explicit `--force`. Only `--check` belongs in CI.
+
+Local ruleset changes are not deployed automatically. After the workflow is on a
+PR and producing the exact job names, a maintainer must apply the ruleset using
+the commands above and confirm with
+`gh api repos/snchimata/tokenfold/rules/branches/main` that `security` and
+`eval-harness` are required. Do not require a job name that the PR does not emit.
+
+## Maintenance cadence and intentional limitations
+
+The maintainer reviews dependency advisories and available updates monthly and
+before each release; security advisories are triaged when reported. Update the
+smallest affected set, review lockfile/license changes, and run the relevant CI
+checks. Grouped update automation is deferred until it reduces maintenance work.
+
+`ponytail:` is this repository's intentional-limitation marker. Search with
+`git grep -n 'ponytail:'`; each marker should state the limit and the condition
+for revisiting it. New actionable defects use `TODO:` rather than disguising
+unfinished safety work as a deliberate simplification.
