@@ -196,6 +196,8 @@ jobs:
       TOKENFOLD_BIN: ${{ github.workspace }}/target/release/tokenfold
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release --locked -p tokenfold-cli
       - run: python eval/test_baseline_fixture_contract.py
