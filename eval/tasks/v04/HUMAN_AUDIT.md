@@ -21,7 +21,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `ccr_marker_001` (ccr_marker)
 
-- Fixture SHA-256: `f5a13b9bf924533710a5fc36904dfa77144c6656fcb34798224ea4859d0cf58b`
+- Fixture SHA-256: `330c49b055245f89967e8a50fbecbef1b0dfe74e7b2af9cff0e413df903f248c`
 - Query: what sha256 manifest digest was published to the registry for this release?
 - Expected answer: `sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08`
 - Source evidence: `[10:22:06] published digest sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08`
@@ -36,7 +36,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `code_build_error_011` (code_build_error)
 
-- Fixture SHA-256: `ec63e54475497530668fd89bebfc0e9e315fb22bb728b5bb49816c38369ee4a8`
+- Fixture SHA-256: `0698653425870d4a8b17c3d3b5fb67986e9006b0eb418d52d2682a65f2923e6c`
 - Query: What fault caused the image-resize test worker to die outright rather than report a normal assertion failure?
 - Expected answer: `SIGABRT (core dumped)`
 - Source evidence: `Worker 3: SIGABRT (core dumped)`
@@ -51,7 +51,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `code_patch_014` (code_patch)
 
-- Fixture SHA-256: `422c6e8d33d7bb3b2a9c6d5fa0cc307bffca3683cbe8cb8893e06d7eb53e4cc0`
+- Fixture SHA-256: `36503c950dca4255a5b13e60015bfe9f1a18c98fbe4e71812ef78a73c5172ad8`
 - Query: What rollout percentage was set for quantumCheckoutPreload in this patch?
 - Expected answer: `quantumCheckoutPreload: 5`
 - Source evidence: `+  quantumCheckoutPreload: 5,`
@@ -66,7 +66,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `diff_review_011` (diff_review)
 
-- Fixture SHA-256: `baf3b8b194254a41c2446724d0bc2aaf90a2f4a3c0f99a751cbd866792b1df6b`
+- Fixture SHA-256: `cf33f04b04dc2ca42436c07a3808f5f1156af28c58d60fbb9b90904535443428`
 - Query: Which backend server in the pool was drained (set to zero weight) during this rebalance?
 - Expected answer: `10.4.2.18:8443 weight=0`
 - Source evidence: `+    server 10.4.2.18:8443 weight=0 max_fails=3;`
@@ -81,7 +81,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `json_schema_012` (json_schema)
 
-- Fixture SHA-256: `be6a15f8bfebf38aee24498b683056c7cb054eebf3d7f4f79484a8fe582dea66`
+- Fixture SHA-256: `2cd42d7f2b01ec9e65c23e535c870f5ed815e91f7cc0fdb1bd35872c6a43223b`
 - Query: what rollout_percent is configured for the checkout-v2-redesign flag?
 - Expected answer: `"checkout-v2-redesign", "enabled": true, "rollout_percent": 35`
 - Source evidence: `{"key": "checkout-v2-redesign", "enabled": true, "rollout_percent": 35, "owner": "team-checkout"},`
@@ -96,7 +96,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `log_multi_service_013` (log_multi_service)
 
-- Fixture SHA-256: `a704962805235295717dee4a22f917053b75a19965f4fcefd94707519246c0d0`
+- Fixture SHA-256: `ebe396393ab45a6b0daaf868aff225e3b8041647011ec59b502b63019f060b9c`
 - Query: when does the edge proxy's current TLS material stop being valid?
 - Expected answer: `not_after=2026-09-02T00:00:00Z`
 - Source evidence: `2026-07-21T08:25:07Z INFO service=certmanager rotation complete for edge-proxy not_after=2026-09-02T00:00:00Z`
@@ -111,7 +111,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `log_qa_013` (log_qa)
 
-- Fixture SHA-256: `eb23771846e45fc56e7ce69f33d97ac6f86ae8397df75a3e4b6a8d1ef1b57485`
+- Fixture SHA-256: `62f07cc85f88d08a8f9e81921f53f779e06b57689c8c4e1498a0cee2bb2da4f1`
 - Query: after the primary instance stopped responding, where did requests get routed?
 - Expected answer: `node-gamma-07`
 - Source evidence: `2026-07-24T18:01:06Z WARN service=gateway upstream failed liveness handoff=node-gamma-07`
@@ -126,7 +126,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `long_context_needle_015` (long_context_needle)
 
-- Fixture SHA-256: `cd1b1609f16f07f979304b9826c4003da0af46e8504e4afd80b6ac201d2ea3f2`
+- Fixture SHA-256: `635f3b21e52f8bd28cb995a7f4669baddfc0f65218d4103015656ddf60f7e662`
 - Query: which user received elevated production write access in this review cycle?
 - Expected answer: `user=t.nguyen scope=admin:prod-write`
 - Source evidence: `grant_id=GR-1500 user=t.nguyen scope=admin:prod-write approver=access-bot`
@@ -173,7 +173,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `rust_holdout_015` (rust_holdout)
 
-- Fixture SHA-256: `7cdb70a46bd7c66de44d7cefc5e4efe238129de4e7b72923a9231f819e868d08`
+- Fixture SHA-256: `19727479bdf854210df85e60f696521be61f26255ca35dcbfa2c3375a5e1d09d`
 - Query: Scanning the workspace's pinned dependency versions, which single entry uses a pre-release version string instead of a stable semver, and what is that exact pin?
 - Expected answer: `("rustls", "2.0.0-rc.3")`
 - Source evidence: `("rustls", "2.0.0-rc.3"),`
@@ -188,7 +188,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `tool_call_json_012` (tool_call_json)
 
-- Fixture SHA-256: `b532de7a60250a8d973524f8437f876dbd009e0cde381e2495d1a3411c9afc63`
+- Fixture SHA-256: `47d573186c09b6b2d60b9756f2bc73d3100966eb719ac7c393908dfb31bb2dd4`
 - Query: which error_code was raised by the failed migration step?
 - Expected answer: `"error_code": "23503"`
 - Source evidence: `"error_code": "23503"`, immediately below the failed step's `"status": "failed"` field.
@@ -203,7 +203,7 @@ compressor-kind fixtures, so the separation criterion does not apply to them.
 
 ## [x] `typescript_holdout_012` (typescript_holdout)
 
-- Fixture SHA-256: `b48b9cc4ac5bb8947a18f338af4c28f090a1868c2e7512f871fafe24e63c4f52`
+- Fixture SHA-256: `620f9c0ff7f463f3323f111ff5bc6bd21c642fbe397c3dbf2f3eb4cd854b22ec`
 - Query: What compiler error does src/components/Card.tsx report?
 - Expected answer: `src/components/Card.tsx(31,9): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.`
 - Source evidence: `src/components/Card.tsx(31,9): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.`

@@ -44,6 +44,11 @@ def select(tasks_dir: Path) -> list[tuple[Path, dict]]:
     ]
 
 
+def _fixture_digest(path: Path) -> str:
+    """Hash fixture text with platform-independent line endings."""
+    return hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest()
+
+
 def render(sample: list[tuple[Path, dict]]) -> str:
     lines = [
         "# v0.4 quality audit sample",
@@ -60,7 +65,7 @@ def render(sample: list[tuple[Path, dict]]) -> str:
         "",
     ]
     for path, fixture in sample:
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = _fixture_digest(path)
         lines.extend(
             [
                 f"## [ ] `{fixture['id']}` ({fixture['family']})",
@@ -119,7 +124,7 @@ def main(argv=None) -> int:
         missing_identity = not _valid_audit_metadata(text)
         stale = len(sample) != text.count("## [") or any(
             f"`{fixture['id']}` ({fixture['family']})" not in text
-            or hashlib.sha256(path.read_bytes()).hexdigest() not in text
+            or _fixture_digest(path) not in text
             for path, fixture in sample
         )
         if pending or missing_identity or stale:

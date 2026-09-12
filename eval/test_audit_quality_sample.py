@@ -46,7 +46,17 @@ def test_existing_audit_is_not_overwritten():
         assert path.read_text(encoding="utf-8") == "existing human work"
 
 
+def test_fixture_digest_ignores_platform_line_endings():
+    with tempfile.TemporaryDirectory() as root:
+        path = Path(root) / "fixture.json"
+        path.write_bytes(b'{\r\n  "id": "fixture"\r\n}\r\n')
+        crlf = audit._fixture_digest(path)
+        path.write_bytes(b'{\n  "id": "fixture"\n}\n')
+        assert audit._fixture_digest(path) == crlf
+
+
 if __name__ == "__main__":
     test_metadata()
     test_existing_audit_is_not_overwritten()
+    test_fixture_digest_ignores_platform_line_endings()
     print("ok: audit metadata fails closed and generation preserves existing work")
