@@ -2,6 +2,11 @@ mod server;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::Duration;
 
 use clap::Parser;
 use tokenfold_core::Preset;
@@ -28,6 +33,18 @@ struct Cli {
     /// Reject non-streaming request bodies larger than this many bytes.
     #[arg(long, default_value_t = 10_000_000)]
     max_body_bytes: usize,
+    /// Worker count (default: CPU count clamped to 2-16).
+    #[arg(long, value_parser = clap::value_parser!(u16).range(1..=256))]
+    workers: Option<u16>,
+    /// Pending application requests (default: twice the worker count).
+    #[arg(long, value_parser = clap::value_parser!(u16).range(1..=1024))]
+    queue_capacity: Option<u16>,
+    /// Whole upstream exchange deadline, including SSE body (not an idle timeout).
+    #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=86400))]
+    upstream_timeout_secs: u64,
+    /// Drain deadline after a termination signal; forced exit is code 6.
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=300))]
+    shutdown_timeout_secs: u64,
     /// Disable request-body compression (pure passthrough proxy).
     #[arg(long)]
     no_compress: bool,
@@ -80,7 +97,24 @@ fn main() {
         }
     };
 
+    if !bind_addr.ip().is_loopback() {
+        eprintln!(
+            "warning: non-loopback routes have no client authentication; require an authenticated gateway and network isolation (including retrieval routes)"
+        );
+    }
+    let workers = cli.workers.map(usize::from).unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(2)
+            .clamp(2, 16)
+    });
     let config = server::ProxyConfig {
+        workers,
+        queue_capacity: cli.queue_capacity.map(usize::from).unwrap_or(workers * 2),
+        upstream_agent: ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(cli.upstream_timeout_secs)))
+            .build()
+            .into(),
         upstream: cli.upstream.trim_end_matches('/').to_string(),
         max_body_bytes: cli.max_body_bytes,
         compress: !cli.no_compress,
@@ -101,7 +135,22 @@ fn main() {
         "tokenfold-proxy listening on {} -> {}",
         cli.bind, config.upstream
     );
-    server::run(&config, &http_server);
+    let stopping = Arc::new(AtomicBool::new(false));
+    let signal = Arc::clone(&stopping);
+    if let Err(error) = ctrlc::set_handler(move || {
+        if !signal.swap(true, Ordering::SeqCst) {
+            eprintln!("shutdown requested; draining active requests");
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(cli.shutdown_timeout_secs));
+                eprintln!("shutdown deadline exceeded; terminating active requests");
+                std::process::exit(6);
+            });
+        }
+    }) {
+        eprintln!("error: cannot install shutdown handler: {error}");
+        std::process::exit(6);
+    }
+    server::run(&config, &http_server, &stopping);
 }
 
 fn validate_upstream(upstream: &str, insecure: bool) -> Result<(), String> {

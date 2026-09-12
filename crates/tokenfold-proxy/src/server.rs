@@ -15,7 +15,7 @@
 
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -32,6 +32,9 @@ use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, Preset};
 type BodyReader = Box<dyn Read>;
 
 pub struct ProxyConfig {
+    pub workers: usize,
+    pub queue_capacity: usize,
+    pub upstream_agent: ureq::Agent,
     pub upstream: String,
     pub max_body_bytes: usize,
     pub compress: bool,
@@ -44,12 +47,9 @@ pub struct ProxyConfig {
     pub retrieval_store_path: Option<PathBuf>,
 }
 
-pub fn run(config: &ProxyConfig, server: &tiny_http::Server) {
-    let workers = std::thread::available_parallelism()
-        .map(usize::from)
-        .unwrap_or(2)
-        .clamp(2, 16);
-    let (tx, rx) = mpsc::sync_channel::<Request>(workers * 2);
+pub fn run(config: &ProxyConfig, server: &tiny_http::Server, stopping: &AtomicBool) {
+    let workers = config.workers;
+    let (tx, rx) = mpsc::sync_channel::<Request>(config.queue_capacity);
     let rx = Arc::new(Mutex::new(rx));
 
     std::thread::scope(|scope| {
@@ -65,17 +65,56 @@ pub fn run(config: &ProxyConfig, server: &tiny_http::Server) {
                     let start = Instant::now();
                     let method = request.method().as_str().to_string();
                     let path = request.url().split('?').next().unwrap_or("").to_string();
-                    let status = handle(config, request);
+                    let status = if stopping.load(Ordering::SeqCst) {
+                        reject_busy(request, "proxy is shutting down")
+                    } else {
+                        handle(config, request)
+                    };
                     log_access(&method, &path, status, start.elapsed());
                 }
             });
         }
-        for request in server.incoming_requests() {
-            if tx.send(request).is_err() {
+        while !stopping.load(Ordering::SeqCst) {
+            let request = match server.recv_timeout(Duration::from_millis(100)) {
+                Ok(Some(request)) => request,
+                Ok(None) => continue,
+                Err(_) => break,
+            };
+            if stopping.load(Ordering::SeqCst) {
+                reject_busy(request, "proxy is shutting down");
                 break;
             }
+            // Liveness is independent of upstream workers. Framing checks still run in handle.
+            if request.method() == &Method::Get
+                && matches!(
+                    request.url().split('?').next(),
+                    Some("/livez" | "/readyz" | "/health")
+                )
+            {
+                handle(config, request);
+                continue;
+            }
+            match tx.try_send(request) {
+                Ok(()) => {}
+                Err(mpsc::TrySendError::Full(request)) => {
+                    reject_busy(request, "proxy queue is full");
+                }
+                Err(mpsc::TrySendError::Disconnected(request)) => {
+                    reject_busy(request, "proxy workers unavailable");
+                    break;
+                }
+            }
         }
+        // Close before scoped threads join, otherwise idle workers wait forever in recv().
+        drop(tx);
     });
+}
+
+fn reject_busy(request: Request, message: &str) -> u16 {
+    let (status, mut response) = error_response(503, message);
+    response.add_header(Header::from_bytes("Retry-After", "1").unwrap());
+    let _ = request.respond(response);
+    status
 }
 
 fn handle(config: &ProxyConfig, mut request: Request) -> u16 {
@@ -382,11 +421,21 @@ fn handle_passthrough(
     }
 
     let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
-    match send_upstream(&target, method, headers, &forward_body) {
+    match send_upstream(
+        &config.upstream_agent,
+        &target,
+        method,
+        headers,
+        &forward_body,
+    ) {
         Ok(response) => build_upstream_response(response, report.as_ref(), request_id),
         Err(e) => {
             eprintln!("upstream request error: {e}");
-            error_response(502, "upstream request failed")
+            if matches!(e, ureq::Error::Timeout(_)) {
+                error_response(504, "upstream deadline exceeded")
+            } else {
+                error_response(502, "upstream request failed")
+            }
         }
     }
 }
@@ -409,19 +458,20 @@ fn should_forward_header(name: &str) -> bool {
 }
 
 fn send_upstream(
+    agent: &ureq::Agent,
     url: &str,
     method: Method,
     headers: &[Header],
     body: &[u8],
 ) -> Result<ureq::http::Response<ureq::Body>, ureq::Error> {
     match method {
-        Method::Post => with_headers(ureq::post(url), headers).send(body),
-        Method::Put => with_headers(ureq::put(url), headers).send(body),
-        Method::Patch => with_headers(ureq::patch(url), headers).send(body),
-        Method::Delete => with_headers(ureq::delete(url), headers).call(),
-        Method::Head => with_headers(ureq::head(url), headers).call(),
-        Method::Options => with_headers(ureq::options(url), headers).call(),
-        _ => with_headers(ureq::get(url), headers).call(),
+        Method::Post => with_headers(agent.post(url), headers).send(body),
+        Method::Put => with_headers(agent.put(url), headers).send(body),
+        Method::Patch => with_headers(agent.patch(url), headers).send(body),
+        Method::Delete => with_headers(agent.delete(url), headers).call(),
+        Method::Head => with_headers(agent.head(url), headers).call(),
+        Method::Options => with_headers(agent.options(url), headers).call(),
+        _ => with_headers(agent.get(url), headers).call(),
     }
 }
 
@@ -479,7 +529,14 @@ fn build_upstream_response(
         )
     } else {
         let mut buf = Vec::new();
-        let _ = body.into_reader().read_to_end(&mut buf);
+        if let Err(error) = body.into_reader().read_to_end(&mut buf) {
+            let status = if error.kind() == std::io::ErrorKind::TimedOut {
+                504
+            } else {
+                502
+            };
+            return error_response(status, "upstream response body incomplete");
+        }
         out_headers.push(Header::from_bytes("Content-Length", buf.len().to_string()).unwrap());
         let len = buf.len();
         (

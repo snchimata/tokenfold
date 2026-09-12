@@ -120,3 +120,26 @@ the harness falls back to the same byte/4 heuristic as `tokenfold-core` and labe
   line.
 - Real paired build/test/debug/patch execution and an LLM judge for *diagnosing* failures (never
   for satisfying a gate). The current scorer is a deterministic containment proxy.
+
+
+### What compressor scores mean
+
+Compressor token counts measure the encoded payload. Before evidence scoring,
+the harness runs the same CLI's `decode --from json` or `decode --from text` to
+reverse structural frames (including log folding and JSON dictionaries). It
+does not retrieve omitted values or undo mandatory redaction. A decoder error
+fails the compressor check. This avoids mistaking split template variables for
+lost information, but **does not measure an LLM's ability to consume the encoded
+payload**. These are structural-evidence checks, not downstream task accuracy.
+
+For production pruning promotion, evaluate a workload-specific held-out corpus
+with raw, lossless and pruned contexts at identical model settings. Pin the
+compressor commit/binary hash, fixture hashes, tokenizer, model revision, prompts,
+judge/rubric and repetitions. Record per-task answers, critical-claim failures,
+actual token counts and latency; evaluate retrieval-assisted recovery separately
+and charge its tokens/latency. Choose acceptance thresholds before looking at
+results and obtain accountable human review. No live-judge claims or promotion
+are made by this deterministic gate.
+
+For model-free CI, set `TOKENFOLD_LEARNED_MODULE=json` (a standard-library module
+with no selector registrations) and `TOKENFOLD_BIN` to a freshly built CLI.

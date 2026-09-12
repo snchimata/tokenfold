@@ -281,7 +281,7 @@ _ISOLATED_CONFIG_PATH: str | None = None
 
 def isolated_retrieval_config() -> str:
     """A `tokenfold.toml`-shaped config file every harness compressor subprocess call passes via
-    `--config`, so a `store_originals`/`--lossy` run never touches the invoking user's real
+    `--config`, so a `--prune` run never touches the invoking user's real
     default retrieval store, AND never silently picks up a project-level `tokenfold.toml`/
     `.tokenfoldrc` (both gitignored, so one can legitimately exist locally) that `--config`-less
     invocations auto-discover from the current directory. Created once per process (a real
@@ -339,10 +339,11 @@ def compress_tokenfold(source: str, budget: int) -> str | None:
 
 
 def compress_tokenfold_lossy(source: str, budget: int) -> str | None:
-    """Run `tokenfold compress --lossy heuristic --lossy-ratio <r>` over `source`, where `r` is
-    `budget / raw_tokens` (this harness's `budget` is a token-count ceiling; the CLI's lossy path
-    takes a fraction of the *prunable pool* to keep — not the same denominator, but the closest
-    honest translation without duplicating tokenfold's own tokenizer here). Best-effort like
+    """Run `tokenfold compress --prune --keep-ratio <r>` over `source`, where `r` is
+    `budget / raw_tokens` (this harness's `budget` is a token-count ceiling; the v0.5 CLI's
+    recovery-preserving pruning policy takes a token-weighted fraction of the *eligible pool* to
+    keep as `--keep-ratio` — not the same denominator as a token ceiling, but the closest honest
+    translation without duplicating tokenfold's own tokenizer here). Best-effort like
     `compress_tokenfold`: returns None when the CLI is unavailable/errors. Non-JSON fixtures (and
     OpenAI/Anthropic-message-shaped JSON, since v0.4-alpha only runs lossy pruning on generic
     JSON — see `pipeline::apply_lossy_reduction`'s format gate) fall through as a lossless-only
@@ -358,9 +359,8 @@ def compress_tokenfold_lossy(source: str, budget: int) -> str | None:
                 _TOKENFOLD_BIN,
                 "compress",
                 "--quiet",
-                "--lossy",
-                "heuristic",
-                "--lossy-ratio",
+                "--prune",
+                "--keep-ratio",
                 f"{ratio:.4f}",
                 "--config",
                 isolated_retrieval_config(),
@@ -574,6 +574,29 @@ def run_one(fixture: dict, baseline: str, target_ratio: float) -> dict:
     return result
 
 
+def decode_compressor_output(encoded: str) -> str | None:
+    """Decode structure only; never retrieve omitted values or undo redaction.
+
+    Scores describe recoverable structural evidence, not an LLM's ability to read
+    the encoded frame. Token accounting still uses the encoded payload.
+    """
+    try:
+        json.loads(encoded)
+        codec = "json"
+    except ValueError:
+        codec = "text"
+    try:
+        proc = subprocess.run(
+            [_TOKENFOLD_BIN, "decode", "--from", codec],
+            input=encoded.encode("utf-8"), capture_output=True, timeout=30,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.decode("utf-8")
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+
+
 def run_one_compressor(fixture: dict, name: str, target_ratio: float) -> dict:
     source = fixture["source"]
     raw_tokens = count_tokens(source)
@@ -602,7 +625,11 @@ def run_one_compressor(fixture: dict, name: str, target_ratio: float) -> dict:
             "over_budget": achieved > budget,
         }
     )
-    base.update(score_task(compressed, fixture))
+    decoded = decode_compressor_output(compressed)
+    if decoded is None:
+        base["available"] = False
+        return base
+    base.update(score_task(decoded, fixture))
     return base
 
 
@@ -763,7 +790,7 @@ def _lossy_smoke_checks() -> list[str]:
     """Gate checks the per-fixture loop below structurally cannot catch: whether
     `lossy-tokenfold` is even capable of activating (dropping anything) at all, whether every
     marker it emits actually round-trips through `tokenfold retrieve`, and whether
-    `--lossy-preserve` still protects a whole array. A round-4 external review found BOTH real
+    `--preserve items` still protects a whole array. A round-4 external review found BOTH real
     v04 lossy fixtures produce zero `$tf_ref` markers at every tested ratio, and the existing
     gate has no check that would ever catch a `lossy-tokenfold` that's silently inert -- this
     runs against a synthetic payload built specifically to be prunable (repeated-but-not-
@@ -826,7 +853,7 @@ def _lossy_smoke_checks() -> list[str]:
                 isolated_retrieval_config(),
                 "retrieve",
                 h,
-                "--retrieve-namespace",
+                "--retrieval-namespace",
                 "default",
             ],
             capture_output=True,
@@ -838,7 +865,7 @@ def _lossy_smoke_checks() -> list[str]:
                 "-- a marker lossy-tokenfold emitted does not actually retrieve"
             )
 
-    # --lossy-preserve must protect the whole array: zero markers with it set, at the SAME
+    # --preserve items must protect the whole array: zero markers with it set, at the SAME
     # aggressive ratio that reliably produced markers without it above.
     try:
         preserve_proc = subprocess.run(
@@ -846,11 +873,10 @@ def _lossy_smoke_checks() -> list[str]:
                 _TOKENFOLD_BIN,
                 "compress",
                 "--quiet",
-                "--lossy",
-                "heuristic",
-                "--lossy-ratio",
+                "--prune",
+                "--keep-ratio",
                 "0.1",
-                "--lossy-preserve",
+                "--preserve",
                 "items",
                 "--config",
                 isolated_retrieval_config(),
@@ -860,16 +886,16 @@ def _lossy_smoke_checks() -> list[str]:
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as e:
-        failures.append(f"lossy smoke check: --lossy-preserve subprocess error: {e}")
+        failures.append(f"lossy smoke check: --preserve subprocess error: {e}")
         return failures
     if preserve_proc.returncode != 0:
         failures.append(
-            f"lossy smoke check: --lossy-preserve items exited {preserve_proc.returncode}: "
+            f"lossy smoke check: --preserve items exited {preserve_proc.returncode}: "
             f"{preserve_proc.stderr.decode('utf-8', errors='replace')[:500]}"
         )
     elif b"$tf_ref" in preserve_proc.stdout:
         failures.append(
-            "lossy smoke check: --lossy-preserve items still let a marker through -- the "
+            "lossy smoke check: --preserve items still let a marker through -- the "
             "preserved array must come back completely untouched"
         )
 
@@ -975,9 +1001,9 @@ def run_gate(fixtures: list[dict], ratios: list[float]) -> int:
             # budget stays best-effort (check 4's comment), but "I accepted data loss and got a
             # bigger payload than the lossless run would have given me" is not a near-miss, it's
             # a strictly-dominated outcome -- and it shipped: a round-5 external review measured
-            # `--lossy-ratio 0.25` emitting ~3x the lossless bytes on two of the fixtures below
-            # while dropping nothing at all. Nothing in this gate compared the two compressors
-            # to each other, so 79 fixtures passed straight over it.
+            # `--lossy-ratio 0.25` (pre-v0.5 naming) emitting ~3x the lossless bytes on two of the
+            # fixtures below while dropping nothing at all. Nothing in this gate compared the two
+            # compressors to each other, so 79 fixtures passed straight over it.
             lossy_res, lossless_res = results.get("lossy-tokenfold"), results.get(
                 "deterministic-tokenfold"
             )
