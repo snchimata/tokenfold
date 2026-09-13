@@ -1,4 +1,12 @@
+<div align="center">
+
 # Contributor Covenant Code of Conduct
+
+[Our Pledge](#our-pledge) · [Our Standards](#our-standards) · [Enforcement Responsibilities](#enforcement-responsibilities) · [Scope](#scope) · [Enforcement](#enforcement) · [Enforcement Guidelines](#enforcement-guidelines) · [Attribution](#attribution)
+
+</div>
+
+---
 
 ## Our Pledge
 

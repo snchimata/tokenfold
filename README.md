@@ -1,12 +1,49 @@
 <div align="center">
 
+<img src="docs/assets/banner.png" alt="Tokenfold - Expand Ideas. Compress Tokens." width="100%" style="border-radius: 12px; max-width: 100%;" />
+
+<br />
+<br />
+
 # TOKENFOLD
 
-### More context. Fewer tokens. Exact by default.
+<h3>More context. Fewer tokens. Exact by default.</h3>
 
-**Cut input tokens up to 96% with opt-in, recoverable pruning - or 45-68% with byte-exact lossless compression.**
-*Model-free core. Zero added hallucination risk. Provider-neutral*
-> **Built for:** Developers and AI teams cutting latency and API costs on structured JSON, tool definitions, and RAG feeds without risking hallucinations or prompt drift.
+<p>
+  <strong>Cut input tokens up to 96% with opt-in, recoverable pruning - or 45-68% with byte-exact lossless compression.</strong>
+</p>
+
+<p><em>Model-free core. Zero added hallucination risk. Provider-neutral.</em></p>
+
+<br />
+
+<!-- Badges -->
+
+[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=for-the-badge)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=for-the-badge&logo=pypi&logoColor=1f73b7&color=ececec)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=NPM&style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=for-the-badge&logo=rust&logoColor=white&color=000000)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge)](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
+
+<!-- Language & platform badges -->
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white) ![MCP](https://img.shields.io/badge/MCP-ready-6E56CF?style=for-the-badge&logo=anthropic&logoColor=white) ![Deterministic](https://img.shields.io/badge/Model--free-deterministic-2ea44f?style=for-the-badge) ![Lossless](https://img.shields.io/badge/Lossless-exact_decode-0a7ea4?style=for-the-badge)
+
+<!-- Repository activity badges -->
+
+[![GitHub stars](https://img.shields.io/github/stars/snchimata/tokenfold?style=for-the-badge&logo=github&color=f5c518&logoColor=white)](https://github.com/snchimata/tokenfold/stargazers) [![Open issues](https://img.shields.io/github/issues/snchimata/tokenfold?style=for-the-badge&logo=github&logoColor=white)](https://github.com/snchimata/tokenfold/issues) [![Last commit](https://img.shields.io/github/last-commit/snchimata/tokenfold?style=for-the-badge&logo=git&logoColor=white)](https://github.com/snchimata/tokenfold/commits/main) [![Repo size](https://img.shields.io/github/repo-size/snchimata/tokenfold?style=for-the-badge&logo=github&logoColor=white)](https://github.com/snchimata/tokenfold)
+
+</div>
+
+## Table of contents
+
+- [Installation](#installation)
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [MCP & agents](#coding-agents-and-mcp-integration)
+- [Core](#tokenfold-core)
+- [Benchmarks](#measured-results)
+- [Extended tooling](#extended-tooling)
+
+<br />
+
+## Installation
 
 ```bash
 pip install tokenfold        # Python library
@@ -15,15 +52,36 @@ cargo install tokenfold-cli  # Standalone CLI
 cargo add tokenfold-core     # Rust library
 ```
 
-[![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=flat-square)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=flat-square)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=npm&logo=npm&style=flat-square)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=flat-square)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <br />
+      <strong>Up to 96% fewer tokens</strong>
+      <br /><br />
+      Opt-in, recoverable pruning for heterogeneous array feeds - every dropped row stays fetchable.
+      <br /><br />
+    </td>
+    <td align="center" width="33%">
+      <br />
+      <strong>45-68% lossless</strong>
+      <br /><br />
+      Byte-exact structural folding of repeated keys, columns, and schemas - verified by exact decode.
+      <br /><br />
+    </td>
+    <td align="center" width="33%">
+      <br />
+      <strong>Model-free &amp; deterministic</strong>
+      <br /><br />
+      No GPU, no semantic guesswork, zero added hallucination risk. Provider-neutral by design.
+      <br /><br />
+    </td>
+  </tr>
+</table>
 
-[How it works](#how-it-works) | [Quick start](#quick-start) | [MCP & agents](#coding-agents-and-mcp-integration) | [Core](#tokenfold-core) | [Benchmarks](#measured-results) | [Extended tooling](#extended-tooling)
+> [!NOTE]
+> **Built for:** Developers and AI teams cutting latency and API costs on structured JSON, tool definitions, and RAG feeds without risking hallucinations or prompt drift. Ideal for applications sending large JSON tool payloads, tool-calling agent loops (Claude Code, Codex), and structured RAG feeds where token overhead drives latency and cost.
 
-</div>
-
----
-
-> **Built for:** Applications sending large JSON tool payloads, tool-calling agent loops (Claude Code, Codex), and structured RAG feeds where token overhead drives latency and cost.
+<br />
 
 ## How it works
 
@@ -35,6 +93,13 @@ cargo add tokenfold-core     # Rust library
 
 // Tokenfold output -> still JSON
 {"__tf_cols__":["id","role"],"__tf_rows__":[[1,"admin"],[2,"member"]]}
+```
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
+flowchart LR
+    In["Repeated keys in every record<br/>id, role, id, role"] --> TF[Tokenfold Core]
+    TF --> Out["Keys named once as columns<br/>values packed into rows"]
 ```
 
 Send the folded JSON directly to the model: column names label each value's
@@ -61,11 +126,46 @@ no hallucination risk is introduced, and every lossless transform is verified
 by exact decode.
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
 flowchart LR
     App[Application / Agent] -->|Large JSON / tool schemas| TF[Tokenfold Core]
     TF -->|Lossless structural JSON| LLM[LLM provider]
     LLM -->|Completion / action| App
     TF -.->|Optional exact decode of folded payload| App
+```
+
+#### How Tokenfold decides what to fold
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
+flowchart TD
+    Start([Incoming JSON payload]) --> Detect{Shape?}
+    Detect -->|Tabular array| Fold[Fold repeated keys into columns]
+    Detect -->|JSON-Schema shaped| Compact[Compact schema, shorten examples]
+    Detect -->|Heterogeneous feed| Choice{Lossy pruning opted in?}
+    Fold --> Verify
+    Compact --> Verify
+    Choice -->|No| Verify[Exact decode round trip]
+    Choice -->|Yes| Rank[Rank rows, store dropped rows locally]
+    Rank --> Verify
+    Verify --> Guard{Smaller than input?}
+    Guard -->|Yes| Emit([Emit folded payload + receipt])
+    Guard -->|No| Passthrough([Keep compact JSON, never larger])
+```
+
+#### Proxy / agent round trip
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "actorBkg": "#22D3EE", "actorTextColor": "#0b1020", "actorBorder": "#A855F7", "signalColor": "#A855F7", "signalTextColor": "#334155", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
+sequenceDiagram
+    participant C as Client / Agent
+    participant P as Tokenfold Proxy
+    participant U as Upstream LLM
+    C->>P: Provider-shaped request (large JSON)
+    P->>P: Apply lossless transforms
+    P->>U: Forwarded compact request
+    U-->>P: Completion / action
+    P-->>C: Response (Authorization forwarded unchanged)
 ```
 
 ![Terminal demo: Tokenfold reduces the bundled API response from 3,812 to 1,376 tokens.](docs/assets/tokenfold-demo.gif)
@@ -89,6 +189,8 @@ Run `vhs docs/tokenfold-demo.tape` to regenerate the GIF; the tape requires
 These figures use exact `o200k_base` counts in the balanced preset. Versioned
 inputs and provenance live in [`tests/fixtures/readme_metrics.json`](tests/fixtures/readme_metrics.json).
 [Recoverable pruning](#recoverable-lossy-pruning) is separate, opt-in extended tooling.
+
+<br />
 
 ## Quick start
 
@@ -193,6 +295,8 @@ server with `codex mcp add tokenfold -- tokenfold mcp serve`. See
 override. Trusted filters for Git, build, and test output
 are available through `tokenfold filters list`.
 
+<br />
+
 ## Tokenfold Core
 
 ### Structural, not semantic compression
@@ -208,7 +312,18 @@ unchanged downstream task accuracy; validate folded payloads with your
 representative workload. Query-aware selection is a separate, optional stage
 through [Tokenfold Select](#tokenfold-select).
 
+<br />
+
 ## Measured results
+
+Exact `o200k_base` token counts, original input versus Tokenfold's lossless
+output across the six-fixture Headroom corpus:
+
+<div align="center">
+  <img src="docs/assets/Chart.png" alt="Exact tokens: original input vs. Tokenfold lossless output across the six-fixture Headroom corpus" width="80%" />
+</div>
+
+<div align="center"><sub>Original input vs. Tokenfold lossless output, exact o200k_base token counts</sub></div>
 
 ### Competitive comparison
 
@@ -297,6 +412,8 @@ both tools. See the [checked-in TOON report](eval/research/toon_results.json)
 and [reproduction command](eval/research/README.md).
 
 </details>
+
+<br />
 
 ## Extended tooling
 
@@ -513,6 +630,8 @@ receipt reports the exact encoding delta and warns when TOON is larger than the
 already-compressed JSON representation.
 
 
+<br />
+
 ## Safety and auditability
 
 - **Never larger:** Core keeps a transform only when exact recounting shows a
@@ -532,6 +651,8 @@ and containment proxies. Those checks catch regressions but do not establish
 semantic equivalence or downstream task success. Runtime `quality` fields are
 absent unless a versioned evaluator has supplied data; applications should run
 their own representative task evaluation before enabling lossy pruning.
+
+<br />
 
 ## Reproduce the results
 
@@ -554,6 +675,8 @@ The bundled 30-record API response reports 3,812 -> 1,376 tokens, a **63.9%
 lossless reduction**. Benchmark sources and thresholds live in [CHANGELOG.md](https://github.com/snchimata/tokenfold/blob/main/CHANGELOG.md)
 and [`crates/tokenfold-core/benches/THRESHOLDS.toml`](https://github.com/snchimata/tokenfold/blob/main/crates/tokenfold-core/benches/THRESHOLDS.toml).
 
+<br />
+
 ## Contributing
 
 Issues and pull requests are welcome. Run the relevant checks before opening a
@@ -569,14 +692,22 @@ python eval/audit_quality_sample.py --check
 cd packages/tokenfold && npm ci && npm test
 ```
 
+<br />
+
 ## License
 
 [Apache-2.0](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
 
 ---
 
+<div align="center">
+
+### Start folding today
+
 Start with one representative payload, inspect the receipt, and see how many
 tokens your application can stop sending today.
+
+</div>
 
 ```bash
 pip install tokenfold        # Python
@@ -585,7 +716,21 @@ cargo install tokenfold-cli  # CLI
 cargo add tokenfold-core     # Rust
 ```
 
+<div align="center">
+
+<br />
+
 If Tokenfold earns a place in your stack, a star on
 [GitHub](https://github.com/snchimata/tokenfold) helps the next team find it.
+
+<br />
+
+<a href="https://github.com/snchimata/tokenfold"><img src="https://img.shields.io/github/stars/snchimata/tokenfold?style=social" alt="Star Tokenfold on GitHub" /></a>
+
+
+
+<img src="docs/assets/tokenfold-logo.png" alt="Tokenfold logo" width="120" />
+
+</div>
 
 [tokenfold-select]: https://huggingface.co/snchimata/tokenfold-select

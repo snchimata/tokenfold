@@ -1,7 +1,16 @@
+<div align="center">
+
 # Contributing
 
-Participation in this project is governed by the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+[Branch model](#branch-model) · [Making a change](#making-a-change) · [Cutting a release](#cutting-a-release) · [Repository rulesets](#repository-rulesets) · [Required status checks](#required-status-checks)
+
+</div>
+
+---
+
+> [!IMPORTANT]
+> Participation in this project is governed by the
+> [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Branch model
 
