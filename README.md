@@ -10,10 +10,10 @@
 <h3>More context. Fewer tokens. Exact by default.</h3>
 
 <p>
-  <strong>Cut input tokens up to 96% with opt-in, recoverable pruning - or 45-68% with byte-exact lossless compression.</strong>
+  <strong>Save 45.6-67.6% on three bundled lossless JSON fixtures. An opt-in pruning showcase reaches 96.3% with omitted rows stored for retrieval.</strong>
 </p>
 
-<p><em>Model-free core. Zero added hallucination risk. Provider-neutral.</em></p>
+<p><em>Model-free core. No model, no semantic rewriting; lossless transforms verify exact data recovery. Provider-neutral.</em></p>
 
 <br />
 
@@ -40,6 +40,10 @@
 - [Core](#tokenfold-core)
 - [Benchmarks](#measured-results)
 - [Extended tooling](#extended-tooling)
+- [Safety and auditability](#safety-and-auditability)
+- [Reproduce the results](#reproduce-the-results)
+- [Contributing](#contributing)
+- [License](#license)
 
 <br />
 
@@ -56,30 +60,30 @@ cargo add tokenfold-core     # Rust library
   <tr>
     <td align="center" width="33%">
       <br />
-      <strong>Up to 96% fewer tokens</strong>
+      <strong>Up to 96.3% fewer tokens (showcase)</strong>
       <br /><br />
       Opt-in, recoverable pruning for heterogeneous array feeds - every dropped row stays fetchable.
       <br /><br />
     </td>
     <td align="center" width="33%">
       <br />
-      <strong>45-68% lossless</strong>
+      <strong>45.6-67.6% on three fixtures, lossless</strong>
       <br /><br />
-      Byte-exact structural folding of repeated keys, columns, and schemas - verified by exact decode.
+      Byte-exact structural folding of repeated keys and columns on three bundled fixtures - verified by exact decode.
       <br /><br />
     </td>
     <td align="center" width="33%">
       <br />
       <strong>Model-free &amp; deterministic</strong>
       <br /><br />
-      No GPU, no semantic guesswork, zero added hallucination risk. Provider-neutral by design.
+      No GPU, no semantic guesswork, no model in the Core path. Validate folded payloads on your workload: exact decode proves data recovery, not unchanged model behavior. Provider-neutral by design.
       <br /><br />
     </td>
   </tr>
 </table>
 
 > [!NOTE]
-> **Built for:** Developers and AI teams cutting latency and API costs on structured JSON, tool definitions, and RAG feeds without risking hallucinations or prompt drift. Ideal for applications sending large JSON tool payloads, tool-calling agent loops (Claude Code, Codex), and structured RAG feeds where token overhead drives latency and cost.
+> **Built for:** Developers and AI teams cutting latency and API costs on structured JSON, tool definitions, and RAG feeds. Exact decode proves data recovery, not unchanged downstream task accuracy - validate folded payloads with your representative workload. Ideal for applications sending large JSON tool payloads, tool-calling agent loops (Claude Code, Codex), and structured RAG feeds where token overhead drives latency and cost.
 
 <br />
 
@@ -88,10 +92,11 @@ cargo add tokenfold-core     # Rust library
 ### What the model sees
 
 ```json
-// Input
+// Input (conceptual illustration - 2 rows shown; small inputs like this
+// pass through unchanged under the never-larger guard)
 [{"id":1,"role":"admin"},{"id":2,"role":"member"}]
 
-// Tokenfold output -> still JSON
+// Tokenfold output on larger uniform arrays -> still JSON
 {"__tf_cols__":["id","role"],"__tf_rows__":[[1,"admin"],[2,"member"]]}
 ```
 
@@ -110,20 +115,23 @@ object shape again.
 
 - **Targets structured JSON, not prose.** Folds repeated keys, columns, and
   schema keywords mechanically rather than using semantic guesswork.
-- **Model-free and deterministic.** Zero models running in Core, zero GPU
-  overhead, and zero hallucination risk.
+- **Model-free and deterministic.** Zero models running in Core and zero GPU
+  overhead. Exact decode proves data recovery, not unchanged model behavior.
 - **Verified by exact decode.** Every lossless transform is verified by an
   in-memory round trip before emitting; lossy pruning is strictly opt-in and
   recoverable.
 
 For tabular arrays, Tokenfold folds repeated keys into
-header columns (`__tf_cols__`). For tool schemas and other JSON-Schema-shaped
-payloads, Core applies its schema compaction transform: illustrative
-`examples` arrays are shortened and the document is re-serialized compactly,
-while every semantic field (`description`, `required`, `enum`, `type`,
-`default`, `name`) survives byte-for-byte. No model runs in the Core engine,
-no hallucination risk is introduced, and every lossless transform is verified
-by exact decode.
+header columns (`__tf_cols__`). No model runs in the Core engine, and every
+lossless transform is verified by exact decode.
+
+> [!NOTE]
+> `schema_compaction` (truncating illustrative `examples` arrays while leaving
+> `description`, `required`, `enum`, `type`, `default`, and `name` untouched)
+> is disabled in every preset (`conservative`, `balanced`, `aggressive`) and
+> is therefore not part of default behavior. Its safety gate checks valid JSON
+> and key order, not exact reversibility, so it must not be described as
+> lossless exact-decode-verified Core behavior.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
@@ -141,10 +149,8 @@ flowchart LR
 flowchart TD
     Start([Incoming JSON payload]) --> Detect{Shape?}
     Detect -->|Tabular array| Fold[Fold repeated keys into columns]
-    Detect -->|JSON-Schema shaped| Compact[Compact schema, shorten examples]
     Detect -->|Heterogeneous feed| Choice{Lossy pruning opted in?}
     Fold --> Verify
-    Compact --> Verify
     Choice -->|No| Verify[Exact decode round trip]
     Choice -->|Yes| Rank[Rank rows, store dropped rows locally]
     Rank --> Verify
@@ -205,8 +211,15 @@ cargo install tokenfold-proxy
 tokenfold-proxy --upstream https://api.openai.com
 ```
 
-The proxy installs from source via Cargo. Prebuilt, checksummed release
-binaries are published for the CLI (see the Interfaces table below).
+The proxy installs from source via Cargo and listens on `127.0.0.1:8787` by
+default (`--bind`; use `--allow-non-loopback-bind` to change that). Only
+chat-shaped JSON bodies (a non-empty `messages` array) are compressed on the
+passthrough path; anything else forwards untouched. Non-`GET /livez|/readyz|/health`
+requests forward upstream with the incoming path appended to `--upstream`, so
+point OpenAI-shaped clients at `<bind>/v1`. Prebuilt, checksummed release
+binaries are published for the CLI only; the proxy has no prebuilt binary.
+SSE responses stream through unbuffered with a whole-exchange
+`--upstream-timeout-secs` deadline.
 
 ```python
 from openai import OpenAI
@@ -259,7 +272,18 @@ compressed_payload = result.payload  # bytes
 print(f"Saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 ```
 
-### Runnable examples
+### Presets
+
+| Preset | Behavior |
+| --- | --- |
+| `conservative` | Minification only; no restructuring of what the model sees. |
+| `balanced` (default) | Minification plus reversible columnar folding (`json_field_fold`, `json_value_dict`, `log_field_fold`) on eligible formats. |
+| `aggressive` | Same transform set as `balanced` today, with wider ratio caps reserved for lossy-with-evidence transforms. |
+
+Provider message formats (`openai_json`, `anthropic_json`) never receive
+columnar folding: only minification applies, so API shapes stay intact.
+
+### Runnable examples (Python >=3.9, Node.js >=22, Rust >=1.98)
 
 Runnable examples, one per surface, all under [`examples/`](examples):
 
@@ -277,8 +301,11 @@ provider payloads, recoverable pruning with retrieval, and where Tokenfold Selec
 ### Coding agents and MCP integration
 
 Coding agents can exhaust context limits on large shell outputs. Tokenfold runs as a
-stdio MCP server with pre-configured filters for Git status, diffs, build output, and test logs
-before they consume agent context.
+stdio MCP server exposing `tokenfold_compress`, `tokenfold_inspect`,
+`tokenfold_retrieve`, and `tokenfold_stats`, with pre-configured filters for Git
+status, diffs, build output, and test logs before they consume agent context.
+`tokenfold init` currently supports Claude Code; Codex uses manual MCP
+registration:
 
 ```bash
 tokenfold init --agent claude-code
@@ -289,8 +316,9 @@ codex mcp add tokenfold -- tokenfold mcp serve
 ```
 
 `tokenfold init --agent claude-code` merges a project-scoped `.mcp.json` entry without replacing
-other servers; `tokenfold doctor --agent claude-code` verifies it. Codex can use the same stdio
-server with `codex mcp add tokenfold -- tokenfold mcp serve`. See
+other servers; `tokenfold doctor --agent claude-code` verifies it. `tokenfold_inspect`
+is side-effect-free (never returns a modified payload); `tokenfold_retrieve`
+accepts a hash or marker, never a report reference. See
 [`docs/configuration.md`](docs/configuration.md) for tested MCP JSON/TOML and every environment
 override. Trusted filters for Git, build, and test output
 are available through `tokenfold filters list`.
@@ -352,7 +380,7 @@ output across the six-fixture Headroom corpus:
 | Nested compression report | 128 | **128** | 131 | **Tokenfold retains compact JSON; both round trip** |
 | Deeply nested report schema | 472 | **472** | 517 | **Tokenfold retains compact JSON; both round trip** |
 | Wide metrics table | 6,310 | **4,061** | 4,161 | **Tokenfold (-35.6%); both round trip** |
-| **Seven-fixture corpus** | **16,235** | **12,776** | **14,841** | **Tokenfold won 7/7; 13.9% fewer than TOON** |
+| **Seven-fixture corpus** | **16,235** | **12,776** | **14,841** | **Tokenfold fewer on 7/7 (3 transforms, 4 never-larger guards); 13.9% fewer than TOON** |
 
 In aggregate across the seven fixtures:
 
@@ -368,7 +396,9 @@ would not reduce the exact token count.
 
 All counts use exact `o200k_base` recounts. Tokenfold passed exact recovery on
 all six Headroom fixtures and all seven TOON fixtures; Headroom's emitted JSON
-matched the input value on 4/6 fixtures. See the [Headroom methodology](#head-to-head-with-headroom)
+matched the input value on 4/6 fixtures (the semi-uniform incident feed and the
+deeply nested OpenAI payload differed), so its aggregate reduction is not a
+lossless result. See the [Headroom methodology](#head-to-head-with-headroom)
 and [TOON methodology](#tokenfold-vs-toon) for the versioned corpora, pinned
 comparator revisions, and full fixture-level results.
 
@@ -405,8 +435,10 @@ is the fewest tokens.
 
 The new `examples/toon_metrics.json` fixture is a 120-row, wide, uniform
 metrics table - the shape where TOON is expected to be strongest. Tokenfold
-JSON was still smaller than official TOON on **7/7 fixtures** and used
-**13.9% fewer tokens in aggregate**. Both paths passed lossless recovery checks.
+produced fewer tokens than TOON on all seven fixtures and used **13.9% fewer
+tokens in aggregate**: a reducing structural transform on three fixtures, and
+the never-larger guard retaining compact JSON (still smaller than the TOON
+output) on four. Both paths passed lossless recovery checks.
 The benchmark uses exact `o200k_base` counts and the same versioned corpus for
 both tools. See the [checked-in TOON report](eval/research/toon_results.json)
 and [reproduction command](eval/research/README.md).
@@ -424,7 +456,7 @@ loaded or invoked by Core.
 | Capability | What you get |
 | --- | --- |
 | **Recoverable pruning** | Drop low-signal JSON rows only after storing them locally; fetch any omission with `tokenfold retrieve` |
-| **Tokenfold Select** | LoRA-fine-tuned, query-aware span ranking with up to **15.8% lift** over BM25 at the same budget |
+| **Tokenfold Select** | LoRA-fine-tuned, query-aware span ranking: **+8.8 pp** over the strongest baseline at 25% budget (**15.8%** relative lift over BM25); source-reported external results |
 | **JSON or TOON output** | Keep Tokenfold's compact JSON default or explicitly emit verified TOON for compatible consumers |
 
 ### Recoverable lossy pruning
@@ -437,7 +469,7 @@ pruning when strict context budgets apply:
 | --- | --- | --- |
 | **What it does** | Minifies, folds repeated keys into columns, and stores repeated values once | Adds deterministic ranking and retrieval markers for selected array rows |
 | **Best on** | Uniform records, schemas, logs, diffs | Search results, mixed event feeds, agent traces, long arrays |
-| **Measured here** | **45.6-67.6%** fewer tokens | **51.7-96.3%** fewer tokens |
+| **Measured here** | **45.6-67.6%** fewer tokens on three bundled fixtures | **51.7-96.3%** fewer tokens (40-event feed at 51.7-68.2%; 100-row showcase at 96.3%) |
 | **Recovery** | All data remains in the payload | Every emitted marker resolves through the local retrieval store |
 
 
@@ -462,14 +494,26 @@ On the bundled 40-event feed:
 The planted `503` with `success: false` and `retries: 7` survives every shown
 setting because typed failure signals outrank position and length - at
 `--keep-ratio 0.05` it is the only row kept. Long rows
-amortize marker overhead further: the 100-result showcase reaches **96.3% fewer tokens**.
+amortize marker overhead further: the 100-result showcase reaches **96.3% fewer tokens**
+(`--keep-ratio 0.02`, `examples/max_showcase.json`; see
+[`tests/fixtures/readme_metrics.json`](tests/fixtures/readme_metrics.json)).
 
-Fetch a dropped row:
+Fetch a dropped row (same `--retrieval-store`/`--retrieval-namespace` the
+compress run used; the hash below is illustrative - use a real marker hash
+from your own run):
 
 ```bash
-tokenfold retrieve cb13cc59cca0c218c579cd1d4b3cbab58d6dea265eb995cc9c00faf0cd0a6856
+tokenfold compress examples/incident_feed.json --format json \
+  --prune --keep-ratio 0.35 --output feed.compact.json \
+  --retrieval-store ./store --retrieval-namespace incident-demo
+tokenfold retrieve <hash-from-feed.compact.json> \
+  --retrieval-store ./store --retrieval-namespace incident-demo
 # {"seq":1,"ts":"2026-08-15T00:01:11Z","subsystem":"index-writer",...}
 ```
+
+> [!WARNING]
+> Recoverable pruning operates only on generic JSON. It does not run on OpenAI
+> or Anthropic message payloads.
 
 What the flags mean:
 
@@ -481,9 +525,12 @@ What the flags mean:
 - `--preserve <path>` protects a named array; nested paths conservatively
   protect their nearest eligible ancestor.
 - Generic JSON only: lossy pruning does not run on OpenAI or Anthropic message
-  payloads.
+  payloads. Pass the same `--retrieval-store`/`--retrieval-namespace` to
+  `tokenfold retrieve` that the compress run used.
 - Storage is fail-closed: refused rows stay inline, and detected secret-shaped
-  bytes are never persisted.
+  bytes are never persisted. Lossy pruning requires the `filesystem` retrieval
+  backend with TTL >= 24h (memory backends and near-immediate expiry are
+  rejected); `$tf_ref` is reserved.
 
 Preview the projected savings with no store writes:
 
@@ -492,24 +539,44 @@ tokenfold inspect examples/incident_feed.json --format json \
   --prune --keep-ratio 0.35
 ```
 
-The same flags, and the same fail-closed contract, from Python and TypeScript:
+The same flags, and the same fail-closed contract, from Python and TypeScript.
+Use a throwaway store directory while experimenting and reuse it for retrieval:
 
 ```python
+import json
+from pathlib import Path
 from tokenfold import InputFormat, PruningPolicy, compress, retrieve
 
-pruning = PruningPolicy(keep_ratio=0.35)
+store = Path("/tmp/tokenfold-readme-store")
+feed_bytes = Path("examples/incident_feed.json").read_bytes()
+pruning = PruningPolicy(
+    keep_ratio=0.35,
+    retrieval_store=store,
+    retrieval_namespace="readme-demo",
+)
 result = compress(feed_bytes, format=InputFormat.JSON, pruning=pruning)
-original = retrieve(marker["$tf_ref"])   # any dropped row, verbatim
+payload = json.loads(result.payload)
+marker = next(e["$tf_ref"] for e in payload["events"] if "$tf_ref" in e)
+original = retrieve(
+    marker, retrieval_store=store, namespace="readme-demo"
+)  # any dropped row, verbatim
 ```
 
 ```ts
+import { readFile } from "node:fs/promises";
 import { compress, retrieve } from "tokenfold";
 
-const { payload, report } = await compress(feed, {
+const store = "/tmp/tokenfold-readme-store";
+const feed = await readFile("examples/incident_feed.json");
+const { text } = await compress(feed, {
   format: "json",
-  pruning: { keepRatio: 0.35 },
+  pruning: { keepRatio: 0.35, retrievalStore: store, retrievalNamespace: "readme-demo" },
 });
-const original = await retrieve(hash); // any dropped row, verbatim
+const marker = JSON.parse(text).events.find((e) => "$tf_ref" in e)["$tf_ref"];
+const original = await retrieve(marker, {
+  retrievalStore: store,
+  namespace: "readme-demo",
+}); // any dropped row, verbatim
 ```
 
 <details>
@@ -600,9 +667,9 @@ source-reported external results, not Core CI results.
 | 10% | **39.9%** | 30.4% | 37.7% | 37.7% | **+2.2 pp** |
 
 Tokenfold Select beat every measured baseline at every budget. At a 25% budget,
-the fine-tuned ranker keeps the answer **70.3% of the time**, an **8.8 percentage
-point** lead over the strongest baseline and a **15.8% relative lift** over BM25.
-Critical-content survival is
+the fine-tuned ranker keeps the answer **70.3% of the time**: an **8.8 percentage
+point** lead over the strongest baseline (Kompress-v2 relevance, 61.5%), and a
+**15.8% relative lift** over BM25 (60.7% -> 70.3%). Critical-content survival is
 **100% at every measured budget** through allocator force-keep. Results are
 three-seed repeated subsampling over roughly 73,000 training and 24,000
 held-out fixtures per run; the [model card][tokenfold-select] publishes the
