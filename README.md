@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner.png" alt="Tokenfold - Expand Ideas. Compress Tokens." width="100%" style="border-radius: 12px; max-width: 100%;" />
+<img src="https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/banner.png" alt="Tokenfold - Expand Ideas. Compress Tokens." width="100%" style="border-radius: 12px; max-width: 100%;" />
 
 <br />
 <br />
@@ -20,14 +20,6 @@
 <!-- Badges -->
 
 [![CI](https://img.shields.io/github/actions/workflow/status/snchimata/tokenfold/ci.yml?branch=main&label=tests&logo=github&style=for-the-badge)](https://github.com/snchimata/tokenfold/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/tokenfold?label=PyPI&style=for-the-badge&logo=pypi&logoColor=1f73b7&color=ececec)](https://pypi.org/project/tokenfold/) [![npm](https://img.shields.io/npm/v/tokenfold?label=NPM&style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/tokenfold) [![Rust](https://img.shields.io/crates/v/tokenfold-core?label=Rust&style=for-the-badge&logo=rust&logoColor=white&color=000000)](https://docs.rs/crate/tokenfold-core/latest) [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge)](https://github.com/snchimata/tokenfold/blob/main/LICENSE)
-
-<!-- Language & platform badges -->
-
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white) ![MCP](https://img.shields.io/badge/MCP-ready-6E56CF?style=for-the-badge&logo=anthropic&logoColor=white) ![Deterministic](https://img.shields.io/badge/Model--free-deterministic-2ea44f?style=for-the-badge) ![Lossless](https://img.shields.io/badge/Lossless-exact_decode-0a7ea4?style=for-the-badge)
-
-<!-- Repository activity badges -->
-
-[![GitHub stars](https://img.shields.io/github/stars/snchimata/tokenfold?style=for-the-badge&logo=github&color=f5c518&logoColor=white)](https://github.com/snchimata/tokenfold/stargazers) [![Open issues](https://img.shields.io/github/issues/snchimata/tokenfold?style=for-the-badge&logo=github&logoColor=white)](https://github.com/snchimata/tokenfold/issues) [![Last commit](https://img.shields.io/github/last-commit/snchimata/tokenfold?style=for-the-badge&logo=git&logoColor=white)](https://github.com/snchimata/tokenfold/commits/main) [![Repo size](https://img.shields.io/github/repo-size/snchimata/tokenfold?style=for-the-badge&logo=github&logoColor=white)](https://github.com/snchimata/tokenfold)
 
 </div>
 
@@ -69,7 +61,7 @@ cargo add tokenfold-core     # Rust library
       <br />
       <strong>45.6-67.6% on three fixtures, lossless</strong>
       <br /><br />
-      Byte-exact structural folding of repeated keys and columns on three bundled fixtures - verified by exact decode.
+      Reversible structural folding of repeated keys and columns on three bundled fixtures - verified by exact JSON-value recovery.
       <br /><br />
     </td>
     <td align="center" width="33%">
@@ -113,8 +105,8 @@ object shape again.
 
 #### Why Tokenfold, not LLMLingua / prompt compressors?
 
-- **Targets structured JSON, not prose.** Folds repeated keys, columns, and
-  schema keywords mechanically rather than using semantic guesswork.
+- **Targets structured JSON, not prose.** Folds repeated keys and columns
+  mechanically rather than using semantic guesswork.
 - **Model-free and deterministic.** Zero models running in Core and zero GPU
   overhead. Exact decode proves data recovery, not unchanged model behavior.
 - **Verified by exact decode.** Every lossless transform is verified by an
@@ -126,12 +118,8 @@ header columns (`__tf_cols__`). No model runs in the Core engine, and every
 lossless transform is verified by exact decode.
 
 > [!NOTE]
-> `schema_compaction` (truncating illustrative `examples` arrays while leaving
-> `description`, `required`, `enum`, `type`, `default`, and `name` untouched)
-> is disabled in every preset (`conservative`, `balanced`, `aggressive`) and
-> is therefore not part of default behavior. Its safety gate checks valid JSON
-> and key order, not exact reversibility, so it must not be described as
-> lossless exact-decode-verified Core behavior.
+> `schema_compaction` is not enabled by any preset. Unlike the default
+> transforms, it truncates `examples` arrays and is not reversible.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
@@ -144,20 +132,20 @@ flowchart LR
 
 #### How Tokenfold decides what to fold
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#22D3EE", "primaryTextColor": "#0b1020", "primaryBorderColor": "#A855F7", "lineColor": "#A855F7", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
-flowchart TD
-    Start([Incoming JSON payload]) --> Detect{Shape?}
-    Detect -->|Tabular array| Fold[Fold repeated keys into columns]
-    Detect -->|Heterogeneous feed| Choice{Lossy pruning opted in?}
-    Fold --> Verify
-    Choice -->|No| Verify[Exact decode round trip]
-    Choice -->|Yes| Rank[Rank rows, store dropped rows locally]
-    Rank --> Verify
-    Verify --> Guard{Smaller than input?}
-    Guard -->|Yes| Emit([Emit folded payload + receipt])
-    Guard -->|No| Passthrough([Keep compact JSON, never larger])
-```
+![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-decision-flow.svg)
+
+<details>
+<summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
+
+1. Incoming JSON payload arrives.
+2. Tabular shape? Yes: fold repeated keys into columns. No (heterogeneous
+   feed): continue only when lossy pruning is opted in (rank rows, store
+   dropped rows locally).
+3. Verify with an exact decode round trip.
+4. Smaller than input? Yes: emit folded payload + receipt. No: keep compact
+   JSON (never larger).
+
+</details>
 
 #### Proxy / agent round trip
 
@@ -174,7 +162,7 @@ sequenceDiagram
     P-->>C: Response (Authorization forwarded unchanged)
 ```
 
-![Terminal demo: Tokenfold reduces the bundled API response from 3,812 to 1,376 tokens.](docs/assets/tokenfold-demo.gif)
+![Terminal demo: Tokenfold reduces the bundled API response from 3,812 to 1,376 tokens.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-demo.gif)
 
 <details>
 <summary><strong>How this demo was generated (VHS tape)</strong></summary>
@@ -278,7 +266,7 @@ print(f"Saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
 | --- | --- |
 | `conservative` | Minification only; no restructuring of what the model sees. |
 | `balanced` (default) | Minification plus reversible columnar folding (`json_field_fold`, `json_value_dict`, `log_field_fold`) on eligible formats. |
-| `aggressive` | Same transform set as `balanced` today, with wider ratio caps reserved for lossy-with-evidence transforms. |
+| `aggressive` | Same default transform set as `balanced` today. |
 
 Provider message formats (`openai_json`, `anthropic_json`) never receive
 columnar folding: only minification applies, so API shapes stay intact.
@@ -318,7 +306,8 @@ codex mcp add tokenfold -- tokenfold mcp serve
 `tokenfold init --agent claude-code` merges a project-scoped `.mcp.json` entry without replacing
 other servers; `tokenfold doctor --agent claude-code` verifies it. `tokenfold_inspect`
 is side-effect-free (never returns a modified payload); `tokenfold_retrieve`
-accepts a hash or marker, never a report reference. See
+retrieves by hash or marker (report references are reserved but not yet
+resolvable). See
 [`docs/configuration.md`](docs/configuration.md) for tested MCP JSON/TOML and every environment
 override. Trusted filters for Git, build, and test output
 are available through `tokenfold filters list`.
@@ -348,7 +337,7 @@ Exact `o200k_base` token counts, original input versus Tokenfold's lossless
 output across the six-fixture Headroom corpus:
 
 <div align="center">
-  <img src="docs/assets/Chart.png" alt="Exact tokens: original input vs. Tokenfold lossless output across the six-fixture Headroom corpus" width="80%" />
+  <img src="https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/Chart.png" alt="Exact tokens: original input vs. Tokenfold lossless output across the six-fixture Headroom corpus" width="80%" />
 </div>
 
 <div align="center"><sub>Original input vs. Tokenfold lossless output, exact o200k_base token counts</sub></div>
@@ -498,15 +487,14 @@ amortize marker overhead further: the 100-result showcase reaches **96.3% fewer 
 (`--keep-ratio 0.02`, `examples/max_showcase.json`; see
 [`tests/fixtures/readme_metrics.json`](tests/fixtures/readme_metrics.json)).
 
-Fetch a dropped row (same `--retrieval-store`/`--retrieval-namespace` the
-compress run used; the hash below is illustrative - use a real marker hash
-from your own run):
+Fetch a dropped row using the same `--retrieval-store` and
+`--retrieval-namespace` as the compression run:
 
 ```bash
 tokenfold compress examples/incident_feed.json --format json \
   --prune --keep-ratio 0.35 --output feed.compact.json \
   --retrieval-store ./store --retrieval-namespace incident-demo
-tokenfold retrieve <hash-from-feed.compact.json> \
+tokenfold retrieve cb13cc59cca0c218c579cd1d4b3cbab58d6dea265eb995cc9c00faf0cd0a6856 \
   --retrieval-store ./store --retrieval-namespace incident-demo
 # {"seq":1,"ts":"2026-08-15T00:01:11Z","subsystem":"index-writer",...}
 ```
@@ -547,7 +535,7 @@ import json
 from pathlib import Path
 from tokenfold import InputFormat, PruningPolicy, compress, retrieve
 
-store = Path("/tmp/tokenfold-readme-store")
+store = Path(".tokenfold-readme-store")
 feed_bytes = Path("examples/incident_feed.json").read_bytes()
 pruning = PruningPolicy(
     keep_ratio=0.35,
@@ -566,7 +554,7 @@ original = retrieve(
 import { readFile } from "node:fs/promises";
 import { compress, retrieve } from "tokenfold";
 
-const store = "/tmp/tokenfold-readme-store";
+const store = ".tokenfold-readme-store";
 const feed = await readFile("examples/incident_feed.json");
 const { text } = await compress(feed, {
   format: "json",
@@ -776,27 +764,12 @@ tokens your application can stop sending today.
 
 </div>
 
-```bash
-pip install tokenfold        # Python
-npm install tokenfold        # Node.js
-cargo install tokenfold-cli  # CLI
-cargo add tokenfold-core     # Rust
-```
-
 <div align="center">
 
 <br />
 
-If Tokenfold earns a place in your stack, a star on
-[GitHub](https://github.com/snchimata/tokenfold) helps the next team find it.
-
-<br />
-
-<a href="https://github.com/snchimata/tokenfold"><img src="https://img.shields.io/github/stars/snchimata/tokenfold?style=social" alt="Star Tokenfold on GitHub" /></a>
-
-
-
-<img src="docs/assets/tokenfold-logo.png" alt="Tokenfold logo" width="120" />
+[Configuration](docs/configuration.md) | [Changelog](CHANGELOG.md) |
+[Contributing](CONTRIBUTING.md) | [Security](SECURITY.md)
 
 </div>
 
