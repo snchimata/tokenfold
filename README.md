@@ -10,10 +10,10 @@
 <h3>More context. Fewer tokens. Exact by default.</h3>
 
 <p>
-  <strong>Save 45.6-67.6% on three bundled lossless JSON fixtures. An opt-in pruning showcase reaches 96.3% with omitted rows stored for retrieval.</strong>
+  <strong>Tokenfold Core saves 45.6-67.6% on three bundled lossless JSON fixtures. Tokenfold Select beats every measured query-aware baseline at 50%, 25%, and 10% token budgets.</strong>
 </p>
 
-<p><em>Model-free core. No model, no semantic rewriting; lossless transforms verify exact data recovery. Provider-neutral.</em></p>
+<p><em>Two complementary offerings: model-free, exact-by-default Tokenfold Core for structural compression, and Tokenfold Select for query-aware ranking under tight context budgets.</em></p>
 
 <br />
 
@@ -30,6 +30,7 @@
 - [Quick start](#quick-start)
 - [MCP & agents](#coding-agents-and-mcp-integration)
 - [Core](#tokenfold-core)
+- [Select](#tokenfold-select)
 - [Benchmarks](#measured-results)
 - [Extended tooling](#extended-tooling)
 - [Safety and auditability](#safety-and-auditability)
@@ -132,7 +133,7 @@ flowchart LR
 
 #### How Tokenfold decides what to fold
 
-![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-decision-flow.svg)
+![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/b1ea4a545c174578adb3eaf7c39ab0b6fb1523f3/docs/assets/tokenfold-decision-flow.svg)
 
 <details>
 <summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
@@ -240,12 +241,6 @@ tokenfold inspect payload.json --format json
 tokenfold compress payload.json --format json --output payload.compact.json
 ```
 
-Upgrading from v0.4? The
-[v0.4 -> v0.5 migration matrix](docs/migration-v0.4-to-v0.5.md) maps every
-interface change (`--mode` -> `--preset`, the `--lossy-*` family ->
-`--prune`/`--keep-ratio`/`--preserve`, removed redaction bypass, exit codes 7
-and 8).
-
 For direct Python calls, use the same Core engine and typed receipt:
 
 ```python
@@ -326,8 +321,101 @@ structural redundancy. Core needs no model, is deterministic, and verifies an
 exact decode before accepting a lossless transform. Tokenfold does not inject
 prompt guidance or fine-tune models. Exact decode proves data recovery, not
 unchanged downstream task accuracy; validate folded payloads with your
-representative workload. Query-aware selection is a separate, optional stage
-through [Tokenfold Select](#tokenfold-select).
+representative workload. [Tokenfold Select](#tokenfold-select) is Tokenfold's
+complementary query-aware offering: when structure ends, it ranks what matters
+under a token budget.
+
+<br />
+
+<a id="tokenfold-select"></a>
+
+## Tokenfold Select
+
+**When structure ends, rank what matters.**
+
+Tokenfold Select is an Apache-2.0 LoRA adapter on
+`ibm-granite/granite-embedding-reranker-english-r2`. It scores candidate spans
+against a query; your allocator applies the token budget and force-keeps
+required content. It is a separately distributed offering. Core remains
+model-free and deterministic and neither loads nor invokes Select.
+
+| | Tokenfold Core | Tokenfold Select |
+| --- | --- | --- |
+| Best at | Structural compression | Query-conditioned span ranking |
+| Runtime | Static Rust binary | Granite reranker + LoRA adapter |
+| Output | Compressed payload + exact receipt | Ranking logits |
+
+<details>
+<summary><strong>Python: load the model and score spans</strong></summary>
+
+```python
+from pathlib import Path
+
+import torch
+from huggingface_hub import snapshot_download
+from peft import PeftModel
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+base_id = "ibm-granite/granite-embedding-reranker-english-r2"
+repo_dir = Path(snapshot_download("snchimata/tokenfold-select"))
+adapter_dir = repo_dir / "adapter"
+tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+base = AutoModelForSequenceClassification.from_pretrained(
+    base_id,
+    dtype=torch.float32,
+)
+model = PeftModel.from_pretrained(base, adapter_dir).eval()
+
+def score(query: str, spans: list[str]) -> list[float]:
+    if not spans:
+        return []
+    encoded = tokenizer(
+        [query] * len(spans),
+        spans,
+        padding=True,
+        truncation=True,
+        max_length=8192,
+        return_tensors="pt",
+    )
+    with torch.no_grad():
+        output = model(
+            input_ids=encoded["input_ids"],
+            attention_mask=encoded["attention_mask"],
+        )
+    return output.logits.view(-1).float().tolist()
+```
+
+</details>
+
+### Tokenfold Select benchmarks
+
+[Tokenfold Select][tokenfold-select] is Tokenfold's query-aware model for choosing
+what fills a tight context window after structural compression ends.
+It is distributed and evaluated separately; Tokenfold Core does not invoke it.
+Headroom's generic JSON engine is evaluated above; this table evaluates
+Kompress-v2, Headroom Labs' query-aware selection baseline. These figures are
+source-reported external results, not Core CI results.
+
+| Tokens kept | Tokenfold Select | Kompress-v2 (Headroom) native | Kompress-v2 (Headroom) relevance | BM25 | vs. best baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 50% | **86.3%** | 66.5% | 80.5% | 79.4% | **+5.8 pp** |
+| 25% | **70.3%** | 47.2% | 61.5% | 60.7% | **+8.8 pp** |
+| 10% | **39.9%** | 30.4% | 37.7% | 37.7% | **+2.2 pp** |
+
+Tokenfold Select beat every measured baseline at every budget. At a 25% budget,
+the fine-tuned ranker keeps the answer **70.3% of the time**: an **8.8 percentage
+point** lead over the strongest baseline (Kompress-v2 relevance, 61.5%), and a
+**15.8% relative lift** over BM25 (60.7% -> 70.3%). Critical-content survival is
+**100% at every measured budget** through allocator force-keep. Results are
+three-seed repeated subsampling over roughly 73,000 training and 24,000
+held-out fixtures per run; the [model card][tokenfold-select] publishes the
+training recipe and full baseline set. Here, task success means the literal
+gold answer survived selection under the stated budget.
+These are source-reported external results, pinned by model revision in the
+[metric manifest](tests/fixtures/readme_metrics.json); Core CI does not reproduce them.
+
+See the [Tokenfold Select model card][tokenfold-select] for setup, evaluation,
+training data, and limitations.
 
 <br />
 
@@ -438,14 +526,12 @@ and [reproduction command](eval/research/README.md).
 
 ## Extended tooling
 
-These optional companions are separate from Tokenfold Core. Recoverable pruning can trade
-payload completeness for local retrieval, and Select uses an external model; neither is
-loaded or invoked by Core.
+These additional capabilities extend Core with recoverable pruning and an
+explicit TOON output codec.
 
 | Capability | What you get |
 | --- | --- |
 | **Recoverable pruning** | Drop low-signal JSON rows only after storing them locally; fetch any omission with `tokenfold retrieve` |
-| **Tokenfold Select** | LoRA-fine-tuned, query-aware span ranking: **+8.8 pp** over the strongest baseline at 25% budget (**15.8%** relative lift over BM25); source-reported external results |
 | **JSON or TOON output** | Keep Tokenfold's compact JSON default or explicitly emit verified TOON for compatible consumers |
 
 ### Recoverable lossy pruning
@@ -579,95 +665,6 @@ keep more rows if storage becomes unavailable.
 
 </details>
 
-<a id="tokenfold-select"></a>
-
-### Tokenfold Select
-
-**When structure ends, rank what matters.**
-
-Tokenfold Select is an Apache-2.0 LoRA adapter on
-`ibm-granite/granite-embedding-reranker-english-r2`. It scores candidate spans
-against a query; your allocator applies the token budget and force-keeps
-required content. It is a separately distributed companion: Core remains
-model-free and deterministic and neither loads nor invokes Select.
-
-| | Tokenfold Core | Tokenfold Select |
-| --- | --- | --- |
-| Best at | Structural compression | Query-conditioned span ranking |
-| Runtime | Static Rust binary | Granite reranker + LoRA adapter |
-| Output | Compressed payload + exact receipt | Ranking logits |
-
-<details>
-<summary><strong>Python: load the model and score spans</strong></summary>
-
-```python
-from pathlib import Path
-
-import torch
-from huggingface_hub import snapshot_download
-from peft import PeftModel
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-base_id = "ibm-granite/granite-embedding-reranker-english-r2"
-repo_dir = Path(snapshot_download("snchimata/tokenfold-select"))
-adapter_dir = repo_dir / "adapter"
-tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
-base = AutoModelForSequenceClassification.from_pretrained(
-    base_id,
-    dtype=torch.float32,
-)
-model = PeftModel.from_pretrained(base, adapter_dir).eval()
-
-def score(query: str, spans: list[str]) -> list[float]:
-    if not spans:
-        return []
-    encoded = tokenizer(
-        [query] * len(spans),
-        spans,
-        padding=True,
-        truncation=True,
-        max_length=8192,
-        return_tensors="pt",
-    )
-    with torch.no_grad():
-        output = model(
-            input_ids=encoded["input_ids"],
-            attention_mask=encoded["attention_mask"],
-        )
-    return output.logits.view(-1).float().tolist()
-```
-
-</details>
-
-#### Tokenfold Select benchmarks
-
-[Tokenfold Select][tokenfold-select] is an optional external query-aware model for
-choosing what fills a tight context window after structural compression ends.
-It is distributed and evaluated separately; Tokenfold Core does not invoke it.
-Headroom's generic JSON engine is evaluated above; this table evaluates
-Kompress-v2, Headroom Labs' query-aware selection baseline. These figures are
-source-reported external results, not Core CI results.
-
-| Tokens kept | Tokenfold Select | Kompress-v2 (Headroom) native | Kompress-v2 (Headroom) relevance | BM25 | vs. best baseline |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 50% | **86.3%** | 66.5% | 80.5% | 79.4% | **+5.8 pp** |
-| 25% | **70.3%** | 47.2% | 61.5% | 60.7% | **+8.8 pp** |
-| 10% | **39.9%** | 30.4% | 37.7% | 37.7% | **+2.2 pp** |
-
-Tokenfold Select beat every measured baseline at every budget. At a 25% budget,
-the fine-tuned ranker keeps the answer **70.3% of the time**: an **8.8 percentage
-point** lead over the strongest baseline (Kompress-v2 relevance, 61.5%), and a
-**15.8% relative lift** over BM25 (60.7% -> 70.3%). Critical-content survival is
-**100% at every measured budget** through allocator force-keep. Results are
-three-seed repeated subsampling over roughly 73,000 training and 24,000
-held-out fixtures per run; the [model card][tokenfold-select] publishes the
-training recipe and full baseline set. Here, task success means the literal
-gold answer survived selection under the stated budget.
-These are source-reported external results, pinned by model revision in the
-[metric manifest](tests/fixtures/readme_metrics.json); Core CI does not reproduce them.
-
-See the [Tokenfold Select model card][tokenfold-select] for setup, evaluation,
-training data, and limitations.
 
 ### Optional TOON output codec
 
