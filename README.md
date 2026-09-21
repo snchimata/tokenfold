@@ -10,10 +10,12 @@
 <h3>More context. Fewer tokens. Exact by default.</h3>
 
 <p>
-  <strong>Tokenfold Core saves 45.6-67.6% on three bundled lossless JSON fixtures. Tokenfold Select beats every measured query-aware baseline at 50%, 25%, and 10% token budgets.</strong>
+  <strong>Deterministic context compression for LLMs. Cut JSON tokens by up to 68% with exact recovery, or exceed 90% with opt-in, recoverable pruning.</strong>
 </p>
 
-<p><em>Two complementary offerings: model-free, exact-by-default Tokenfold Core for structural compression, and Tokenfold Select for query-aware ranking under tight context budgets.</em></p>
+<p><em>Tokenfold Core delivers model-free structural compression.</em></p>
+<p><em>
+Tokenfold Select ranks the context that matters most when token budgets get tight.</em></p>
 
 <br />
 
@@ -133,7 +135,7 @@ flowchart LR
 
 #### How Tokenfold decides what to fold
 
-![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-decision-flow.svg)
+![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/b1ea4a545c174578adb3eaf7c39ab0b6fb1523f3/docs/assets/tokenfold-decision-flow.svg)
 
 <details>
 <summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
@@ -313,17 +315,10 @@ are available through `tokenfold filters list`.
 
 ### Structural, not semantic compression
 
-Semantic prompt compressors such as
-[LLMLingua](https://github.com/microsoft/LLMLingua) use a smaller language model
-to identify and remove less-important prompt tokens. Tokenfold solves a
-different problem first: repeated keys, values, schemas, rows, and other
-structural redundancy. Core needs no model, is deterministic, and verifies an
-exact decode before accepting a lossless transform. Tokenfold does not inject
-prompt guidance or fine-tune models. Exact decode proves data recovery, not
-unchanged downstream task accuracy; validate folded payloads with your
-representative workload. [Tokenfold Select](#tokenfold-select) is Tokenfold's
-complementary query-aware offering: when structure ends, it ranks what matters
-under a token budget.
+Semantic prompt compressors such as [LLMLingua](https://github.com/microsoft/LLMLingua) use a smaller language model to identify and remove less-important prompt tokens.
+Tokenfold solves a different problem first: repeated keys, values, schemas, rows, and other structural redundancy. Core needs no model, is deterministic, and verifies an exact decode before accepting a lossless transform. Tokenfold does not inject prompt guidance or fine-tune models. Exact decode proves data recovery, not unchanged downstream task accuracy; validate folded payloads with your representative workload.
+
+[Tokenfold Select](#tokenfold-select) is Tokenfold's complementary query-aware offering: when structure ends, it ranks what matters under a token budget.
 
 <br />
 
@@ -585,9 +580,7 @@ tokenfold retrieve cb13cc59cca0c218c579cd1d4b3cbab58d6dea265eb995cc9c00faf0cd0a6
 # {"seq":1,"ts":"2026-08-15T00:01:11Z","subsystem":"index-writer",...}
 ```
 
-> [!WARNING]
-> Recoverable pruning operates only on generic JSON. It does not run on OpenAI
-> or Anthropic message payloads.
+
 
 What the flags mean:
 
@@ -636,22 +629,6 @@ original = retrieve(
 )  # any dropped row, verbatim
 ```
 
-```ts
-import { readFile } from "node:fs/promises";
-import { compress, retrieve } from "tokenfold";
-
-const store = ".tokenfold-readme-store";
-const feed = await readFile("examples/incident_feed.json");
-const { text } = await compress(feed, {
-  format: "json",
-  pruning: { keepRatio: 0.35, retrievalStore: store, retrievalNamespace: "readme-demo" },
-});
-const marker = JSON.parse(text).events.find((e) => "$tf_ref" in e)["$tf_ref"];
-const original = await retrieve(marker, {
-  retrievalStore: store,
-  namespace: "readme-demo",
-}); // any dropped row, verbatim
-```
 
 <details>
 <summary><strong>Current Phase 1 constraints</strong></summary>
@@ -759,14 +736,18 @@ cd packages/tokenfold && npm ci && npm test
 Start with one representative payload, inspect the receipt, and see how many
 tokens your application can stop sending today.
 
-</div>
+<br />
 
-<div align="center">
+If Tokenfold earns a place in your stack, a star on
+[GitHub](https://github.com/snchimata/tokenfold) helps the next team find it.
 
 <br />
 
-[Configuration](docs/configuration.md) | [Changelog](CHANGELOG.md) |
-[Contributing](CONTRIBUTING.md) | [Security](SECURITY.md)
+<a href="https://github.com/snchimata/tokenfold"><img src="https://img.shields.io/github/stars/snchimata/tokenfold?style=social" alt="Star Tokenfold on GitHub" /></a>
+
+
+
+<img src="docs/assets/tokenfold-logo.png" alt="Tokenfold logo" width="120" />
 
 </div>
 
