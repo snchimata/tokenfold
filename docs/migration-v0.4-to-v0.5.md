@@ -4,7 +4,7 @@ v0.5.0 is a breaking interface release: compression *modes* became `Preset`
 values, the opt-in lossy flag family became one recoverable pruning policy, and
 public redaction lost its bypass. This matrix maps each v0.4 surface to its
 v0.5 replacement so an upgrade does not silently change behavior. Full detail
-for every surface is in the v0.5.0 entry of [CHANGELOG.md](CHANGELOG.md).
+for every surface is in the v0.5.0 entry of [CHANGELOG.md](../CHANGELOG.md).
 
 ## CLI
 

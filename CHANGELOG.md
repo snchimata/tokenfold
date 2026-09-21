@@ -12,9 +12,7 @@
   (`--prune`/`--keep-ratio`/`--preserve`, and `--retrieval-namespace`), add the
   harness contract tests and a strict `audit_quality_sample.py --check`
   (reviewer metadata must parse, the reviewed commit must resolve in the
-  repository, sampled fixtures must match, no pending items) to pull-request CI. The full baseline `--gate` remains red on the v0.5
-  corpus until the v0.4-era fixtures are revalidated against current lossless
-  output — tracked as the follow-up evaluation-evidence repair.
+  repository, sampled fixtures must match, no pending items) to pull-request CI. The full baseline `--gate` is enforced by the required `eval-harness` CI job and passes on the v0.5 corpus.
 
 ## [0.5.0] - 2026-09-02
 
