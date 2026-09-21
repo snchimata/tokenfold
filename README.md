@@ -133,7 +133,7 @@ flowchart LR
 
 #### How Tokenfold decides what to fold
 
-![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/b1ea4a545c174578adb3eaf7c39ab0b6fb1523f3/docs/assets/tokenfold-decision-flow.svg)
+![Flowchart: incoming JSON is folded when tabular, optionally pruned when heterogeneous, verified by exact round-trip, and emitted only when smaller; otherwise compact JSON is kept.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-decision-flow.svg)
 
 <details>
 <summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
