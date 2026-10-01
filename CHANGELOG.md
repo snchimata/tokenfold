@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Add the paired raw-vs-candidate evaluation runner (`eval/run_paired.py`,
+  fixtures in `eval/tasks/paired/`, contract tests in
+  `eval/test_paired_runner.py`, wired into the `eval-harness` CI job). It
+  defines a versioned paired-run record (task and environment-snapshot digest,
+  arm, model and policy revision, seed/attempt, outcome, evidence references,
+  and the optional per-attempt usage measurement), a fail-closed reader, and
+  the predeclared aggregation: all four paired outcomes, the conditional
+  contrastive regression rate, the absolute success delta, and a
+  task-clustered confidence interval. Unavailable is reported as unavailable —
+  with no raw successes the CFR has no denominator, so it is `null` and cannot
+  clear a ceiling rather than being recorded as `0.0`. An arm without its
+  partner, a duplicated arm and an invalid environment run are each reported
+  instead of being dropped or counted as a model failure. Offline execution
+  drives the real CLI from a resettable per-arm sandbox whose two start digests
+  are asserted equal, and resolves `$tf_ref` retrieval before scoring so a
+  recoverable drop is not read as data loss. Scoring is a deterministic dummy
+  model: this certifies the record contract and the arithmetic, not downstream
+  task quality, and no live or paid run was performed.
 - Add a concise v0.4 → v0.5 migration matrix
   (`docs/migration-v0.4-to-v0.5.md`) covering Rust, CLI, Python, TypeScript,
   receipts, redaction, and exit codes.

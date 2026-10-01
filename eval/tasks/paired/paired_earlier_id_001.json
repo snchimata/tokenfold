@@ -1,0 +1,10 @@
+{
+  "id": "paired_earlier_id_001",
+  "family": "earlier_id_reference",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"trace.thread\",\n  \"request_id\": \"rq-9ae04c77\",\n  \"steps\": [\n    {\"step\": 1, \"call_id\": \"call_a1\", \"op\": \"search_orders\", \"result_id\": \"res_5510\"},\n    {\"step\": 2, \"call_id\": \"call_b2\", \"op\": \"get_order\", \"uses_result_id\": \"res_5510\"},\n    {\"step\": 3, \"call_id\": \"call_c3\", \"op\": \"list_items\", \"uses_result_id\": \"res_5510\"},\n    {\"step\": 4, \"call_id\": \"call_d4\", \"op\": \"close_order\", \"uses_result_id\": \"res_5510\"}\n  ],\n  \"final\": {\"result_id\": \"res_5510\", \"status\": \"closed\"}\n}\n",
+  "query": "which result id did the final close_order call operate on?",
+  "gold_answer": "\"result_id\": \"res_5510\"",
+  "critical_atoms": ["call_a1", "res_5510", "call_d4"],
+  "notes": "Later use of an earlier id: the identifier is introduced at step 1 and referenced by every later step, so compressing the earliest step alone can orphan four later references while leaving a payload that still looks complete."
+}
