@@ -131,9 +131,13 @@ fn main() {
             std::process::exit(6);
         }
     };
+    // Report the address actually bound, not the one requested: with `--bind 127.0.0.1:0` the
+    // kernel assigns the port, and this line is how a caller learns it. Printing the requested
+    // string instead would report port 0 and hide which socket is really serving.
     eprintln!(
         "tokenfold-proxy listening on {} -> {}",
-        cli.bind, config.upstream
+        http_server.server_addr(),
+        config.upstream
     );
     let stopping = Arc::new(AtomicBool::new(false));
     let signal = Arc::clone(&stopping);

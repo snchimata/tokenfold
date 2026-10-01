@@ -37,6 +37,14 @@
   `usage_disposition: "malformed"` with `provider_usage: null` and suppressed the
   counts the final object carries. A body where no line parses as an object is
   still `malformed`, so a broken document never reads as a clean `absent`.
+- Fix two proxy behaviors that made refusals and rejections unreliable to observe:
+  a request refused for conflicting framing (and a body refused as oversized) is now
+  drained before the response is written. Closing a socket that still holds unread
+  request bytes resets the connection and discards the response the proxy had
+  already written, so a client saw a transport fault instead of the `400`/`413` —
+  it could not distinguish a refusal from a network error. The proxy's startup
+  line now reports the address it actually bound rather than the one requested,
+  so `--bind 127.0.0.1:0` reports the kernel-assigned port instead of `0`.
 
 ## [0.5.0] - 2026-09-02
 

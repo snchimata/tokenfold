@@ -128,6 +128,11 @@ fn handle(config: &ProxyConfig, mut request: Request) -> u16 {
     let headers = request.headers().to_vec();
 
     if let Err(message) = check_framing(&headers) {
+        // Drain before responding. A request we reject unread leaves data in the socket's
+        // receive buffer, and closing on top of that makes the peer reset the connection
+        // instead of reading the 400 we just wrote — the rejection silently becomes a reset.
+        // Bounded, and never allowed to delay the refusal by more than the body limit.
+        discard_body(&mut request, config.max_body_bytes);
         let (status, resp) = error_response(400, &message);
         let _ = request.respond(resp);
         return status;
@@ -141,22 +146,26 @@ fn handle(config: &ProxyConfig, mut request: Request) -> u16 {
         (Method::Get, "/health") => {
             json_response(200, &json!({"status": "ok", "upstream": config.upstream}))
         }
-        (Method::Post, "/v1/compress") => match read_body(&mut request, config.max_body_bytes) {
-            Ok(body) => handle_compress(config, &headers, &body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
-        },
-        (Method::Post, "/v1/retrieve") => match read_body(&mut request, config.max_body_bytes) {
-            Ok(body) => handle_retrieve_post(config, &headers, &body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
-        },
+        (Method::Post, "/v1/compress") => {
+            match read_body_or_refuse(&mut request, config.max_body_bytes) {
+                Ok(body) => handle_compress(config, &headers, &body),
+                Err(refusal) => refusal,
+            }
+        }
+        (Method::Post, "/v1/retrieve") => {
+            match read_body_or_refuse(&mut request, config.max_body_bytes) {
+                Ok(body) => handle_retrieve_post(config, &headers, &body),
+                Err(refusal) => refusal,
+            }
+        }
         (Method::Get, "/v1/retrieve/stats") => handle_retrieve_stats(),
         (Method::Get, p) if p.starts_with("/v1/retrieve/") => {
             handle_retrieve_get(config, &headers, p)
         }
         (Method::Get, "/stats") => handle_stats(&url),
-        _ => match read_body(&mut request, config.max_body_bytes) {
+        _ => match read_body_or_refuse(&mut request, config.max_body_bytes) {
             Ok(body) => handle_passthrough(config, method, &url, &headers, body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
+            Err(refusal) => refusal,
         },
     };
     let _ = request.respond(resp);
@@ -197,6 +206,38 @@ fn check_framing(headers: &[Header]) -> Result<(), String> {
         return Err("conflicting Content-Length and Transfer-Encoding headers".to_string());
     }
     Ok(())
+}
+
+/// Reads and throws away a rejected request's body, bounded by `max_bytes`. Best-effort: a peer
+/// that sent fewer bytes than it declared simply ends the read early, and a socket error is not
+/// worth reporting — the request is already being refused either way.
+fn discard_body(request: &mut Request, max_bytes: usize) {
+    let _ = std::io::copy(
+        &mut request.as_reader().take(max_bytes as u64),
+        &mut std::io::sink(),
+    );
+}
+
+/// [`read_body`], but a refusal is also delivered instead of a connection reset.
+///
+/// An oversized body is only partly read before the 413, so the socket still holds unread bytes
+/// when the connection closes; that turns the 413 into a reset on the client, which cannot tell a
+/// refusal from a network fault. Draining what is left lets the refusal actually arrive. Bounded
+/// by the same limit, so an over-large body cannot cost unbounded work.
+fn read_body_or_refuse(
+    request: &mut Request,
+    max_bytes: usize,
+) -> Result<Vec<u8>, (u16, Response<BodyReader>)> {
+    match read_body(request, max_bytes) {
+        Ok(body) => Ok(body),
+        Err(status) => {
+            discard_body(request, max_bytes);
+            Err(error_response(
+                status,
+                "request body exceeds max_body_bytes",
+            ))
+        }
+    }
 }
 
 fn read_body(request: &mut Request, max_bytes: usize) -> Result<Vec<u8>, u16> {

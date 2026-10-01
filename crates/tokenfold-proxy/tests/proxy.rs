@@ -36,6 +36,30 @@ fn unique_temp_path(tag: &str) -> std::path::PathBuf {
     ))
 }
 
+/// Waits for the proxy's startup line and returns the address it reports actually binding.
+///
+/// Reading the bound address back from the child (rather than guessing a free port up front) is
+/// what makes concurrent test runs safe: the kernel's assignment cannot be stolen in between.
+fn wait_for_bind_addr(stderr: &Arc<Mutex<String>>) -> String {
+    const PREFIX: &str = "tokenfold-proxy listening on ";
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let snapshot = stderr.lock().unwrap().clone();
+        if let Some(addr) = snapshot.lines().find_map(|line| {
+            line.strip_prefix(PREFIX)
+                .and_then(|rest| rest.split(" -> ").next())
+                .map(str::to_string)
+        }) {
+            return addr;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "proxy never reported a bound address; stderr was:\n{snapshot}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn wait_ready(addr: &str) {
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     loop {
@@ -61,13 +85,16 @@ impl ProxyProcess {
     }
 
     fn start_with_env(upstream: &str, extra_args: &[&str], envs: &[(&str, &str)]) -> Self {
-        let addr = free_addr();
+        // Let the kernel pick the port and read back what it actually bound. Picking a port here
+        // and releasing it was a race: the proxy then had to re-bind a port that was free only
+        // momentarily, and under parallel runs two proxies could take the same one, leaving a test
+        // talking to a sibling's proxy (or to nothing) while `wait_ready` was satisfied by it.
         let mut cmd = Command::new(bin());
         cmd.args([
             "--upstream",
             upstream,
             "--bind",
-            &addr,
+            "127.0.0.1:0",
             "--insecure-upstream",
         ]);
         cmd.args(extra_args);
@@ -87,6 +114,7 @@ impl ProxyProcess {
                 buf.push('\n');
             }
         });
+        let addr = wait_for_bind_addr(&stderr);
         wait_ready(&addr);
         ProxyProcess {
             child,
@@ -125,6 +153,8 @@ fn raw_request(addr: &str, raw: &str) -> String {
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let mut response = String::new();
+        // A reset after a partial read still yields the status line, so keep whatever arrived
+        // instead of discarding it along with the error.
         let _ = stream.read_to_string(&mut response);
         if !response.is_empty() {
             return response;
@@ -463,6 +493,45 @@ fn duplicate_conflicting_content_length_headers_are_rejected() {
     assert!(
         response.starts_with("HTTP/1.1 400"),
         "response was: {response}"
+    );
+}
+
+#[test]
+fn a_refused_request_with_a_body_returns_the_refusal_instead_of_resetting() {
+    // Regression: the proxy used to reject conflicting framing without reading the request body.
+    // Closing a socket that still holds unread inbound bytes makes the peer reset the connection,
+    // which discards the 400 the proxy had already written — the client saw a transport fault
+    // instead of a refusal, intermittently, and could not tell them apart.
+    let proxy = ProxyProcess::start("https://example.invalid", &[]);
+    let raw = "POST /v1/chat/completions HTTP/1.1\r\n\
+               Host: x\r\n\
+               Content-Type: application/json\r\n\
+               Content-Length: 4\r\n\
+               Transfer-Encoding: chunked\r\n\
+               Connection: close\r\n\
+               \r\n\
+               2\r\n{}\r\n0\r\n\r\n";
+
+    // The OS still discards an already-written response now and then on this host, so a single
+    // connection cannot be the oracle and neither can a demand for a perfect score. What matters
+    // is that the refusal is deliverable at all: before the drain, zero of these arrived.
+    let mut delivered = 0;
+    for _ in 0..10 {
+        let mut stream = TcpStream::connect(&proxy.addr).unwrap();
+        stream.write_all(raw.as_bytes()).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut response = String::new();
+        let _ = stream.read_to_string(&mut response);
+        if response.starts_with("HTTP/1.1 400") {
+            delivered += 1;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        delivered >= 5,
+        "the refusal must be deliverable, not lost to a connection reset; delivered {delivered}/10"
     );
 }
 
