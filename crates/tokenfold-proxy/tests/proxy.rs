@@ -10,6 +10,9 @@ use std::thread;
 use std::time::Duration;
 
 use tiny_http::{Header, Response, StatusCode};
+use tokenfold_core::measurement::{
+    CompletionState, MeasurementEvent, ModelResolution, UsageDisposition, opaque_id,
+};
 
 fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_tokenfold-proxy")
@@ -673,4 +676,198 @@ fn retrieve_stats_route_returns_retrieval_counters_without_raw_originals() {
     assert!(value["retrieval"].get("markers").is_some());
 
     std::fs::remove_file(&ledger_path).ok();
+}
+
+// ---- measurement events: exactly one terminal event per provider attempt ----
+
+/// Polls the proxy's stderr until `expected` measurement events have arrived. Any stderr line
+/// that claims to be an event must parse, so a schema drift fails loudly here.
+fn wait_for_events(proxy: &ProxyProcess, expected: usize) -> Vec<MeasurementEvent> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let events = proxy
+            .stderr_snapshot()
+            .lines()
+            .filter_map(tokenfold_core::measurement::parse_event_line)
+            .collect::<Result<Vec<MeasurementEvent>, _>>()
+            .expect("every emitted measurement line must parse");
+        if events.len() >= expected || std::time::Instant::now() > deadline {
+            return events;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn body_text(mut response: ureq::http::Response<ureq::Body>) -> String {
+    let mut text = String::new();
+    response
+        .body_mut()
+        .as_reader()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+/// Serves one request with a complete JSON body (explicit Content-Length, so the proxy buffers it
+/// instead of streaming it).
+fn spawn_json_upstream(body: &'static str, content_type: &'static str) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let addr = server.server_addr().to_string();
+    thread::spawn(move || {
+        if let Ok(request) = server.recv() {
+            let headers = vec![Header::from_bytes("Content-Type", content_type).unwrap()];
+            let _ = request.respond(Response::new(
+                StatusCode(200),
+                headers,
+                std::io::Cursor::new(body.as_bytes().to_vec()),
+                Some(body.len()),
+                None,
+            ));
+        }
+    });
+    addr
+}
+
+fn chat_request(model: &str, stream: bool) -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({
+        "model": model,
+        "messages": [{"role": "user", "content": "hello there"}],
+        "stream": stream
+    }))
+    .unwrap()
+}
+
+#[test]
+fn streamed_sse_usage_emits_exactly_one_measurement_event() {
+    let upstream_addr = spawn_sse_upstream(vec![
+        "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
+        "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\n",
+        "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\n",
+        "data: [DONE]\n\n",
+    ]);
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &[]);
+    let response = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .header("X-TokenFold-Session-Id", "sess-abc")
+        .send(&chat_request("gpt-4o-mini", true))
+        .unwrap();
+    let text = body_text(response);
+    assert!(
+        text.contains("data: [DONE]"),
+        "stream must be forwarded verbatim"
+    );
+
+    let events = wait_for_events(&proxy, 1);
+    assert_eq!(
+        events.len(),
+        1,
+        "one terminal event per attempt, got {events:?}"
+    );
+    let event = &events[0];
+    assert_eq!(event.completion, CompletionState::Completed);
+    assert_eq!(event.usage_disposition, UsageDisposition::Reported);
+    // The repeated cumulative snapshot is merged, never summed.
+    assert_eq!(event.provider_usage.unwrap().total(), Some(15));
+    assert_eq!(event.attempt, 1);
+    assert_eq!(
+        event.model,
+        Some(ModelResolution::Known {
+            model: "gpt-4o-mini".to_string(),
+            tokenizer: "o200k_base".to_string()
+        })
+    );
+    // Local counts come from the compression report, and the delta is the provider's prompt count
+    // minus the local input-side count (never its completion tokens).
+    let local_after = event
+        .local_after_tokens
+        .expect("compression report carries local counts");
+    assert_eq!(event.provider_delta_tokens, Some(10 - local_after as i64));
+    assert!(event.estimator.is_some());
+    assert!(
+        event
+            .policy_revision
+            .as_deref()
+            .is_none_or(|revision| revision.contains('@')),
+        "a policy revision is an id@version list: {:?}",
+        event.policy_revision
+    );
+    // The session id is recorded, but never in its raw form.
+    assert_eq!(
+        event.session_id.as_deref(),
+        Some(opaque_id("sess-abc").as_str())
+    );
+    assert!(!proxy.stderr_snapshot().contains("sess-abc"));
+}
+
+#[test]
+fn non_streaming_json_usage_is_measured_with_local_counts_and_a_signed_delta() {
+    let upstream_addr = spawn_json_upstream(
+        "{\"id\":\"cmpl-1\",\"choices\":[{\"message\":{\"content\":\"hi\"}}],\
+         \"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3,\"total_tokens\":15}}",
+        "application/json",
+    );
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &[]);
+    let response = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&chat_request("gpt-4.1", false))
+        .unwrap();
+    assert!(body_text(response).contains("cmpl-1"));
+
+    let events = wait_for_events(&proxy, 1);
+    assert_eq!(events.len(), 1);
+    let event = &events[0];
+    assert_eq!(event.usage_disposition, UsageDisposition::Reported);
+    assert_eq!(event.provider_usage.unwrap().prompt_tokens, Some(12));
+    let local_after = event.local_after_tokens.unwrap();
+    assert_eq!(event.provider_delta_tokens, Some(12 - local_after as i64));
+    assert!(event.local_transform_micros.is_some());
+}
+
+#[test]
+fn a_malformed_usage_payload_disables_accounting_without_breaking_the_stream() {
+    let chunks = vec![
+        "data: {\"usage\":{\"total_tokens\":7}}\n\n",
+        "data: {truncated\n\n",
+        "data: [DONE]\n\n",
+    ];
+    let expected = chunks.concat();
+    let upstream_addr = spawn_sse_upstream(chunks);
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &[]);
+    let response = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&chat_request("gpt-4o", true))
+        .unwrap();
+    assert_eq!(body_text(response), expected);
+
+    let events = wait_for_events(&proxy, 1);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].usage_disposition, UsageDisposition::Malformed);
+    assert_eq!(events[0].provider_usage, None);
+    assert_eq!(events[0].completion, CompletionState::Completed);
+}
+
+#[test]
+fn an_upstream_connect_failure_still_emits_one_terminal_event() {
+    let proxy = ProxyProcess::start(&format!("http://{}", free_addr()), &[]);
+    let result = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&chat_request("qwen2.5:7b", false));
+    match result.unwrap_err() {
+        ureq::Error::StatusCode(502) => {}
+        other => panic!("expected 502, got {other:?}"),
+    }
+
+    let events = wait_for_events(&proxy, 1);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].completion, CompletionState::Failed);
+    assert_eq!(events[0].usage_disposition, UsageDisposition::Absent);
+    assert_eq!(events[0].provider_usage, None);
+    // The local stage still ran, so a failed round trip is still accounted for.
+    assert!(events[0].local_after_tokens.is_some());
+    assert_eq!(
+        events[0].model,
+        Some(ModelResolution::Unknown {
+            requested: "qwen2.5:7b".to_string()
+        })
+    );
 }

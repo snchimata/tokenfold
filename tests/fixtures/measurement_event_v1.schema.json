@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenfold.dev/schema/measurement-event-1.0.json",
+  "title": "Tokenfold MeasurementEvent 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_id", "session_id", "attempt", "model", "policy_revision",
+    "estimator", "local_before_tokens", "local_after_tokens", "local_transform_micros",
+    "provider_usage", "usage_disposition", "provider_delta_tokens", "completion"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "request_id": { "type": "string" },
+    "session_id": { "type": ["string", "null"] },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "model": { "$ref": "#/$defs/nullableModelResolution" },
+    "policy_revision": { "type": ["string", "null"] },
+    "estimator": { "$ref": "#/$defs/nullableEstimator" },
+    "local_before_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+    "local_after_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+    "local_transform_micros": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+    "provider_usage": { "$ref": "#/$defs/nullableProviderUsage" },
+    "usage_disposition": { "enum": ["reported", "absent", "malformed", "oversized"] },
+    "provider_delta_tokens": { "type": ["integer", "null"] },
+    "completion": { "enum": ["completed", "timed_out", "cancelled", "failed"] }
+  },
+  "$defs": {
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "nullableNonNegativeInteger": { "type": ["integer", "null"], "minimum": 0 },
+    "nullableModelResolution": {
+      "type": ["object", "null"],
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["known"],
+          "properties": {
+            "known": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "tokenizer"],
+              "properties": {
+                "model": { "type": "string" },
+                "tokenizer": { "type": "string" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unknown"],
+          "properties": {
+            "unknown": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["requested"],
+              "properties": { "requested": { "type": "string" } }
+            }
+          }
+        }
+      ]
+    },
+    "nullableEstimator": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["backend", "model", "is_exact"],
+      "properties": {
+        "backend": { "type": "string" },
+        "model": { "type": ["string", "null"] },
+        "is_exact": { "type": "boolean" }
+      }
+    },
+    "nullableProviderUsage": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["prompt_tokens", "completion_tokens", "total_tokens"],
+      "properties": {
+        "prompt_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "completion_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "total_tokens": { "$ref": "#/$defs/nullableNonNegativeInteger" }
+      }
+    }
+  }
+}

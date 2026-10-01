@@ -13,6 +13,23 @@
   harness contract tests and a strict `audit_quality_sample.py --check`
   (reviewer metadata must parse, the reviewed commit must resolve in the
   repository, sampled fixtures must match, no pending items) to pull-request CI. The full baseline `--gate` is enforced by the required `eval-harness` CI job and passes on the v0.5 corpus.
+- Tighten `tokenfold-adapters` `verify_shape_parity` for OpenAI-shaped payloads: the per-message
+  `tool_calls`, `function_call`, `tool_call_id`, and `name` fields must now match the original
+  exactly, including added or removed fields. Previously a call's `id`, `function.name`,
+  `function.arguments`, or a result's `tool_call_id` could be rewritten without failing
+  verification. `compress_for` and the default compression behavior are unchanged.
+- Add a versioned per-attempt measurement event to the proxy's stderr
+  (`tokenfold.measurement {...}`, schema 1.0 from `tokenfold_core::measurement`,
+  with a canonical fixture in `tests/fixtures/measurement_event_v1.json`): one
+  terminal event per forwarded attempt, carrying local before/after counts with
+  estimator provenance, the provider's reported `usage` (streamed SSE or
+  buffered JSON, merged snapshot by snapshot so a repeated cumulative snapshot
+  is never double-counted), a signed local-versus-provider delta, the requested
+  model's tokenizer resolution, the applied policy revision, and the attempt's
+  completion state. Unavailable numbers serialize as `null`, never `0`; a
+  malformed or oversized usage payload disables accounting for that attempt
+  without changing what is forwarded. `X-TokenFold-Session-Id` is hashed before
+  it is recorded. Receipt and statistics schemas are unchanged.
 
 ## [0.5.0] - 2026-09-02
 

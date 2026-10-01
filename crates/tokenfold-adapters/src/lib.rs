@@ -72,8 +72,10 @@ pub fn compress_for(
 /// - for each index, the `role` field must exist and be byte-identical between `original` and
 ///   `compressed` (a message's `content` may shrink, but its `role` must never change or be
 ///   dropped);
-/// - if a message in `original` has a `tool_calls` or `function_call` key, the same key must
-///   still exist (and be non-null) in the corresponding `compressed` message.
+/// - the per-message fields `tool_calls`, `function_call`, `tool_call_id` and `name` must match
+///   exactly, including presence (`None` vs `Some`). A tool call's `id`,
+///   `function.name`/`function.arguments` and a tool result's `tool_call_id` are what link calls to
+///   results, so rewriting or dropping any of them corrupts the request.
 ///
 /// For `AnthropicMessages`:
 /// - both must have a `messages` array of the same length with a matching `role` per index;
@@ -148,30 +150,26 @@ fn verify_openai_shape(
     verify_role_parity(orig_messages, comp_messages)?;
 
     for (i, (orig_msg, comp_msg)) in orig_messages.iter().zip(comp_messages.iter()).enumerate() {
-        for key in ["tool_calls", "function_call"] {
-            let Some(orig_val) = orig_msg.get(key) else {
-                continue;
-            };
-            if orig_val.is_null() {
-                continue;
-            }
-            match comp_msg.get(key) {
-                Some(comp_val) if !comp_val.is_null() => {}
-                Some(_) => {
-                    return Err(format!(
-                        "message index {i}: `{key}` became null in compressed output"
-                    ));
-                }
-                None => {
-                    return Err(format!(
-                        "message index {i}: `{key}` was dropped in compressed output"
-                    ));
-                }
+        for key in ["tool_calls", "function_call", "tool_call_id", "name"] {
+            if orig_msg.get(key) != comp_msg.get(key) {
+                return Err(format!(
+                    "message index {i}: immutable field `{key}` changed from {} to {}",
+                    described_field(orig_msg, key),
+                    described_field(comp_msg, key)
+                ));
             }
         }
     }
 
     Ok(())
+}
+
+/// Renders `msg[key]` for a mismatch message, distinguishing an absent key from a JSON `null`.
+fn described_field(msg: &serde_json::Value, key: &str) -> String {
+    match msg.get(key) {
+        Some(value) => value.to_string(),
+        None => "(absent)".to_string(),
+    }
 }
 
 fn verify_anthropic_shape(
@@ -341,6 +339,54 @@ mod tests {
         let output = compress_for(AdapterFormat::VercelAiSdk, &payload, &policy).unwrap();
         let result = verify_shape_parity(AdapterFormat::VercelAiSdk, &payload, &output.bytes);
         assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn observation_contract_rejects_changed_tool_call_fields() {
+        let original = openai_fixture();
+        let original_bytes = serde_json::to_vec(&original).unwrap();
+        for (pointer, replacement) in [
+            ("/messages/1/tool_calls/0/id", json!("call_other")),
+            (
+                "/messages/1/tool_calls/0/function/name",
+                json!("other_tool"),
+            ),
+            (
+                "/messages/1/tool_calls/0/function/arguments",
+                json!("{\"location\": \"Rome\"}"),
+            ),
+        ] {
+            let mut changed = original.clone();
+            *changed
+                .pointer_mut(pointer)
+                .unwrap_or_else(|| panic!("fixture is missing {pointer}")) = replacement;
+            let changed_bytes = serde_json::to_vec(&changed).unwrap();
+            assert!(
+                verify_shape_parity(AdapterFormat::OpenAiChat, &original_bytes, &changed_bytes)
+                    .is_err(),
+                "{pointer} can be rewritten without failing shape verification"
+            );
+        }
+    }
+
+    #[test]
+    fn observation_contract_rejects_changed_result_identity() {
+        let mut original = openai_fixture();
+        original["messages"].as_array_mut().unwrap().push(json!({
+            "role": "tool",
+            "tool_call_id": "call_abc123",
+            "content": "{\"temperature\": 18}"
+        }));
+        let original_bytes = serde_json::to_vec(&original).unwrap();
+
+        let mut changed = original.clone();
+        changed["messages"][2]["tool_call_id"] = json!("call_other");
+        let changed_bytes = serde_json::to_vec(&changed).unwrap();
+
+        assert!(
+            verify_shape_parity(AdapterFormat::OpenAiChat, &original_bytes, &changed_bytes)
+                .is_err()
+        );
     }
 
     #[test]

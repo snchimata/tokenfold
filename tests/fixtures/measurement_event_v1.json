@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "request_id": "tc-9a1f0c2b",
+  "session_id": "3f2a91c0d4e57b68",
+  "attempt": 1,
+  "model": {
+    "known": {
+      "model": "gpt-4o-mini",
+      "tokenizer": "o200k_base"
+    }
+  },
+  "policy_revision": "json_minify@1.0.0",
+  "estimator": {
+    "backend": "tiktoken",
+    "model": "o200k_base",
+    "is_exact": true
+  },
+  "local_before_tokens": 203,
+  "local_after_tokens": 147,
+  "local_transform_micros": 1830,
+  "provider_usage": {
+    "prompt_tokens": 118,
+    "completion_tokens": 41,
+    "total_tokens": 159
+  },
+  "usage_disposition": "reported",
+  "provider_delta_tokens": -29,
+  "completion": "completed"
+}

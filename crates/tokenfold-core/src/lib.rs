@@ -3,6 +3,7 @@ pub mod codec;
 pub mod errors;
 pub mod filters;
 pub mod input;
+pub mod measurement;
 pub mod modes;
 pub mod pipeline;
 pub mod report;

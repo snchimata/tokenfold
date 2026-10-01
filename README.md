@@ -212,6 +212,17 @@ binaries are published for the CLI only; the proxy has no prebuilt binary.
 SSE responses stream through unbuffered with a whole-exchange
 `--upstream-timeout-secs` deadline.
 
+Every forwarded request also emits exactly one measurement event on stderr, as
+a single JSON line (`tokenfold.measurement {...}`, schema 1.0 from
+`tokenfold_core::measurement`): the request id, a hashed
+`X-TokenFold-Session-Id` when the client sends one, the requested model's
+tokenizer resolution, the local before/after counts with their estimator, the
+provider's own `usage` when it reports any (streamed SSE or buffered JSON,
+merged snapshot by snapshot), a signed local-versus-provider delta, and how the
+attempt ended. A provider that reports no usage, or a body whose usage cannot
+be read cleanly, records `usage_disposition: absent|malformed|oversized` with a
+`null` count rather than a zero — and never changes what is forwarded.
+
 ```python
 from openai import OpenAI
 

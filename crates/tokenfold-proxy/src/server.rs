@@ -22,6 +22,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 use tokenfold_core::budget::CompressionPolicyBuilder;
+use tokenfold_core::measurement::{
+    CompletionState, EventSink, MeasurementEvent, MeasurementReader, MeasurementSpec,
+    UsageDisposition, format_event_line, opaque_id, resolve_model,
+};
 use tokenfold_core::report::{CompressionReport, TransformStatus};
 use tokenfold_core::retrieval_store::{
     RetrievalOutcome, RetrievalStore, parse_retrieval_reference,
@@ -227,7 +231,7 @@ fn handle_compress(
         Ok((response_value, report)) => {
             let (status, mut resp) = json_response(200, &response_value);
             let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
-            for header in report_headers(&report, request_id) {
+            for header in report_headers(&report, &request_id) {
                 resp.add_header(header);
             }
             (status, resp)
@@ -368,18 +372,34 @@ fn detect_format(bytes: &[u8]) -> InputFormat {
     }
 }
 
-fn detect_passthrough_format(bytes: &[u8]) -> Option<InputFormat> {
-    let value: Value = serde_json::from_slice(bytes).ok()?;
-    let obj = value.as_object()?;
-    let messages = obj.get("messages")?.as_array()?;
-    if messages.is_empty() {
-        return None;
-    }
-    Some(if obj.contains_key("system") {
-        InputFormat::AnthropicJson
-    } else {
-        InputFormat::OpenAiJson
-    })
+/// What a forwarded request body tells us before it is sent: the format the local transforms may
+/// apply (`None` for a body this proxy must not touch), and the requested model name for the
+/// measurement event. One parse for both, since the body is read once.
+struct RequestShape {
+    format: Option<InputFormat>,
+    model: Option<String>,
+}
+
+fn request_shape(bytes: &[u8]) -> RequestShape {
+    let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
+        return RequestShape {
+            format: None,
+            model: None,
+        };
+    };
+    let model = value.get("model").and_then(Value::as_str).map(str::to_string);
+    let format = value.as_object().and_then(|obj| {
+        let messages = obj.get("messages")?.as_array()?;
+        if messages.is_empty() {
+            return None;
+        }
+        Some(if obj.contains_key("system") {
+            InputFormat::AnthropicJson
+        } else {
+            InputFormat::OpenAiJson
+        })
+    });
+    RequestShape { format, model }
 }
 
 // ---- provider passthrough ----
@@ -397,11 +417,13 @@ fn handle_passthrough(
         header_value(headers, "x-tokenfold-bypass").is_some_and(|v| v.eq_ignore_ascii_case("true"));
 
     let mut forward_body = body;
+    let shape = request_shape(&forward_body);
     let mut report: Option<CompressionReport> = None;
+    let mut transform_micros: Option<u64> = None;
     if config.compress
         && !bypassed
         && content_type.to_ascii_lowercase().contains("json")
-        && let Some(format) = detect_passthrough_format(&forward_body)
+        && let Some(format) = shape.format
     {
         let mut builder = CompressionPolicy::builder().preset(config.preset);
         if let Some(target) = config.target_tokens {
@@ -413,7 +435,11 @@ fn handle_passthrough(
                 format,
                 bytes: forward_body.clone(),
             };
+            let started = Instant::now();
             if let Ok(output) = tokenfold_core::compress(input, &policy) {
+                // Measured around the local stage only; the upstream call is timed by whichever
+                // deadline produced the completion state.
+                transform_micros = Some(started.elapsed().as_micros() as u64);
                 forward_body = output.bytes;
                 report = Some(output.report);
             }
@@ -421,6 +447,13 @@ fn handle_passthrough(
     }
 
     let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
+    let spec = measurement_spec(
+        &request_id,
+        headers,
+        shape.model.as_deref(),
+        report.as_ref(),
+        transform_micros,
+    );
     match send_upstream(
         &config.upstream_agent,
         &target,
@@ -428,16 +461,58 @@ fn handle_passthrough(
         headers,
         &forward_body,
     ) {
-        Ok(response) => build_upstream_response(response, report.as_ref(), request_id),
+        Ok(response) => build_upstream_response(response, report.as_ref(), &request_id, spec),
         Err(e) => {
             eprintln!("upstream request error: {e}");
+            // An attempt that never reached the provider still gets its terminal event, so the
+            // request is visible in accounting instead of silently missing.
             if matches!(e, ureq::Error::Timeout(_)) {
+                log_event(&spec.finish(CompletionState::TimedOut, None, UsageDisposition::Absent));
                 error_response(504, "upstream deadline exceeded")
             } else {
+                log_event(&spec.finish(CompletionState::Failed, None, UsageDisposition::Absent));
                 error_response(502, "upstream request failed")
             }
         }
     }
+}
+
+/// Builds the per-attempt measurement for a forwarded request. `local_transform_micros` times the
+/// local compression stage, and the applied transform versions are the policy identity this
+/// attempt actually ran under — both absent when no local transform ran.
+fn measurement_spec(
+    request_id: &str,
+    headers: &[Header],
+    model: Option<&str>,
+    report: Option<&CompressionReport>,
+    transform_micros: Option<u64>,
+) -> MeasurementSpec {
+    let mut spec = MeasurementSpec::new(request_id);
+    // The session id is caller-supplied and hashed before it is recorded; the raw value never
+    // reaches a log line, and `x-tokenfold-*` headers are never forwarded upstream.
+    spec.session_id = header_value(headers, "x-tokenfold-session-id").map(opaque_id);
+    spec.model = model.map(resolve_model);
+    spec.policy_revision = report
+        .map(applied_versions)
+        .filter(|versions| !versions.is_empty())
+        .map(|versions| versions.join(","));
+    spec.estimator = report.map(|report| report.estimator.clone());
+    spec.local_before_tokens = report.map(|report| report.original_tokens);
+    spec.local_after_tokens = report.map(|report| report.compressed_tokens);
+    spec.local_transform_micros = transform_micros;
+    spec
+}
+
+/// Writes the one terminal event per attempt as a single JSON line on stderr, beside the access
+/// log. Counters, IDs and revisions only: never payload text, headers, or credentials.
+fn log_event(event: &MeasurementEvent) {
+    if let Ok(line) = format_event_line(event) {
+        eprintln!("{line}");
+    }
+}
+
+fn measurement_sink() -> EventSink {
+    Box::new(|event| log_event(&event))
 }
 
 fn should_forward_header(name: &str) -> bool {
@@ -491,7 +566,8 @@ fn with_headers<B>(
 fn build_upstream_response(
     response: ureq::http::Response<ureq::Body>,
     report: Option<&CompressionReport>,
-    request_id: String,
+    request_id: &str,
+    spec: MeasurementSpec,
 ) -> (u16, Response<BodyReader>) {
     let status = response.status().as_u16();
     let is_success = (200..300).contains(&status);
@@ -521,15 +597,18 @@ fn build_upstream_response(
     }
 
     let body = response.into_body();
+    // Every byte below is forwarded exactly as received: the measuring reader observes the stream
+    // in passing and emits one terminal event when it ends, errors, or is abandoned.
+    let mut measured: BodyReader =
+        Box::new(MeasurementReader::new(body.into_reader(), spec, measurement_sink()));
     if is_streaming {
-        let reader: BodyReader = Box::new(body.into_reader());
         (
             status,
-            Response::new(StatusCode(status), out_headers, reader, None, None),
+            Response::new(StatusCode(status), out_headers, measured, None, None),
         )
     } else {
         let mut buf = Vec::new();
-        if let Err(error) = body.into_reader().read_to_end(&mut buf) {
+        if let Err(error) = measured.read_to_end(&mut buf) {
             let status = if error.kind() == std::io::ErrorKind::TimedOut {
                 504
             } else {
@@ -789,19 +868,26 @@ fn request_id_for(client_supplied: Option<&str>) -> String {
         .unwrap_or_else(generate_request_id)
 }
 
-fn report_headers(report: &CompressionReport, request_id: String) -> Vec<Header> {
+/// `id@version` for each transform that actually ran, in report order. Doubles as the attempt's
+/// policy revision in the measurement event and as the `X-TokenFold-Applied-Versions` header, so
+/// the two can never drift apart.
+fn applied_versions(report: &CompressionReport) -> Vec<String> {
+    report
+        .transforms
+        .iter()
+        .filter(|t| t.status == TransformStatus::Applied)
+        .map(|t| format!("{}@{}", t.id, t.version))
+        .collect()
+}
+
+fn report_headers(report: &CompressionReport, request_id: &str) -> Vec<Header> {
     let applied: Vec<&str> = report
         .transforms
         .iter()
         .filter(|t| t.status == TransformStatus::Applied)
         .map(|t| t.id.as_str())
         .collect();
-    let applied_versions: Vec<String> = report
-        .transforms
-        .iter()
-        .filter(|t| t.status == TransformStatus::Applied)
-        .map(|t| format!("{}@{}", t.id, t.version))
-        .collect();
+    let applied_versions = applied_versions(report);
     let estimator = match &report.estimator.model {
         Some(model) => format!("{}:{model}", report.estimator.backend),
         None => report.estimator.backend.clone(),
@@ -827,7 +913,7 @@ fn report_headers(report: &CompressionReport, request_id: String) -> Vec<Header>
         ("X-TokenFold-Estimator", estimator),
         ("X-TokenFold-Applied", applied.join(",")),
         ("X-TokenFold-Applied-Versions", applied_versions.join(",")),
-        ("X-TokenFold-Request-Id", request_id),
+        ("X-TokenFold-Request-Id", request_id.to_string()),
         ("X-TokenFold-Preset", report.preset.clone()),
         ("X-TokenFold-Format", report.format.clone()),
     ]
