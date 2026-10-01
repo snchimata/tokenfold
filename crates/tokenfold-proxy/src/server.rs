@@ -21,6 +21,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
+use tokenfold_adapters::ObservationPolicy;
+use tokenfold_adapters::observation::{compress_observations, format_for_route};
 use tokenfold_core::budget::CompressionPolicyBuilder;
 use tokenfold_core::measurement::{
     CompletionState, EventSink, MeasurementEvent, MeasurementReader, MeasurementSpec,
@@ -49,6 +51,8 @@ pub struct ProxyConfig {
     pub retrieval_backend: String,
     /// Retrieval-store filesystem root override; `None` means `retrieval_store::default_store_path()`.
     pub retrieval_store_path: Option<PathBuf>,
+    /// Lossless tool-result observation compression. Disabled unless the operator opts in.
+    pub observations: ObservationPolicy,
 }
 
 pub fn run(config: &ProxyConfig, server: &tiny_http::Server, stopping: &AtomicBool) {
@@ -459,36 +463,76 @@ fn handle_passthrough(
     let content_type = header_value(headers, "content-type").unwrap_or("");
     let bypassed =
         header_value(headers, "x-tokenfold-bypass").is_some_and(|v| v.eq_ignore_ascii_case("true"));
+    // The route the client actually asked for, with any query string removed. Adapter selection is
+    // made from this and nothing else: sniffing the body to guess a provider shape means rewriting
+    // a request layout nobody validated.
+    let route = url.split('?').next().unwrap_or("");
 
     let mut forward_body = body;
-    let shape = request_shape(&forward_body);
     let mut report: Option<CompressionReport> = None;
     let mut transform_micros: Option<u64> = None;
-    if config.compress
-        && !bypassed
-        && content_type.to_ascii_lowercase().contains("json")
-        && let Some(format) = shape.format
-    {
-        let mut builder = CompressionPolicy::builder().preset(config.preset);
-        if let Some(target) = config.target_tokens {
-            builder = builder.target_tokens(target);
-        }
-        builder = apply_retrieval_overrides(builder, config, headers);
-        if let Ok(policy) = builder.build() {
-            let input = CompressionInput {
-                format,
-                bytes: forward_body.clone(),
-            };
-            let started = Instant::now();
-            if let Ok(output) = tokenfold_core::compress(input, &policy) {
-                // Measured around the local stage only; the upstream call is timed by whichever
-                // deadline produced the completion state.
-                transform_micros = Some(started.elapsed().as_micros() as u64);
-                forward_body = output.bytes;
-                report = Some(output.report);
+    let mut observation: Option<ObservationRun> = None;
+    if config.compress && !bypassed && content_type.to_ascii_lowercase().contains("json") {
+        let started = Instant::now();
+        // The observation path replaces the whole-body path *only* on a route it owns AND only
+        // when switched on. Both conditions matter: dropping the second would silently remove the
+        // pre-existing chat/completions compression, and dropping the first would let a body-sniffing
+        // rewrite of an unvalidated route.
+        let observation_format = if config.observations.enabled {
+            format_for_route(route)
+        } else {
+            None
+        };
+        if let Some(format) = observation_format {
+            // Core's transforms are applied to the eligible tool-result strings only, so the
+            // provider envelope is never folded.
+            let mut builder = CompressionPolicy::builder().preset(config.preset);
+            if let Some(target) = config.target_tokens {
+                builder = builder.target_tokens(target);
+            }
+            if let Ok(policy) = builder.build() {
+                match compress_observations(format, &forward_body, &config.observations, &policy) {
+                    Ok(outcome) if outcome.disposition.is_compressed() => {
+                        transform_micros = Some(started.elapsed().as_micros() as u64);
+                        observation = Some(ObservationRun {
+                            min_content_tokens: config.observations.min_content_tokens,
+                            original_bytes: outcome.original_bytes,
+                            compressed_bytes: outcome.compressed_bytes,
+                        });
+                        forward_body = outcome.bytes;
+                    }
+                    // Every other disposition is a normal, forwarded request. The observation module
+                    // already returned the baseline bytes; the reason is logged so a kept baseline is
+                    // explainable without re-running it.
+                    Ok(outcome) => {
+                        eprintln!("observation kept baseline: {:?}", outcome.disposition);
+                    }
+                    Err(e) => eprintln!("observation error, forwarding baseline: {e}"),
+                }
+            }
+        } else if let Some(format) = request_shape(&forward_body).format {
+            // Unchanged pre-existing whole-body behavior, still selected by the body heuristic.
+            let mut builder = CompressionPolicy::builder().preset(config.preset);
+            if let Some(target) = config.target_tokens {
+                builder = builder.target_tokens(target);
+            }
+            builder = apply_retrieval_overrides(builder, config, headers);
+            if let Ok(policy) = builder.build() {
+                let input = CompressionInput {
+                    format,
+                    bytes: forward_body.clone(),
+                };
+                if let Ok(output) = tokenfold_core::compress(input, &policy) {
+                    // Measured around the local stage only; the upstream call is timed by whichever
+                    // deadline produced the completion state.
+                    transform_micros = Some(started.elapsed().as_micros() as u64);
+                    forward_body = output.bytes;
+                    report = Some(output.report);
+                }
             }
         }
     }
+    let shape = request_shape(&forward_body);
 
     let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
     let spec = measurement_spec(
@@ -497,6 +541,7 @@ fn handle_passthrough(
         shape.model.as_deref(),
         report.as_ref(),
         transform_micros,
+        observation.as_ref(),
     );
     match send_upstream(
         &config.upstream_agent,
@@ -524,28 +569,62 @@ fn handle_passthrough(
 /// Builds the per-attempt measurement for a forwarded request. `local_transform_micros` times the
 /// local compression stage, and the applied transform versions are the policy identity this
 /// attempt actually ran under — both absent when no local transform ran.
+///
+/// `observation` is `Some` only when the tool-result adapter rewrote this request. The observation
+/// path produces no `CompressionReport` (it compresses inner result strings, not one payload), so
+/// without this the attempt would report no policy revision and no local counts at all — an
+/// observation run would be indistinguishable in accounting from a pure passthrough.
 fn measurement_spec(
     request_id: &str,
     headers: &[Header],
     model: Option<&str>,
     report: Option<&CompressionReport>,
     transform_micros: Option<u64>,
+    observation: Option<&ObservationRun>,
 ) -> MeasurementSpec {
     let mut spec = MeasurementSpec::new(request_id);
     // The session id is caller-supplied and hashed before it is recorded; the raw value never
     // reaches a log line, and `x-tokenfold-*` headers are never forwarded upstream.
     spec.session_id = header_value(headers, "x-tokenfold-session-id").map(opaque_id);
     spec.model = model.map(resolve_model);
-    spec.policy_revision = report
-        .map(applied_versions)
-        .filter(|versions| !versions.is_empty())
-        .map(|versions| versions.join(","));
     spec.estimator = report.map(|report| report.estimator.clone());
-    spec.local_before_tokens = report.map(|report| report.original_tokens);
-    spec.local_after_tokens = report.map(|report| report.compressed_tokens);
+    if let Some(run) = observation {
+        // Byte counts, not token counts: the observation path runs Core per inner result string, so
+        // there is no single whole-payload token figure to report. They are counted with the
+        // same byte heuristic the adapter used for its own reduction check, which keeps the two
+        // numbers comparable instead of mixing units.
+        spec.policy_revision = Some(format!(
+            "observation:{OBSERVATION_POLICY_REVISION}:min_content_bytes={}",
+            run.min_content_tokens
+        ));
+        spec.local_before_tokens = Some(run.original_bytes);
+        spec.local_after_tokens = Some(run.compressed_bytes);
+    } else {
+        spec.policy_revision = report
+            .map(applied_versions)
+            .filter(|versions| !versions.is_empty())
+            .map(|versions| versions.join(","));
+        spec.local_before_tokens = report.map(|report| report.original_tokens);
+        spec.local_after_tokens = report.map(|report| report.compressed_tokens);
+    }
     spec.local_transform_micros = transform_micros;
     spec
 }
+
+/// What one observation pass did, kept only long enough to label its measurement event.
+///
+/// Separate from [`ObservationPolicy`] on purpose: the policy is the operator's configuration and
+/// is identical for every request, while this is a per-attempt fact.
+struct ObservationRun {
+    min_content_tokens: usize,
+    original_bytes: usize,
+    compressed_bytes: usize,
+}
+
+/// Version tag for the observation path's policy identity in measurement events. Bump when the
+/// eligibility rules or verification steps change, so a recorded run can be attributed to the code
+/// that produced it.
+const OBSERVATION_POLICY_REVISION: &str = "1.0";
 
 /// Writes the one terminal event per attempt as a single JSON line on stderr, beside the access
 /// log. Counters, IDs and revisions only: never payload text, headers, or credentials.

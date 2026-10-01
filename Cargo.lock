@@ -1181,6 +1181,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tiny_http",
+ "tokenfold-adapters",
  "tokenfold-core",
  "ureq",
 ]

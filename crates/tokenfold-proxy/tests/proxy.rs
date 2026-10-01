@@ -259,6 +259,177 @@ fn compress_route_rejects_body_missing_content_and_messages() {
 
 // ---- passthrough ----
 
+// --- tool-result observations (opt-in, route-gated) -------------------------
+
+/// A chat request whose assistant turn requested one tool call, answered by a result with enough
+/// repeated structure for the data transforms to actually shrink it.
+fn chat_with_one_tool_result() -> serde_json::Value {
+    let items: Vec<serde_json::Value> = (0..12)
+        .map(|i| {
+            serde_json::json!({
+                "id": format!("row-{i:03}"),
+                "host": "worker-07",
+                "state": "ready",
+                "attempts": 3,
+                "note": "processed batch with no anomalies detected in this shard"
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "model": "gpt-4",
+        "messages": [
+            {"role": "user", "content": "summarize the queue"},
+            {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [{
+                    "id": "call_0",
+                    "type": "function",
+                    "function": {"name": "queue_status", "arguments": "{}"}
+                }]
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_0",
+                "content": serde_json::to_string(
+                    &serde_json::json!({"tool": "queue.status", "items": items})
+                )
+                .unwrap()
+            }
+        ]
+    })
+}
+
+#[test]
+fn observations_are_off_unless_the_operator_opts_in() {
+    let (upstream_addr, received) = spawn_echo_upstream();
+    // No --observations: the default must be a byte-for-byte forward, because the feature rewrites
+    // request bodies and must never activate itself.
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &[]);
+    let raw_body = serde_json::to_vec(&chat_with_one_tool_result()).unwrap();
+
+    let _ = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&raw_body[..])
+        .unwrap();
+
+    let forwarded = received.lock().unwrap().clone();
+    assert_eq!(
+        forwarded, raw_body,
+        "observations rewrote a request without being enabled"
+    );
+}
+
+#[test]
+fn enabling_observations_shrinks_only_the_tool_result() {
+    let (upstream_addr, received) = spawn_echo_upstream();
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &["--observations"]);
+    let baseline = chat_with_one_tool_result();
+    let raw_body = serde_json::to_vec(&baseline).unwrap();
+
+    let _ = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&raw_body[..])
+        .unwrap();
+
+    let forwarded = received.lock().unwrap().clone();
+    assert!(
+        forwarded.len() < raw_body.len(),
+        "expected a smaller forwarded body: {} vs {}",
+        forwarded.len(),
+        raw_body.len()
+    );
+
+    // The envelope survives intact; only the result string is rewritten.
+    let candidate: serde_json::Value = serde_json::from_slice(&forwarded).unwrap();
+    assert_eq!(candidate["model"], baseline["model"]);
+    assert_eq!(candidate["messages"][0], baseline["messages"][0]);
+    assert_eq!(candidate["messages"][1], baseline["messages"][1]);
+    assert_eq!(candidate["messages"][2]["tool_call_id"], "call_0");
+    assert!(
+        candidate["messages"][2]["content"].as_str().unwrap().len()
+            < baseline["messages"][2]["content"].as_str().unwrap().len()
+    );
+}
+
+#[test]
+fn the_threshold_flag_suppresses_small_results() {
+    let (upstream_addr, received) = spawn_echo_upstream();
+    let raw_body = serde_json::to_vec(&chat_with_one_tool_result()).unwrap();
+    // Above the request's own size, so nothing qualifies.
+    let threshold = (raw_body.len() + 1).to_string();
+    let proxy = ProxyProcess::start(
+        &format!("http://{upstream_addr}"),
+        &[
+            "--observations",
+            "--observation-min-content-bytes",
+            &threshold,
+        ],
+    );
+
+    let _ = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&raw_body[..])
+        .unwrap();
+
+    assert_eq!(received.lock().unwrap().clone(), raw_body);
+}
+
+#[test]
+fn an_unactivated_route_never_consults_the_observation_adapter() {
+    let (upstream_addr, received) = spawn_echo_upstream();
+    // Observations enabled, but this route is not the one the adapter owns. The body is a valid
+    // chat payload, so a body-sniffing implementation would have rewritten it -- which is exactly
+    // the guess this gate exists to prevent.
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &["--observations"]);
+    // A small body the pre-existing whole-body path leaves alone, so the only thing that could
+    // change it is the observation adapter.
+    let raw_body = serde_json::to_vec(&serde_json::json!({
+        "model": "gpt-4",
+        "messages": [{"role": "user", "content": "hello"}]
+    }))
+    .unwrap();
+
+    let _ = ureq::post(proxy.url("/v1/messages"))
+        .header("Content-Type", "application/json")
+        .send(&raw_body[..])
+        .unwrap();
+
+    assert_eq!(received.lock().unwrap().clone(), raw_body);
+    // The adapter is not merely a no-op here, it is not called: a kept baseline would still be
+    // explained on stderr, and its absence is what proves the route gate ran.
+    let stderr = proxy.stderr_snapshot();
+    assert!(
+        !stderr.contains("observation kept baseline"),
+        "the observation adapter ran on an unactivated route; stderr was:\n{stderr}"
+    );
+}
+
+#[test]
+fn a_kept_baseline_is_forwarded_and_explained() {
+    let (upstream_addr, received) = spawn_echo_upstream();
+    let proxy = ProxyProcess::start(&format!("http://{upstream_addr}"), &["--observations"]);
+    // No tool result at all: nothing to compress, so the request is a normal one.
+    let raw_body = serde_json::to_vec(&serde_json::json!({
+        "model": "gpt-4",
+        "messages": [{"role": "user", "content": "hello"}]
+    }))
+    .unwrap();
+
+    let response = ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .send(&raw_body[..])
+        .unwrap();
+    assert_eq!(response.status(), 200);
+
+    assert_eq!(received.lock().unwrap().clone(), raw_body);
+    let stderr = proxy.stderr_snapshot();
+    assert!(
+        stderr.contains("observation kept baseline"),
+        "a kept baseline must be explainable; stderr was:\n{stderr}"
+    );
+}
+
 fn spawn_echo_upstream() -> (String, Arc<Mutex<Vec<u8>>>) {
     let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
     let addr = server.server_addr().to_string();

@@ -23,7 +23,11 @@
 //! framework name, so the framework/agent layers above stay out of this crate's surface until
 //! they emit a shape of their own.
 
+pub mod observation;
+
 use tokenfold_core::{CompressionInput, CompressionOutput, CompressionPolicy, TokenFoldError};
+
+pub use observation::ObservationPolicy;
 
 /// The provider wire-shape a payload should be adapted through.
 ///

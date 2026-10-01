@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Add an explicitly enabled, lossless tool-result observation adapter for
+  `/v1/chat/completions` (`tokenfold_adapters::observation`, enabled in the
+  proxy with `--observations`). Only complete `role: "tool"` groups whose content
+  is a JSON object/array string are eligible, and a parallel group is
+  all-or-nothing: one ineligible member leaves the whole group verbatim, so a
+  request never mixes compressed and untouched copies of one call's results.
+  Core's transforms run on the result strings only, never on the provider
+  envelope, and every candidate is verified three ways before it is emitted —
+  restoring the originals must reproduce the baseline exactly (proving no sibling
+  value or key order changed), each replacement must decode back to the original
+  inner value, and the assembled body must be smaller. Anything short of that
+  returns the untouched baseline with a reason on stderr. The adapter is selected
+  by explicit route, never by sniffing the body; routes it does not own keep the
+  pre-existing whole-body behavior unchanged. Off by default — with the flag
+  absent, `/v1/chat/completions` forwards byte-for-byte exactly as before. No
+  redaction, pruning, retrieval, history replacement, or cross-turn prefix
+  stability is claimed by this increment.
 - Add the paired raw-vs-candidate evaluation runner (`eval/run_paired.py`,
   fixtures in `eval/tasks/paired/`, contract tests in
   `eval/test_paired_runner.py`, wired into the `eval-harness` CI job). It

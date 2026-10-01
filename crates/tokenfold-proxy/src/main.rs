@@ -1,5 +1,7 @@
 mod server;
 
+use tokenfold_adapters::observation::ObservationPolicy;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{
@@ -61,6 +63,14 @@ struct Cli {
     /// Retrieval-store filesystem root override; defaults to the standard XDG-based path.
     #[arg(long)]
     retrieval_store_path: Option<PathBuf>,
+    /// Enable lossless tool-result observation compression on /v1/chat/completions. Off by
+    /// default: it rewrites request bodies, so an operator opts in explicitly.
+    #[arg(long)]
+    observations: bool,
+    /// Skip tool results smaller than this many bytes. Below the threshold, re-encoding and
+    /// validation cost more than the compression can save.
+    #[arg(long, default_value_t = 0)]
+    observation_min_content_bytes: usize,
 }
 
 fn main() {
@@ -122,6 +132,10 @@ fn main() {
         target_tokens: cli.target_tokens,
         retrieval_backend: cli.retrieval_backend,
         retrieval_store_path: cli.retrieval_store_path,
+        observations: ObservationPolicy {
+            enabled: cli.observations,
+            min_content_tokens: cli.observation_min_content_bytes,
+        },
     };
 
     let http_server = match tiny_http::Server::http(&cli.bind) {
