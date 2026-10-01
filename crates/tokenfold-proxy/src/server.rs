@@ -387,7 +387,10 @@ fn request_shape(bytes: &[u8]) -> RequestShape {
             model: None,
         };
     };
-    let model = value.get("model").and_then(Value::as_str).map(str::to_string);
+    let model = value
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let format = value.as_object().and_then(|obj| {
         let messages = obj.get("messages")?.as_array()?;
         if messages.is_empty() {
@@ -599,8 +602,11 @@ fn build_upstream_response(
     let body = response.into_body();
     // Every byte below is forwarded exactly as received: the measuring reader observes the stream
     // in passing and emits one terminal event when it ends, errors, or is abandoned.
-    let mut measured: BodyReader =
-        Box::new(MeasurementReader::new(body.into_reader(), spec, measurement_sink()));
+    let mut measured: BodyReader = Box::new(MeasurementReader::new(
+        body.into_reader(),
+        spec,
+        measurement_sink(),
+    ));
     if is_streaming {
         (
             status,

@@ -30,6 +30,13 @@
   malformed or oversized usage payload disables accounting for that attempt
   without changing what is forwarded. `X-TokenFold-Session-Id` is hashed before
   it is recorded. Receipt and statistics schemas are unchanged.
+- Read measurement usage from newline-delimited JSON responses and accept Ollama's
+  top-level `prompt_eval_count`/`eval_count` counters as the prompt/completion
+  equivalent. A streaming `/api/chat` body from a local Ollama endpoint is one
+  JSON object per line rather than a single document, so it previously reported
+  `usage_disposition: "malformed"` with `provider_usage: null` and suppressed the
+  counts the final object carries. A body where no line parses as an object is
+  still `malformed`, so a broken document never reads as a clean `absent`.
 
 ## [0.5.0] - 2026-09-02
 

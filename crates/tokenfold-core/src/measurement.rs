@@ -13,10 +13,15 @@
 //!
 //! [`MeasurementReader`] reads the streamed response body *without buffering or rewriting it*: it
 //! keeps at most [`MAX_SCAN_BYTES`] of an unterminated line, forwards every byte untouched, and
-//! stops accounting entirely if the body is malformed or exceeds that bound. Both framing shapes
-//! are handled — server-sent events and a single JSON document — chosen from the body's first
-//! non-whitespace byte, so an event stream is never line-split out of a JSON document and vice
-//! versa. Accounting failures disable measurement for that attempt only — never forwarding.
+//! stops accounting entirely if the body is malformed or exceeds that bound. Three framing shapes
+//! are handled — server-sent events, a single JSON document, and newline-delimited JSON (one
+//! object per line, e.g. Ollama's streaming chat) — chosen so an event stream is never line-split
+//! out of a JSON document and vice versa. Accounting failures disable measurement for that
+//! attempt only — never forwarding.
+//!
+//! Local Ollama endpoints are measured on the same basis: a non-streaming chat response reports
+//! `prompt_eval_count`/`eval_count` at the top level instead of a nested `usage` object, and
+//! those are accepted as the prompt/completion equivalent.
 //!
 //! Local counts use the provider-independent estimators in [`crate::token_estimator`]; provider
 //! usage is compared against them as a *signed*, input-side delta
@@ -308,14 +313,19 @@ struct UsageScanner {
     stopped: bool,
 }
 
-/// A response body is either framed as server-sent events or is one JSON document, and the two
-/// cannot share a reader: an SSE body must never be line-split out of a JSON document, and a JSON
-/// document must not be mistaken for an event stream. The first non-whitespace byte decides.
+/// A response body is framed as server-sent events, one JSON document, or newline-delimited
+/// JSON (one object per line, e.g. Ollama's streaming chat). The first non-whitespace byte
+/// decides between SSE and JSON; the trailing bytes decide between a single document and one
+/// object per line, so neither framing is ever mistaken for another.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum ScanMode {
     #[default]
     Undecided,
     Events,
+    /// A single document, plus a trailing-newline-tolerant variant: when the whole body fails to
+    /// parse as one document, each line is retried as its own object (the Ollama NDJSON shape).
+    /// A pretty-printed document spans lines that are not objects on their own, so a body with no
+    /// per-line object is still malformed rather than silently absent.
     Document,
 }
 
@@ -369,11 +379,36 @@ impl UsageScanner {
         }
         let pending = std::mem::take(&mut self.pending);
         match self.mode {
-            ScanMode::Document => match serde_json::from_slice::<Value>(&pending) {
-                Ok(value) => self.read_usage(&value),
-                Err(_) => self.malformed = true,
-            },
+            ScanMode::Document => self.read_document(&pending),
             ScanMode::Events | ScanMode::Undecided => self.read_line(&pending),
+        }
+    }
+
+    /// One JSON document, or — when the whole body is not one document — one JSON object per line
+    /// (the Ollama NDJSON shape). A body where no line parses as an object is malformed: a broken
+    /// document must never read as a clean "absent".
+    fn read_document(&mut self, pending: &[u8]) {
+        match serde_json::from_slice::<Value>(pending) {
+            Ok(value) => self.read_usage(&value),
+            Err(_) => {
+                let mut saw_object = false;
+                for line in pending.split(|b| *b == b'\n') {
+                    let line = trim_ascii(line);
+                    if line.is_empty() {
+                        continue;
+                    }
+                    match serde_json::from_slice::<Value>(line) {
+                        Ok(value) => {
+                            saw_object = true;
+                            self.read_usage(&value);
+                        }
+                        Err(_) => self.malformed = true,
+                    }
+                }
+                if !saw_object {
+                    self.malformed = true;
+                }
+            }
         }
     }
 
@@ -396,7 +431,15 @@ impl UsageScanner {
 
     fn read_usage(&mut self, value: &Value) {
         match value.get("usage") {
-            None | Some(Value::Null) => {}
+            None | Some(Value::Null) => {
+                // No nested object: the object itself may be the usage, as in Ollama's
+                // non-streaming chat (`prompt_eval_count`/`eval_count` at the top level).
+                // Anything else is a chunk without usage — ignored, never malformed.
+                if let Some(usage) = usage_from_json(value) {
+                    self.usage.merge(usage);
+                    self.saw_usage = true;
+                }
+            }
             Some(raw) => match usage_from_json(raw) {
                 Some(usage) => {
                     self.usage.merge(usage);
@@ -423,8 +466,10 @@ impl UsageScanner {
     }
 }
 
-/// Reads a provider `usage` object. `None` means the value cannot be accounted for (wrong type,
-/// or none of the known counters), which the caller treats as malformed.
+/// Reads a provider `usage` object. Ollama's non-streaming chat reports `prompt_eval_count` and
+/// `eval_count` at the top level instead of a nested `usage` object; those are accepted as the
+/// prompt/completion equivalent. `None` means the value cannot be accounted for (wrong type, or
+/// none of the known counters), which the caller treats as malformed.
 fn usage_from_json(raw: &Value) -> Option<ProviderUsage> {
     let object = raw.as_object()?;
     let counter = |keys: &[&str]| {
@@ -433,8 +478,8 @@ fn usage_from_json(raw: &Value) -> Option<ProviderUsage> {
             .map(|value| value as usize)
     };
     let usage = ProviderUsage {
-        prompt_tokens: counter(&["prompt_tokens", "input_tokens"]),
-        completion_tokens: counter(&["completion_tokens", "output_tokens"]),
+        prompt_tokens: counter(&["prompt_tokens", "input_tokens", "prompt_eval_count"]),
+        completion_tokens: counter(&["completion_tokens", "output_tokens", "eval_count"]),
         total_tokens: counter(&["total_tokens"]),
     };
     if usage == ProviderUsage::default() {
@@ -784,6 +829,54 @@ mod tests {
         let body = "data: {\"usage\":null}\n\ndata: {\"usage\":null}\n\n";
         let (_, events) = forward(body.as_bytes(), spec());
         assert_eq!(events[0].usage_disposition, UsageDisposition::Absent);
+    }
+
+    #[test]
+    fn newline_delimited_json_is_read_as_one_object_per_line() {
+        // Ollama's streaming chat: every byte is an object, the whole body is not a document.
+        // Regression for a body that previously failed to parse as one document and was reported
+        // as `malformed`, suppressing the counts the final object does carry.
+        let body = concat!(
+            "{\"model\":\"qwen2.5:7b\",\"message\":{\"content\":\"TO\"},\"done\":false}\n",
+            "{\"model\":\"qwen2.5:7b\",\"message\":{\"content\":\"KEN\"},\"done\":false}\n",
+            "{\"model\":\"qwen2.5:7b\",\"done\":true,\"done_reason\":\"stop\",",
+            "\"prompt_eval_count\":26,\"eval_count\":3,\"total_duration\":100}\n"
+        );
+        let mut template = spec();
+        template.local_after_tokens = Some(21);
+        template.model = Some(resolve_model("qwen2.5:7b"));
+        let (forwarded, events) = forward(body.as_bytes(), template);
+        assert_eq!(String::from_utf8(forwarded).unwrap(), body);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].usage_disposition, UsageDisposition::Reported);
+        let usage = events[0].provider_usage.unwrap();
+        // `prompt_eval_count`/`eval_count` are accepted as the prompt/completion equivalent.
+        assert_eq!(usage.prompt_tokens, Some(26));
+        assert_eq!(usage.completion_tokens, Some(3));
+        assert_eq!(usage.total(), Some(29));
+        assert_eq!(events[0].provider_delta_tokens, Some(5));
+    }
+
+    #[test]
+    fn newline_delimited_json_without_counters_stays_absent_not_malformed() {
+        // The early chunks of the same stream carry no counters; a chunk that is simply a chunk
+        // must not be mistaken for a corrupt one.
+        let body = concat!(
+            "{\"message\":{\"content\":\"a\"},\"done\":false}\n",
+            "{\"message\":{\"content\":\"b\"},\"done\":true,\"done_reason\":\"stop\"}\n"
+        );
+        let (_, events) = forward(body.as_bytes(), spec());
+        assert_eq!(events[0].usage_disposition, UsageDisposition::Absent);
+        assert_eq!(events[0].provider_usage, None);
+    }
+
+    #[test]
+    fn a_document_with_no_line_that_is_an_object_is_still_malformed() {
+        // The per-line retry must not rescue a genuinely broken document into a clean "absent".
+        let body = b"{\"choices\": [{\"message\": {\"content\": \"hi\"}}],\n  \"usage\": {\n";
+        let (_, events) = forward(body, spec());
+        assert_eq!(events[0].usage_disposition, UsageDisposition::Malformed);
+        assert_eq!(events[0].provider_usage, None);
     }
 
     #[test]
