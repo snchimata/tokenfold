@@ -94,3 +94,127 @@ proptest! {
         );
     }
 }
+
+// --- EP-06 structured allocation ---------------------------------------------
+//
+// These assert the properties that must hold for *any* generated group set, not just the
+// hand-picked cases in `allocation.rs`'s own tests.
+
+use tokenfold_core::allocation::{
+    Candidate, Group, SelectRejection, allocate, allocate_with_scorer,
+};
+
+/// A candidate id unique within its group, so a group's members are never conflated.
+fn groups(counts: impl Iterator<Item = (usize, bool, f64)>) -> Vec<Group> {
+    counts
+        .enumerate()
+        .map(|(gi, (cost, required, score))| Group {
+            id: format!("g{gi}"),
+            members: (0..2)
+                .map(|mi| Candidate {
+                    id: format!("g{gi}-m{mi}"),
+                    cost: cost / 2,
+                    score,
+                })
+                .collect(),
+            required,
+        })
+        .collect()
+}
+
+proptest! {
+    /// Whole groups only: a group is either fully present in the result or fully absent. A
+    /// partially-retained group would emit a record whose partner is gone.
+    #[test]
+    fn allocation_never_returns_a_partially_retained_group(
+        spec in prop::collection::vec((0usize..200, any::<bool>(), 0.0f64..10.0), 0..8),
+        budget in 0usize..600,
+    ) {
+        let groups = groups(spec.into_iter());
+        let (kept, report) = allocate(&groups, budget);
+        prop_assert_eq!(kept.len() + report.dropped_groups, groups.len());
+        for id in &kept {
+            prop_assert!(groups.iter().any(|g| g.id == *id), "kept an unknown id {id}");
+        }
+        // Determinism: the same input twice gives the same answer.
+        prop_assert_eq!(kept, allocate(&groups, budget).0);
+    }
+
+    /// Declared requirements always survive, whatever the budget or the scores.
+    #[test]
+    fn a_required_group_is_always_retained(
+        spec in prop::collection::vec((0usize..200, any::<bool>(), 0.0f64..10.0), 0..8),
+        budget in 0usize..600,
+    ) {
+        let groups = groups(spec.into_iter());
+        let (kept, report) = allocate(&groups, budget);
+        for group in groups.iter().filter(|g| g.required) {
+            prop_assert!(
+                kept.contains(&group.id),
+                "required group {} was dropped: {kept:?}",
+                group.id
+            );
+        }
+        prop_assert_eq!(report.kept_required, groups.iter().filter(|g| g.required).count());
+    }
+
+    /// The result is in source order: applying it can never reorder the source document.
+    #[test]
+    fn the_result_is_always_in_source_order(
+        spec in prop::collection::vec((0usize..200, any::<bool>(), 0.0f64..10.0), 0..8),
+        budget in 0usize..600,
+    ) {
+        let groups = groups(spec.into_iter());
+        let (kept, _) = allocate(&groups, budget);
+        let positions: Vec<usize> = kept
+            .iter()
+            .map(|id| groups.iter().position(|g| g.id == *id).unwrap())
+            .collect();
+        prop_assert!(positions.windows(2).all(|w| w[0] < w[1]), "out of order: {positions:?}");
+    }
+
+    /// A misbehaving scorer degrades to the fallback ranking and never empties the context
+    /// while there was something to keep.
+    #[test]
+    fn a_failing_scorer_never_empties_a_non_empty_selection(
+        spec in prop::collection::vec((0usize..200, any::<bool>(), 0.0f64..10.0), 1..8),
+        budget in 0usize..600,
+    ) {
+        let groups = groups(spec.into_iter());
+        let baseline = allocate(&groups, budget).0;
+        for scored in [
+            None,
+            Some(std::collections::BTreeMap::from([("ghost".to_string(), 1.0f64)])),
+        ] {
+            let out = allocate_with_scorer(&groups, budget, scored);
+            prop_assert!(out.rejection.is_some());
+            prop_assert!(out.report.used_fallback_ranking);
+            prop_assert_eq!(
+                out.kept_group_ids, baseline.clone(),
+                "a failing scorer changed the selection"
+            );
+            prop_assert!(out.report.kept_groups + out.report.dropped_groups >= 1);
+        }
+    }
+
+    /// Requirements survive a failing scorer too.
+    #[test]
+    fn a_failing_scorer_never_drops_a_requirement(
+        spec in prop::collection::vec((0usize..200, any::<bool>(), 0.0f64..10.0), 1..8),
+        budget in 0usize..600,
+    ) {
+        let groups = groups(spec.into_iter());
+        let out = allocate_with_scorer(&groups, budget, None);
+        for group in groups.iter().filter(|g| g.required) {
+            prop_assert!(
+                out.kept_group_ids.contains(&group.id),
+                "a missing scorer dropped required group {}",
+                group.id
+            );
+        }
+        prop_assert_eq!(
+            out.rejection,
+            Some(SelectRejection::Unavailable)
+        );
+    }
+}

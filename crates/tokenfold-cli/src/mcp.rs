@@ -396,9 +396,39 @@ fn run_retrieve(arguments: &Value) -> Result<Value, String> {
         .unwrap_or_else(|| "default".to_string());
 
     let store = retrieval_store_from_env()?;
-    Ok(retrieve_outcome_to_value(
-        store.retrieve(&reference.hash, &namespace),
-    ))
+    Ok(retrieve_outcome_to_value(store.retrieve_authorized(
+        &reference.hash,
+        &namespace,
+        &authorized_namespaces_from_env(),
+        max_restore_bytes_from_env(),
+    )))
+}
+
+/// The namespaces this MCP server is permitted to read, from
+/// `TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES` (comma-separated).
+///
+/// Unset or empty means unrestricted, which is the pre-EP-05 behavior. This file deliberately
+/// never parses `tokenfold.toml` (see the top-of-file doc comment), so the authorization boundary
+/// is configured through the same environment channel that already selects the store itself.
+fn authorized_namespaces_from_env() -> Vec<String> {
+    std::env::var("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The per-retrieval restored-context byte budget, from
+/// `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES`. Unset or unparseable means unbounded.
+///
+/// An unparseable value is treated as "no budget" rather than as an error so that a typo cannot
+/// take retrieval offline; the size is still reported honestly by the `over_budget` outcome.
+fn max_restore_bytes_from_env() -> Option<usize> {
+    std::env::var("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
 }
 
 /// `source` is honestly always `"local_mcp"`: this tool only ever reads the local retrieval
@@ -412,6 +442,17 @@ fn retrieve_outcome_to_value(outcome: RetrievalOutcome) -> Value {
         }),
         RetrievalOutcome::Missing => json!({"status": "missing", "source": "local_mcp"}),
         RetrievalOutcome::Expired => json!({"status": "expired", "source": "local_mcp"}),
+        // `unauthorized` deliberately omits any hint about the hash, so a host cannot use this
+        // tool to discover what exists in a namespace it was not granted.
+        RetrievalOutcome::Unauthorized => json!({"status": "unauthorized", "source": "local_mcp"}),
+        // `over_budget` reports the whole-entry size against the caller's own limit so it can
+        // retry deliberately. The content is never partially returned.
+        RetrievalOutcome::OverBudget { bytes, limit_bytes } => json!({
+            "status": "over_budget",
+            "source": "local_mcp",
+            "bytes": bytes,
+            "limit_bytes": limit_bytes,
+        }),
     }
 }
 

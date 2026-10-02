@@ -22,7 +22,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 use tokenfold_adapters::ObservationPolicy;
-use tokenfold_adapters::observation::{compress_observations, format_for_route};
+use tokenfold_adapters::observation::{compress_observations_in_session, format_for_route};
+use tokenfold_adapters::session::SessionLedger;
 use tokenfold_core::budget::CompressionPolicyBuilder;
 use tokenfold_core::measurement::{
     CompletionState, EventSink, MeasurementEvent, MeasurementReader, MeasurementSpec,
@@ -53,6 +54,10 @@ pub struct ProxyConfig {
     pub retrieval_store_path: Option<PathBuf>,
     /// Lossless tool-result observation compression. Disabled unless the operator opts in.
     pub observations: ObservationPolicy,
+    /// What each session has already been sent, so a committed observation is never
+    /// folded a second time and cross-turn stability is evidenced rather than assumed.
+    /// Requests with no `X-TokenFold-Session-Id` never touch it.
+    pub sessions: SessionLedger,
 }
 
 pub fn run(config: &ProxyConfig, server: &tiny_http::Server, stopping: &AtomicBool) {
@@ -491,7 +496,19 @@ fn handle_passthrough(
                 builder = builder.target_tokens(target);
             }
             if let Ok(policy) = builder.build() {
-                match compress_observations(format, &forward_body, &config.observations, &policy) {
+                // The session id is caller-supplied and therefore untrusted input, but it is
+                // only ever an opaque key: the ledger hashes content, and the id itself is
+                // never logged. With no id the ledger is neither consulted nor written, so a
+                // caller that does not opt in keeps byte-identical stateless behaviour.
+                let session_id = header_value(headers, "x-tokenfold-session-id");
+                let session = session_id.map(|id| (&config.sessions, Some(id)));
+                match compress_observations_in_session(
+                    format,
+                    &forward_body,
+                    &config.observations,
+                    &policy,
+                    session,
+                ) {
                     Ok(outcome) if outcome.disposition.is_compressed() => {
                         transform_micros = Some(started.elapsed().as_micros() as u64);
                         observation = Some(ObservationRun {
@@ -831,6 +848,24 @@ fn retrieve_response(outcome: RetrievalOutcome) -> (u16, Response<BodyReader>) {
         RetrievalOutcome::Expired => {
             json_response(410, &json!({"status": "expired", "source": "proxy_store"}))
         }
+        // `unauthorized` is 403 and deliberately says nothing about whether the hash exists:
+        // a 404 here would turn the status code into an existence oracle for a namespace the
+        // caller may not read.
+        RetrievalOutcome::Unauthorized => json_response(
+            403,
+            &json!({"status": "unauthorized", "source": "proxy_store"}),
+        ),
+        // `over_budget` reports the whole-entry size and the limit, which is the caller's own
+        // budget rather than privileged information, and lets it retry with a larger allowance.
+        RetrievalOutcome::OverBudget { bytes, limit_bytes } => json_response(
+            413,
+            &json!({
+                "status": "over_budget",
+                "source": "proxy_store",
+                "bytes": bytes,
+                "limit_bytes": limit_bytes,
+            }),
+        ),
     }
 }
 
@@ -852,7 +887,12 @@ fn handle_retrieve_post(
         Ok(store) => store,
         Err(message) => return error_response(500, &message),
     };
-    retrieve_response(store.retrieve(&hash, &namespace))
+    retrieve_response(store.retrieve_authorized(
+        &hash,
+        &namespace,
+        &authorized_namespaces_from_env(),
+        max_restore_bytes_from_env(),
+    ))
 }
 
 fn handle_retrieve_get(
@@ -870,7 +910,35 @@ fn handle_retrieve_get(
         Ok(store) => store,
         Err(message) => return error_response(500, &message),
     };
-    retrieve_response(store.retrieve(&hash, &namespace))
+    retrieve_response(store.retrieve_authorized(
+        &hash,
+        &namespace,
+        &authorized_namespaces_from_env(),
+        max_restore_bytes_from_env(),
+    ))
+}
+
+/// The namespaces this proxy may retrieve from, from
+/// `TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES` (comma-separated).
+///
+/// Unset or empty means unrestricted, preserving the pre-EP-05 behavior for every existing
+/// deployment. Same environment channel as the MCP server, so one host configures both.
+fn authorized_namespaces_from_env() -> Vec<String> {
+    std::env::var("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The per-retrieval restored-context byte budget, from `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES`.
+/// Unset or unparseable means unbounded, so a typo cannot take retrieval offline.
+fn max_restore_bytes_from_env() -> Option<usize> {
+    std::env::var("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
 }
 
 /// `RetrievalStore`'s public API (tokenfold_core::retrieval_store) has no entry-count/byte-total

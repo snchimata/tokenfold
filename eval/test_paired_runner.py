@@ -330,6 +330,167 @@ def test_a_marker_free_lossy_run_is_still_scored_not_assumed():
     assert rp.dummy_model_answer(task["source"], task["gold_answer"]) == task["gold_answer"]
 
 
+def _proxy() -> bool:
+    if rp.proxy_binary() is None:
+        print("# skipping observation-arm cases: no tokenfold-proxy "
+              "(build it, set TOKENFOLD_PROXY_BIN)")
+        return False
+    return True
+
+
+# --- observation arm (offline, needs the proxy binary) ----------------------
+
+
+def test_the_observation_envelope_is_a_valid_single_result_transcript():
+    """The adapter is group-scoped, so the envelope must be exactly one call+result.
+
+    A malformed or partial transcript is skipped as a whole, which would make this
+    arm silently ineligible rather than failing -- so the envelope is pinned here
+    rather than trusted."""
+    task = rp.load_tasks(rp.DEFAULT_TASKS_DIR)[0]
+    envelope = rp.observation_envelope(task)
+    assert envelope["messages"][1]["tool_calls"][0]["id"] == "call_0"
+    result = envelope["messages"][2]
+    assert result["role"] == "tool" and result["tool_call_id"] == "call_0"
+    # The result content is the fixture source verbatim, so the adapter's
+    # restore-and-compare check is measuring the fixture and not a copy of it.
+    assert result["content"] == task["source"]
+    assert rp.observation_tool_content(json.dumps(envelope)) == task["source"]
+    # A non-JSON-object source has no observation to compress.
+    try:
+        rp.observation_envelope({"id": "t", "source": "not json"})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a non-JSON result source must be refused, not wrapped")
+
+
+def test_the_observation_arm_drives_the_real_proxy_over_a_fixture():
+    if not _proxy():
+        return
+    records, rows = rp.run_observation(rp.DEFAULT_TASKS_DIR, min_content_bytes=16)
+    assert rows and records, "the observation arm produced nothing"
+    # Every row is an observation row, and each fixture emits a raw/candidate pair.
+    assert {row["arm"] for row in rows} == {"observation"}, rows
+    assert {record["arm"] for record in records} == {"raw", "candidate"}, records
+    assert {record["task_id"].split("@", 1)[1] for record in records} <= {
+        "observation",
+        "observation-ineligible",
+    }, records
+    for row in rows:
+        assert row["envelope_well_formed"], row
+        assert row["candidate_tokens"] <= row["raw_tokens"], row
+    # At least one result is large enough to be rewritten; that is what makes the
+    # arm a test of the proxy path instead of a passthrough in disguise.
+    assert any(row["rewritten"] for row in rows), rows
+    # The contract under test: compression never loses a critical atom or the answer.
+    for row in rows:
+        assert row["structure_ok"], row
+        assert row["downstream_success"], row
+
+
+def test_the_observation_arm_participates_in_the_aggregate():
+    if not _proxy():
+        return
+    records, rows = rp.run_offline(rp.DEFAULT_TASKS_DIR, [0.5, 0.1], observation=True)
+    report = rp.aggregate(*rp.pair_records(records))
+    assert report["unpaired"] == [], report["unpaired"]
+    assert report["invalid_count"] == 0, report
+    # Each observation fixture pairs with raw: strictly more pairs than the CLI
+    # arms alone, and every one of them is a valid pair.
+    assert any(row["arm"] == "observation" for row in rows), rows
+    assert report["paired_count"] == len(rows), (report["paired_count"], len(rows))
+    assert report["raw_success_rate"] == 1.0, report
+
+
+def test_the_live_scorer_accepts_the_but_not_the_decoy():
+    """A free model may answer with the bare id or the full id; both are correct.
+
+    The report's decoy is risk-registry-1180, so the tail match stays discriminating
+    -- scoring a bare `4471` as a failure would report model formatting variance as
+    lost content."""
+    assert rp.live_answered("risk-registry-4471")
+    assert rp.live_answered("4471")
+    assert rp.live_answered("The primary blocker is risk-registry-4471.")
+    assert rp.live_answered("`4471`")
+    assert not rp.live_answered("risk-registry-1180")
+    assert not rp.live_answered("I could not find a blocker")
+    assert not rp.live_answered(None)
+    assert not rp.live_answered("")
+
+
+def test_the_live_transcript_is_genuinely_append_only():
+    """Each turn must be a byte-prefix extension of the previous one.
+
+    Without this, `cache_prefix_stable` would report instability caused by the
+    harness re-posing the question instead of by the compression under test."""
+    results = [json.dumps(rp._live_report()), *(
+        rp._live_join_result(t) for t in range(1, 3)
+    )]
+    bodies = [
+        rp._live_body(results[:n], rp.LIVE_ASK)["messages"] for n in (1, 2, 3)
+    ]
+    assert rp.messages_prefix_stable(bodies[0], bodies[1]), "turn 2 is not an append of turn 1"
+    assert rp.messages_prefix_stable(bodies[1], bodies[2]), "turn 3 is not an append of turn 2"
+    assert len(bodies[0]) < len(bodies[1]) < len(bodies[2])
+    assert not rp.messages_prefix_stable(bodies[1], bodies[0]), "a shorter turn is not an extension"
+
+
+def test_the_live_envelope_is_a_valid_multi_turn_transcript():
+    """Each turn's result group must pair with its own preceding tool_calls.
+
+    A group whose ids do not match is skipped as malformed; if one turn silently
+    dropped out, the "multi-turn" run would only be measuring the turns that
+    happened to survive."""
+    results = [json.dumps(rp._live_report()), '{"status":"ok","turn":1}']
+    body = rp._live_body(results, rp.LIVE_ASK)
+    messages = body["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[-1]["role"] == "user" and rp.LIVE_GOLD not in messages[-1]["content"]
+    seen = [m for m in messages if m.get("role") == "tool"]
+    assert len(seen) == 2 and [m["content"] for m in seen] == results
+    for index, result in enumerate(seen):
+        call = messages[messages.index(result) - 1]["tool_calls"][0]
+        assert (call["id"], result["tool_call_id"]) == (f"call_{index}", f"call_{index}")
+    assert rp.LIVE_GOLD in results[0] and rp.LIVE_GOLD not in results[1]
+
+
+def test_the_paid_guard_refuses_an_unapproved_paid_model():
+    for refused in ("nvidia/nemotron-3-ultra-550b-a55b", None, ""):
+        try:
+            rp.paid_guard("https://openrouter.ai/api", refused, False)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"a non-:free model must be refused: {refused!r}")
+    # :free passes, and anything outside OpenRouter is none of this function's business.
+    rp.paid_guard("https://openrouter.ai/api", "some/model:free", False)
+    rp.paid_guard("https://openrouter.ai/api", "some/model", True)
+    rp.paid_guard("http://localhost:11434", None, False)
+
+
+def test_live_response_parsing_and_prefix_reporting_are_plain():
+    answer = {"choices": [{"message": {"content": "hello risk-registry-4471 world"}}], "usage": {"prompt_tokens": 5}}
+    assert rp._answer_text(answer) == "hello risk-registry-4471 world"
+    assert rp._usage_of(answer) == {"prompt_tokens": 5}
+    assert rp._answer_text({}) is None and rp._usage_of({}) is None
+    assert rp.cache_prefix_stable(b"abc", b"abcdef")
+    assert not rp.cache_prefix_stable(b"abe", b"abcdef")
+
+
+def test_the_observation_arm_is_skipped_when_the_proxy_is_absent():
+    """The arm is additive: with no proxy binary it reports and returns nothing,
+    rather than failing a run that has no way to exercise it."""
+    saved = (rp._PROXY_BIN, rp._PROXY_RESOLVED, rp._PROXY_NOTICE)
+    try:
+        rp._PROXY_RESOLVED = True
+        rp._PROXY_BIN = None
+        assert rp.proxy_binary() is None
+        assert rp.run_observation(rp.DEFAULT_TASKS_DIR, 16) == ([], [])
+    finally:
+        rp._PROXY_BIN, rp._PROXY_RESOLVED, rp._PROXY_NOTICE = saved
+
+
 if __name__ == "__main__":
     failures = 0
     for name, case in sorted(globals().items()):

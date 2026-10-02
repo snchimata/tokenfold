@@ -31,25 +31,46 @@ USAGE
     python eval/run_paired.py --records runs.jsonl
     python eval/run_paired.py --records runs.jsonl --gate --max-cfr 0.005
     python eval/run_paired.py --run-offline --tasks-dir eval/tasks/paired
+    python eval/run_paired.py --run-offline --observation-arm
+
+The `--observation-arm` pass additionally drives the real `tokenfold-proxy` (build
+it, or set `TOKENFOLD_PROXY_BIN`) over a loopback echo upstream, so the observation
+path is exercised on real requests rather than only unit-tested. It is skipped,
+with a notice, when the proxy binary is absent.
+    python eval/run_paired.py --live-arm --live-model MODEL --live-upstream URL
+
+The `--live-arm` pass drives raw vs observation-compressed transcripts through a
+REAL model behind the real proxy and scores the model's own answers. Ollama
+(http://localhost:11434) and OpenRouter free models (:free, upstream
+https://openrouter.ai/api) are supported; a paid OpenRouter model is refused
+unless `--live-allow-paid` is passed, so the default spend cap is zero.
 
 DEPENDENCIES
 ------------
 Python standard library only, plus the existing `run_baselines` harness for
 token counting, the isolated retrieval config and the `tokenfold` CLI
-subprocesses (`--run-offline` only).
+subprocesses (`--run-offline` only); the `--observation-arm` pass also needs the
+`tokenfold-proxy` binary.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import http.server
 import json
 import math
+import os
 import random
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -63,6 +84,776 @@ _BOOTSTRAP_SEED = 20260930
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TASKS_DIR = SCRIPT_DIR / "tasks" / "paired"
+# ---------------------------------------------------------------------------
+# observation arm (offline, real proxy)
+# ---------------------------------------------------------------------------
+#
+# The observation path lives in `tokenfold-proxy`, not in the CLI the other arms
+# drive, so it is reached through the proxy binary over a loopback echo upstream:
+# no provider, no credential, no network egress. The arm is skipped -- reported,
+# never failed -- when the proxy binary is not built, so a default offline run is
+# exactly what it was before this flag existed.
+
+DEFAULT_OBSERVATION_MIN_CONTENT_BYTES = 16
+_PROXY_BIN: str | None = None
+_PROXY_RESOLVED = False
+_PROXY_NOTICE = ""
+
+
+def _find_proxy() -> str | None:
+    """Locate the proxy binary: TOKENFOLD_PROXY_BIN, then a local target build, then PATH.
+
+    Mirrors `run_baselines._find_tokenfold` (newest build wins), so a freshly built
+    debug proxy is not shadowed by a stale release one."""
+    env = os.environ.get("TOKENFOLD_PROXY_BIN")
+    if env and Path(env).is_file():
+        return env
+    root = Path(__file__).resolve().parent.parent
+    exe = "tokenfold-proxy.exe" if os.name == "nt" else "tokenfold-proxy"
+    candidates = [root / sub / exe for sub in ("target/release", "target/debug")]
+    existing = [c for c in candidates if c.is_file()]
+    if existing:
+        return str(max(existing, key=lambda c: c.stat().st_mtime))
+    return shutil.which("tokenfold-proxy")
+
+
+def proxy_binary() -> str | None:
+    global _PROXY_BIN, _PROXY_RESOLVED, _PROXY_NOTICE
+    if not _PROXY_RESOLVED:
+        _PROXY_RESOLVED = True
+        _PROXY_BIN = _find_proxy()
+        if _PROXY_BIN is None:
+            _PROXY_NOTICE = (
+                "observation arm skipped: tokenfold-proxy not found "
+                "(build it and set TOKENFOLD_PROXY_BIN)"
+            )
+    return _PROXY_BIN
+
+
+class _EchoUpstream(http.server.BaseHTTPRequestHandler):
+    """Records the forwarded request body and answers it.
+
+    With `server.relay` set, it forwards the captured request to that URL and
+    returns the provider's response, so the harness sees the exact body the proxy
+    sent *and* gets a real model answer through one code path -- a separate
+    "capture proxy" would be a second thing that could drift from the first.
+    """
+
+    # HTTP/1.1 so the proxy's pooled upstream sockets stay valid between requests.
+    # The stdlib default is HTTP/1.0, which closes the socket after every response;
+    # the proxy then reused a dead socket and surfaced the provider request as an
+    # intermittent "connection forcibly closed" 502.
+    protocol_version = "HTTP/1.1"
+
+    def do_POST(self):  # noqa: N802 - BaseHTTPRequestHandler API
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        self.server.captured = body  # type: ignore[attr-defined]
+        relay = getattr(self.server, "relay", None)
+        if relay is None:
+            self._respond(200, b'{"ok":true}')
+            return
+        headers = {"Content-Type": "application/json"}
+        authorization = self.headers.get("Authorization")
+        if authorization:
+            headers["Authorization"] = authorization
+        try:
+            request = urllib.request.Request(relay, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(request, timeout=180) as response:
+                self._respond(200, response.read())
+        except Exception as exc:  # noqa: BLE001 - a relayed failure becomes a readable 502
+            self._respond(502, str(exc).encode("utf-8", errors="replace")[:300])
+
+    def _respond(self, status: int, payload: bytes) -> None:
+        # Content-Length on every response is what makes HTTP/1.1 keep-alive legal
+        # here; without it the client cannot tell where the body ends.
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102 - silence the default access log
+        pass
+
+
+class _QuietThreadingHTTPServer(http.server.ThreadingHTTPServer):
+    """ThreadingHTTPServer without the default per-connection traceback.
+
+    A client that closes a keep-alive socket on the way out is normal here, not a
+    server fault, and `socketserver` prints a full traceback for each one. The
+    quiet override keeps a passing run's output readable.
+    """
+
+    def handle_error(self, request, client_address):  # noqa: D102 - stdlib API
+        pass
+
+
+def _start_echo(relay: str | None = None) -> http.server.ThreadingHTTPServer:
+    """A loopback echo upstream, already serving and ready to accept the proxy."""
+    # Threading server: each connection gets its own handler thread, so a pooled
+    # connection being reused cannot block a second, concurrent one.
+    server = _QuietThreadingHTTPServer(("127.0.0.1", 0), _EchoUpstream)
+    server.captured = b""  # type: ignore[attr-defined]
+    server.relay = relay  # type: ignore[attr-defined]
+    # The default poll interval is used deliberately: a 0s poll busy-spins
+    # `select` in this thread, which under the GIL starved the request handler
+    # threads and showed up as an intermittent upstream connection reset.
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def _await_proxy(process: subprocess.Popen, timeout: float = 30.0) -> str:
+    """Read the proxy's bound-address line and return its `http://host:port`.
+
+    The proxy is started with `--bind 127.0.0.1:0`, so the port is assigned by the
+    kernel and this line is the only way to learn it."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and process.stderr is not None:
+        line = process.stderr.readline().decode("utf-8", errors="replace")
+        if "listening on " in line:
+            bound = line.split("listening on ", 1)[1].split(" ->", 1)[0].strip()
+            return f"http://{bound}"
+        if process.poll() is not None:
+            break
+    raise ValueError("tokenfold-proxy never reported a bound address")
+
+
+def _proxy_ready(url: str, headers: dict | None = None, model: str = "readiness", timeout: float = 20.0) -> None:
+    """POST a minimal body until the proxy answers 200, or raise.
+
+    The listening line proves the socket is bound; it does not prove the accept
+    loop or the upstream is ready yet. Driving the fixtures against a proxy that
+    has already answered one request is the difference between a race and a test.
+    `model` must be real when the upstream is a real provider, so the probe is a
+    valid request rather than an unknown-model 404.
+    """
+    body = json.dumps(
+        {"model": model, "messages": [{"role": "user", "content": "ping"}]}
+    ).encode("utf-8")
+    deadline = time.monotonic() + timeout
+    last: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(
+                urllib.request.Request(
+                    f"{url}/v1/chat/completions",
+                    data=body,
+                    headers={"Content-Type": "application/json", **(headers or {})},
+                    method="POST",
+                ),
+                timeout=10,
+            ) as response:
+                if response.status == 200:
+                    return
+        except Exception as exc:  # noqa: BLE001 - a readiness poll expects failures
+            last = exc
+        time.sleep(0.05)
+    raise ValueError(f"tokenfold-proxy never became ready: {last}")
+
+
+def _drain_stderr(process: subprocess.Popen) -> list[str]:
+    """Read the proxy's stderr into a list on a thread, so a blocked pipe or a
+    crashed proxy becomes a diagnosable error instead of a bare 502."""
+    lines: list[str] = []
+
+    def run() -> None:
+        if process.stderr is None:
+            return
+        for raw in process.stderr:
+            lines.append(raw.decode("utf-8", errors="replace").rstrip())
+
+    threading.Thread(target=run, daemon=True).start()
+    return lines
+
+
+def _post_once(url: str, body: bytes, timeout: float) -> None:
+    """POST one body through the proxy and discard the (echoed) response."""
+    request = urllib.request.Request(
+        f"{url}/v1/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        response.read()
+
+
+def _post_resilient(url: str, body: bytes, timeout: float = 30.0, attempts: int = 3) -> None:
+    """`_post_once`, retrying a loopback transport hiccup.
+
+    The proxy keeps a pooled socket to this upstream, and on Windows a socket that
+    is torn down between requests surfaces as one "connection forcibly closed"
+    502. That is a property of the loopback test transport, not of the
+    observation transform, which is deterministic: replaying the same body
+    produces the same forwarded bytes. A persistent failure still raises, so a real
+    defect is never hidden -- it just is not reported as one.
+    """
+    last: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            _post_once(url, body, timeout)
+            return
+        except OSError as exc:  # HTTPError is an OSError, so a 502 lands here too
+            last = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.1 * (attempt + 1))
+    raise last  # type: ignore[misc]
+
+
+def observation_envelope(task: dict) -> dict:
+    """Wrap a fixture's source as the string content of one OpenAI tool result.
+
+    The adapter only rewrites a `role: "tool"` result string, so the source must
+    arrive as a JSON-encoded message in a valid transcript: one assistant turn
+    requesting a single call, answered by one matching result. Built from the
+    fixture rather than stored, so no second copy can drift out of sync."""
+    source = task["source"]
+    if source.lstrip()[:1] not in ("{", "["):
+        raise ValueError(f"{task['id']}: source is not a JSON object/array result")
+    return {
+        "model": "offline-observation",
+        "messages": [
+            {"role": "user", "content": "inspect the tool output"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_0",
+                        "type": "function",
+                        "function": {"name": "inspect", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_0", "content": source},
+        ],
+    }
+
+
+def observation_tool_content(payload: str) -> str:
+    """The forwarded tool-result string, decoded; raises if it is missing."""
+    value = json.loads(payload)
+    for message in value["messages"]:
+        if message.get("role") == "tool":
+            return message["content"]
+    raise ValueError("observation envelope lost its tool result")
+
+
+def run_observation(tasks_dir: Path, min_content_bytes: int) -> tuple[list[dict], list[dict]]:
+    """Drive the real proxy over each fixture's tool result; `([], [])` when unavailable.
+
+    Each fixture is one attempt: the proxy rewrites the result string in place and
+    the echo upstream hands the forwarded body back, so what is scored is exactly
+    what the proxy would send to a provider. Returns `(records, rows)`."""
+    binary = proxy_binary()
+    if binary is None:
+        print(f"# {_PROXY_NOTICE}", file=sys.stderr)
+        return [], []
+
+    upstream = _start_echo()
+
+    proxy = subprocess.Popen(
+        [
+            binary,
+            "--upstream",
+            f"http://127.0.0.1:{upstream.server_address[1]}",
+            "--bind",
+            "127.0.0.1:0",
+            "--insecure-upstream",
+            "--observations",
+            "--observation-min-content-bytes",
+            str(min_content_bytes),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    records: list[dict] = []
+    rows: list[dict] = []
+    try:
+        proxy_url = _await_proxy(proxy)
+        proxy_stderr = _drain_stderr(proxy)
+        # Prove the proxy is serving before trusting the fixtures to it.
+        _proxy_ready(proxy_url)
+        for task in load_tasks(tasks_dir):
+            baseline = json.dumps(observation_envelope(task), separators=(",", ":")).encode("utf-8")
+            raw_tokens = rb.count_tokens(task["source"])
+            try:
+                _post_resilient(proxy_url, baseline)
+            except OSError as exc:
+                tail = "\n".join(proxy_stderr[-5:])
+                raise ValueError(
+                    f"observation arm request failed for {task['id']}: {exc}\n{tail}"
+                ) from exc
+            forwarded = upstream.captured  # type: ignore[attr-defined]
+            content = observation_tool_content(forwarded.decode("utf-8"))
+            # Honest naming: the gate is a size threshold, so a small fixture keeps its
+            # baseline and is reported ineligible rather than scored as if compressed.
+            label = "observation" if content != task["source"] else "observation-ineligible"
+
+            answer = dummy_model_answer(recoverable_text(content), task["gold_answer"])
+            succeeded = answer == task["gold_answer"]
+            rows.append(
+                {
+                    "task": task["id"],
+                    "family": task["family"],
+                    "arm": "observation",
+                    "target_ratio": None,
+                    "raw_tokens": raw_tokens,
+                    "candidate_tokens": rb.count_tokens(content),
+                    **structural_check(task, content),
+                    "downstream_success": succeeded,
+                    "rewritten": content != task["source"],
+                }
+            )
+            for arm, text, ok in (
+                ("raw", task["source"], True),
+                ("candidate", content, succeeded),
+            ):
+                records.append(
+                    {
+                        "schema_version": PAIRED_SCHEMA_VERSION,
+                        "run_id": "offline-observation-proxy",
+                        "task_id": f"{task['id']}@{label}",
+                        "environment_snapshot": snapshot_hash(task["source"]),
+                        "arm": arm,
+                        "model": f"dummy-scorer-v0+{label}",
+                        "policy_revision": label,
+                        "seed": 0,
+                        "attempt": 1,
+                        "outcome": "success" if ok else "failure",
+                        "evidence": [f"eval/tasks/paired/{task['id']}.json"],
+                        "measurement": {
+                            "local_before_tokens": raw_tokens,
+                            "local_after_tokens": rb.count_tokens(text),
+                            "provider_usage": None,
+                        },
+                    }
+                )
+    finally:
+        proxy.terminate()
+        try:
+            proxy.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proxy.kill()
+        upstream.shutdown()
+        upstream.server_close()
+    return records, rows
+
+
+# ---------------------------------------------------------------------------
+# live arm (opt-in; a real model behind the real proxy)
+# ---------------------------------------------------------------------------
+#
+# `--live-arm` closes the last EP-04 item's offline gap by driving the real proxy
+# to a REAL model and scoring the model's own answers. Ollama (local, free) and
+# OpenRouter free models (`:free`) are supported; a paid OpenRouter model is
+# refused unless `--live-allow-paid` is passed, so the default spend cap is zero.
+#
+# Both arms share one transcript per turn: `raw` forwards verbatim
+# (`--no-compress`), `candidate` runs the observation path. Each arm forwards to
+# its own relay, which records the exact forwarded body and passes it to the one
+# real provider, so the recorded body and the model's answer cannot diverge.
+
+LIVE_GOLD = "risk-registry-4471"
+# The decoy in the report is risk-registry-1180, so the trailing digits alone
+# discriminate the primary blocker from every other id in the result.
+LIVE_GOLD_TAIL = "4471"
+LIVE_ASK = (
+    "Which risk-registry id does the fleet report name as the primary blocker? "
+    "Reply with only that id."
+)
+
+
+def live_answered(answer: str | None) -> bool:
+    """True when `answer` names the primary blocker.
+
+    The model is asked for "only that id", but free models vary their format: the
+    same model returns `risk-registry-4471` on one turn and bare `4471` on the next.
+    Requiring the whole gold string scored that as a failure, which is a scoring
+    artifact rather than lost content. Matching the distinctive id tail instead is
+    still discriminating, because the report's decoy is risk-registry-1180.
+    """
+    if not answer:
+        return False
+    text = rb._ws_strip(answer)
+    return LIVE_GOLD in text or LIVE_GOLD_TAIL in text
+
+
+def _live_report() -> dict:
+    """One tool result with the answer buried in repeated structure.
+
+    Fifteen findings share the same keys so the columnar fold actually engages;
+    exactly one carries the primary risk id and a second carries a decoy, so the
+    answer is only right when the result's real content survived."""
+    findings = [
+        {
+            "index": index,
+            "label": f"check-{index:02d}",
+            "severity": "high" if index % 3 == 0 else "info",
+            "host": f"worker-{index:02d}",
+            "detail": "routine sweep, no action required in this shard",
+        }
+        for index in range(15)
+    ]
+    findings[4]["detail"] = "primary risk-registry-4471 blocks rollout on this shard"
+    findings[9]["detail"] = "decoy risk-registry-1180 recurs when the shard restarts"
+    return {"tool": "inspect", "resource": "mesos", "report_id": "rep-9931", "findings": findings}
+
+
+def _live_join_result(turn: int) -> str:
+    return json.dumps({"status": "ok", "turn": turn, "note": "join acknowledged in this shard"})
+
+
+def _live_base() -> list:
+    """The fixed opening turns every live transcript starts from."""
+    return [
+        {"role": "system", "content": "Answer strictly from the tool output. Never invent ids."},
+        {
+            "role": "user",
+            "content": "We are auditing the fleet. Inspect the mesos report and keep verifying as workers join.",
+        },
+    ]
+
+
+def _append_turn(messages: list, index: int, result: str, question: str) -> list:
+    """Append one tool group and the question. The new list shares the old prefix.
+
+    Every turn returns a *new* list so a caller can choose what history the next turn
+    is built from: the originals it still holds, or the observations the proxy committed.
+    """
+    call_id = f"call_{index}"
+    return [
+        *messages,
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": "inspect", "arguments": json.dumps({"resource": "mesos"})},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": call_id, "content": result},
+        {"role": "assistant", "content": f"acknowledged {call_id}"},
+        {"role": "user", "content": question},
+    ]
+
+
+def _live_body(results: list[str], question: str) -> dict:
+    """A truly append-only multi-turn chat body: one tool group per join turn.
+
+    Each result is followed by the question, so the body for `results[:n]` is a
+    message-for-message extension of the body for `results[:n-1]`. That is what
+    makes the run a real append-only transcript -- and what lets
+    `messages_prefix_stable` mean anything: a non-append-only layout (re-asking the
+    question from a different final message each turn) would report instability
+    caused by the harness rather than by the compression.
+    """
+    messages = _live_base()
+    for index, result in enumerate(results):
+        messages = _append_turn(messages, index, result, question)
+    return {"messages": messages, "temperature": 0}
+
+
+def _answer_text(response: dict) -> str | None:
+    """The assistant text, or `None` when the provider returned no content string."""
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):  # some providers return content parts
+        return " ".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return None
+
+
+def _usage_of(response: dict) -> dict | None:
+    usage = response.get("usage")
+    return usage if isinstance(usage, dict) else None
+
+
+def _post_chat(url: str, body: bytes, headers: dict, timeout: float, attempts: int = 1) -> dict:
+    """POST a chat body and return the provider's JSON response.
+
+    Retries a transport hiccup (see `_post_resilient`); a live provider call is
+    not free, so the default is a single attempt and only the loopback-shaped
+    callers opt into replaying.
+    """
+    request = urllib.request.Request(
+        f"{url}/v1/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json", **headers},
+        method="POST",
+    )
+    last: OSError | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:300]
+            raise ValueError(f"live provider returned {exc.code}: {detail}") from exc
+        except OSError as exc:
+            last = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.2 * (attempt + 1))
+    raise last  # type: ignore[misc]
+
+
+def cache_prefix_stable(previous_body: bytes, current_body: bytes) -> bool:
+    """True when the current prompt keeps `previous_body` as a byte prefix.
+
+    That is the property a provider prompt cache needs, and the one a proxy can
+    only claim for turns it has already seen. The live arm reports it per turn
+    instead of asserting it.""" 
+    return current_body.startswith(previous_body)
+
+
+def prompt_messages(body: bytes) -> list | None:
+    """The `messages` array of a captured provider body, or `None` if unreadable."""
+    try:
+        return json.loads(body)["messages"]
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def messages_prefix_stable(previous: list, current: list) -> bool:
+    """True when `current` extends `previous` message-for-message.
+
+    This is the append-only property a provider prompt cache needs, measured on the
+    parsed transcript. A raw byte-prefix cannot express it: a serialized array
+    closes with `]}`, so a perfectly appended transcript is never a byte-prefix of
+    the next document. Comparing the captured bodies message-by-message avoids
+    reporting JSON framing as compression instability.
+    """
+    return current[: len(previous)] == previous
+
+
+def _sum_usage(rows: list[dict], field: str, key: str) -> int | None:
+    values = [
+        row[field][key]
+        for row in rows
+        if isinstance(row.get(field), dict) and isinstance(row[field].get(key), int)
+    ]
+    return sum(values) if values else None
+
+
+def _sum_cost(rows: list[dict]) -> float | None:
+    costs = [
+        float(row[field]["cost"])
+        for row in rows
+        for field in ("raw_usage", "candidate_usage")
+        if isinstance(row.get(field), dict) and isinstance(row[field].get("cost"), (int, float))
+    ]
+    return round(sum(costs), 6) if costs else None
+
+
+# A stable, opaque id for the live run's session. Not a secret: it exists only so the
+# proxy can recognise a committed observation, and it is hashed before it is recorded.
+_SESSION_HEADER = {"X-TokenFold-Session-Id": "live-paired-run"}
+
+
+def paid_guard(upstream: str | None, model: str | None, allow_paid: bool) -> None:
+    """Refuse an unapproved paid run: a non-`:free` OpenRouter model is a spend."""
+    if allow_paid or not upstream or "openrouter.ai" not in upstream:
+        return
+    if not model or not model.endswith(":free"):
+        raise ValueError(
+            f"refusing paid OpenRouter model {model!r}; add ':free' or pass --live-allow-paid"
+        )
+
+
+def run_live(
+    model: str,
+    upstream: str,
+    api_key: str | None,
+    min_content_bytes: int,
+    turns: int,
+    timeout: float = 180.0,
+    session: bool = False,
+    commit_once: bool = False,
+) -> tuple[list[dict], list[dict], dict]:
+    """Drive raw vs observation-compressed transcripts through a real model.
+
+    Returns `(records, rows, summary)`. Both arms point at `upstream` (the real
+    provider) through a per-arm relay; the model answers its own prompt, so a
+    failure is a failure of what the observation path forwarded, never of a dummy
+    scorer."""
+    binary = proxy_binary()
+    if binary is None:
+        raise ValueError(_PROXY_NOTICE)
+    if not model:
+        raise ValueError("--live-model is required with --live-arm")
+    if not upstream:
+        raise ValueError("--live-upstream is required with --live-arm")
+    if "openrouter.ai" in upstream and not api_key:
+        raise ValueError("an OpenRouter upstream needs --live-api-key-env to resolve a key")
+
+    results = [json.dumps(_live_report()), *(_live_join_result(t) for t in range(1, turns))]
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    relay = f"{upstream.rstrip('/')}/v1/chat/completions"
+    raw_echo, cand_echo = _start_echo(relay), _start_echo(relay)
+
+    def spawn(extra: list[str], echo: http.server.HTTPServer) -> subprocess.Popen:
+        return subprocess.Popen(
+            [
+                binary,
+                "--upstream", f"http://127.0.0.1:{echo.server_address[1]}",
+                "--insecure-upstream", "--bind", "127.0.0.1:0",
+                *extra,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+    # raw forwards verbatim; candidate runs only the observation path. Neither
+    # compresses the whole body, so the only difference is the observation adapter.
+    raw_proxy = spawn(["--no-compress"], raw_echo)
+    cand_proxy = spawn(
+        ["--observations", "--observation-min-content-bytes", str(min_content_bytes)], cand_echo
+    )
+    records: list[dict] = []
+    rows: list[dict] = []
+    try:
+        raw_url = _await_proxy(raw_proxy)
+        cand_url = _await_proxy(cand_proxy)
+        _drain_stderr(raw_proxy)
+        cand_log = _drain_stderr(cand_proxy)
+        _proxy_ready(raw_url, headers, model)
+        _proxy_ready(cand_url, headers, model)
+
+        previous_messages: list | None = None
+        # A commit-once host keeps what the proxy actually sent instead of re-sending the
+        # original results. That is the contract the session ledger exists to make safe:
+        # without it, replaying a committed observation folds a frame inside a frame.
+        raw_messages = _live_base()
+        cand_messages = _live_base()
+        for turn in range(1, turns + 1):
+            result = results[turn - 1]
+            raw_messages = _append_turn(raw_messages, turn - 1, result, LIVE_ASK)
+            cand_messages = _append_turn(cand_messages, turn - 1, result, LIVE_ASK)
+            body = json.dumps(
+                {"messages": raw_messages, "temperature": 0, "model": model}
+            ).encode("utf-8")
+            cand_body = json.dumps(
+                {"messages": cand_messages, "temperature": 0, "model": model}
+            ).encode("utf-8")
+            try:
+                raw_response = _post_chat(raw_url, body, headers, timeout, attempts=2)
+                cand_response = _post_chat(
+                    cand_url,
+                    cand_body,
+                    {**headers, **_SESSION_HEADER} if session else headers,
+                    timeout,
+                    attempts=2,
+                )
+            except OSError as exc:
+                tail = "\n".join(cand_log[-5:])
+                raise ValueError(f"live arm request failed on turn {turn}: {exc}\n{tail}") from exc
+
+            raw_forwarded = raw_echo.captured  # type: ignore[attr-defined]
+            cand_forwarded = cand_echo.captured  # type: ignore[attr-defined]
+            raw_answer = _answer_text(raw_response)
+            cand_answer = _answer_text(cand_response)
+            raw_ok = live_answered(raw_answer)
+            cand_ok = live_answered(cand_answer)
+            raw_tokens = rb.count_tokens(raw_forwarded.decode("utf-8", errors="replace"))
+            cand_tokens = rb.count_tokens(cand_forwarded.decode("utf-8", errors="replace"))
+            prefix_stable = None
+            if previous_messages is not None:
+                current_messages = prompt_messages(cand_forwarded)
+                prefix_stable = (
+                    False
+                    if current_messages is None
+                    else messages_prefix_stable(previous_messages, current_messages)
+                )
+            previous_messages = prompt_messages(cand_forwarded)
+            if commit_once:
+                # Commit once: the next turn's history is what the proxy just sent. Without a
+                # session header the proxy has no ledger to recognise it by, so this is the
+                # negative control that shows what the ledger prevents.
+                committed = prompt_messages(cand_forwarded)
+                if committed is not None:
+                    cand_messages = committed
+
+            rows.append(
+                {
+                    "turn": turn,
+                    "raw_tokens": raw_tokens,
+                    "candidate_tokens": cand_tokens,
+                    "raw_success": raw_ok,
+                    "candidate_success": cand_ok,
+                    "rewritten": cand_forwarded != raw_forwarded,
+                    "prefix_stable": prefix_stable,
+                    "raw_usage": _usage_of(raw_response),
+                    "candidate_usage": _usage_of(cand_response),
+                    "raw_answer": raw_answer,
+                    "candidate_answer": cand_answer,
+                }
+            )
+            for arm, ok, usage, tokens in (
+                ("raw", raw_ok, _usage_of(raw_response), raw_tokens),
+                ("candidate", cand_ok, _usage_of(cand_response), cand_tokens),
+            ):
+                records.append(
+                    {
+                        "schema_version": PAIRED_SCHEMA_VERSION,
+                        "run_id": f"live-{model}",
+                        "task_id": f"live_multi_turn_observation@turn{turn}",
+                        "environment_snapshot": snapshot_hash(json.dumps(results[:turn])),
+                        "arm": arm,
+                        "model": model,
+                        "policy_revision": (
+                            "raw"
+                            if arm == "raw"
+                            else f"observation:live:min_content_bytes={min_content_bytes}"
+                        ),
+                        "seed": 0,
+                        "attempt": 1,
+                        "outcome": "success" if ok else "failure",
+                        "evidence": [f"live:{upstream}", f"model:{model}", f"turn:{turn}"],
+                        "measurement": {
+                            "local_before_tokens": raw_tokens,
+                            "local_after_tokens": tokens,
+                            "provider_usage": usage,
+                        },
+                    }
+                )
+    finally:
+        for process in (raw_proxy, cand_proxy):
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        for echo in (raw_echo, cand_echo):
+            echo.shutdown()
+            echo.server_close()
+
+    summary = {
+        "model": model,
+        "upstream": upstream,
+        "turns": turns,
+        "min_content_bytes": min_content_bytes,
+        "session_commit_once": session,
+        "commit_once": commit_once or session,
+        "raw_success": sum(row["raw_success"] for row in rows),
+        "candidate_success": sum(row["candidate_success"] for row in rows),
+        "rewritten_turns": sum(row["rewritten"] for row in rows),
+        "prefix_stable_turns": sum(row["prefix_stable"] is True for row in rows),
+        "provider_prompt_tokens": {
+            "raw": _sum_usage(rows, "raw_usage", "prompt_tokens"),
+            "candidate": _sum_usage(rows, "candidate_usage", "prompt_tokens"),
+        },
+        "reported_cost": _sum_cost(rows),
+    }
+    return records, rows, summary
+
+
 # ---------------------------------------------------------------------------
 # record schema
 # ---------------------------------------------------------------------------
@@ -463,13 +1254,23 @@ def structural_check(task: dict, payload: str) -> dict:
         "structure_ok": well_formed and len(surviving) == len(task["critical_atoms"]),
     }
 
-def run_offline(tasks_dir: Path, ratios: list[float]) -> tuple[list[dict], list[dict]]:
+def run_offline(
+    tasks_dir: Path,
+    ratios: list[float],
+    observation: bool = False,
+    observation_min_content_bytes: int = DEFAULT_OBSERVATION_MIN_CONTENT_BYTES,
+) -> tuple[list[dict], list[dict]]:
     """Run every fixture through both arms. Returns `(records, rows)`.
 
     `raw` is the untouched source; `candidate` is the tokenfold CLI output at
     the requested ratio. Each arm runs in its own sandbox reset from the same
     snapshot bytes, and the two start digests are asserted equal rather than
     assumed -- that assertion is the whole point of the sandbox.
+
+    With `observation`, a third candidate arm drives the real proxy over the same
+    fixtures (see `run_observation`) and is appended to the run, so the proxy path
+    is exercised rather than only unit-tested. It is additive: the CLI arms are
+    produced first and are unchanged whether the proxy binary exists or not.
     """
     if rb._TOKENFOLD_BIN is None:
         raise ValueError(
@@ -512,7 +1313,7 @@ def run_offline(tasks_dir: Path, ratios: list[float]) -> tuple[list[dict], list[
                         "downstream_success": succeeded,
                     }
                 )
-                for arm, observation, ok in (
+                for arm, local_text, ok in (
                     ("raw", source, True),
                     ("candidate", answer, succeeded),
                 ):
@@ -531,11 +1332,17 @@ def run_offline(tasks_dir: Path, ratios: list[float]) -> tuple[list[dict], list[
                             "evidence": [f"eval/tasks/paired/{task['id']}.json"],
                             "measurement": {
                                 "local_before_tokens": raw_tokens,
-                                "local_after_tokens": rb.count_tokens(observation),
+                                "local_after_tokens": rb.count_tokens(local_text),
                                 "provider_usage": None,
                             },
                         }
                     )
+    if observation:
+        observation_records, observation_rows = run_observation(
+            tasks_dir, observation_min_content_bytes
+        )
+        records.extend(observation_records)
+        rows.extend(observation_rows)
     return records, rows
 
 # ---------------------------------------------------------------------------
@@ -579,6 +1386,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="drive the real tokenfold CLI over --tasks-dir and aggregate the result",
     )
     parser.add_argument(
+        "--observation-arm",
+        action="store_true",
+        help="also drive the real tokenfold-proxy observation path over the same "
+        "fixtures (needs the proxy binary; skipped, with a notice, when it is absent)",
+    )
+    parser.add_argument(
+        "--observation-min-content-bytes",
+        type=int,
+        default=DEFAULT_OBSERVATION_MIN_CONTENT_BYTES,
+        help="tool-result size floor passed to the proxy observation arm "
+        "(below it a fixture keeps its baseline and is reported ineligible)",
+    )
+    parser.add_argument(
         "--ratios",
         default="0.5,0.1",
         help="comma-separated target retention ratios; 0.1 is where lossy pruning "
@@ -592,11 +1412,57 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.005,
         help="predeclared conditional-failure ceiling for --gate (default 0.005)",
     )
+    parser.add_argument(
+        "--live-arm",
+        action="store_true",
+        help="drive raw vs observation-compressed transcripts through a real model "
+        "(needs --live-model and --live-upstream)",
+    )
+    parser.add_argument("--live-model", help="model id for --live-arm")
+    parser.add_argument(
+        "--live-upstream",
+        help="provider base URL for --live-arm, e.g. http://localhost:11434 (Ollama) "
+        "or https://openrouter.ai/api (OpenRouter)",
+    )
+    parser.add_argument(
+        "--live-api-key-env",
+        default="OPENROUTER_API_KEY",
+        help="environment variable holding the provider key (default OPENROUTER_API_KEY)",
+    )
+    parser.add_argument(
+        "--live-allow-paid",
+        action="store_true",
+        help="permit a non-:free OpenRouter model; off by default so a paid model is refused",
+    )
+    parser.add_argument(
+        "--live-session",
+        action="store_true",
+        help="commit the proxy's transformed observations and replay them next turn, under "
+        "an X-TokenFold-Session-Id, exercising the proxy's session contract end to end",
+    )
+    parser.add_argument(
+        "--live-commit-once",
+        action="store_true",
+        help="replay the proxy's committed observations next turn WITHOUT a session header: "
+        "the negative control showing what the ledger prevents",
+    )
+    parser.add_argument(
+        "--live-turns", type=int, default=3, help="multi-turn depth for --live-arm (default 3)"
+    )
+    parser.add_argument(
+        "--live-min-content-bytes",
+        type=int,
+        default=DEFAULT_OBSERVATION_MIN_CONTENT_BYTES,
+        help="tool-result size floor for the live observation arm",
+    )
     return parser
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    records: list[dict] = []
+    rows = None
+    live_summary = None
     try:
         if args.records:
             records, rows = load_records(Path(args.records)), None
@@ -604,9 +1470,25 @@ def main(argv=None) -> int:
             ratios = [float(x) for x in args.ratios.split(",") if x.strip()]
             if not ratios or any(not math.isfinite(r) or r <= 0.0 or r > 1.0 for r in ratios):
                 raise ValueError("ratios must be comma-separated numbers in (0, 1]")
-            records, rows = run_offline(Path(args.tasks_dir), ratios)
+            records, rows = run_offline(
+                Path(args.tasks_dir),
+                ratios,
+                observation=args.observation_arm,
+                observation_min_content_bytes=args.observation_min_content_bytes,
+            )
+        elif args.live_arm:
+            paid_guard(args.live_upstream, args.live_model, args.live_allow_paid)
+            records, rows, live_summary = run_live(
+                args.live_model,
+                args.live_upstream,
+                os.environ.get(args.live_api_key_env),
+                args.live_min_content_bytes,
+                args.live_turns,
+                session=args.live_session,
+                commit_once=args.live_session or args.live_commit_once,
+            )
         else:
-            print("one of --records or --run-offline is required", file=sys.stderr)
+            print("one of --records, --run-offline or --live-arm is required", file=sys.stderr)
             return 2
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"paired run failed: {error}", file=sys.stderr)
@@ -616,7 +1498,9 @@ def main(argv=None) -> int:
     report = aggregate(pairs, unpaired, invalid)
     report["schema_version"] = PAIRED_SCHEMA_VERSION
     if rows is not None:
-        report["offline_rows"] = rows
+        report["live_rows" if args.live_arm else "offline_rows"] = rows
+    if live_summary is not None:
+        report["live"] = live_summary
     if args.gate:
         report["failures"] = gate_failures(report, args.max_cfr)
         report["gate"] = "pass" if not report["failures"] else "fail"

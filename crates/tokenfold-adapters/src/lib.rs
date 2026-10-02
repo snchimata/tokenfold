@@ -24,6 +24,7 @@
 //! they emit a shape of their own.
 
 pub mod observation;
+pub mod session;
 
 use tokenfold_core::{CompressionInput, CompressionOutput, CompressionPolicy, TokenFoldError};
 

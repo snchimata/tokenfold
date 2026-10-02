@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+- Add structured allocation with atomic groups and an optional scorer contract
+  (EP-06, `tokenfold_core::allocation`). Allocation is factored out of `json_prune`
+  into a reusable module that spends a budget over *caller-declared groups* without
+  doing any JSON traversal, so pruning, observation, and a future Select runtime can
+  share one rule. Three properties are guaranteed and tested: a group is kept **whole
+  or dropped whole** (splitting one would emit a record whose meaning depends on a
+  record that is no longer there), `required` is **declared and never inferred**
+  (nothing here deduces that a high-ranking row makes another row unnecessary), and
+  selection is **never empty** because a scorer misbehaved. The result is returned in
+  source order, so applying it can never reorder a document, and allocation is
+  deterministic (ties break by source position). Required content that cannot fit is
+  retained anyway and reported as `over_budget` / `required_overflow` rather than
+  silently dropped — the budget is the softer contract.
+- Add a versioned, validated scorer request/response (EP-06). `SelectRequest` pins
+  `SELECT_SCHEMA_VERSION` and a `model_revision` for attribution and carries only opaque
+  candidate ids — no text. `SelectResponse` can carry scores and nothing else, so a
+  scorer structurally **cannot** rewrite candidate text or force retention; ranking is
+  the only influence it has. `validate_response` rejects a wrong schema version, a
+  batch over `MAX_SELECT_BATCH`, a non-finite score (NaN/±inf), and any id-set
+  mismatch including duplicates — detected via `BTreeMap::insert` returning a value, so
+  a collision is proven rather than silently letting the last write win. An oversized
+  request is refused up front rather than truncated, so a caller can never believe every
+  candidate was considered. Every rejection feeds `allocate_with_scorer`'s declared
+  fallback ranking, which is reported through `AllocationReport::used_fallback_ranking`
+  and `ScoredAllocation::rejection`. An in-process deterministic fake scorer ships as
+  the starting point; no model loading happens in Core and no download is performed.
+  Five proptest invariants cover whole-group retention, requirement survival, source
+  ordering, determinism, and scorer-failure degradation. **No default policy changed.**
+- Fix a pre-existing race in the CLI config tests: `resolve_rejects_disabling_secret_redaction_via_disable_list`
+  called `resolve()`, which reads the whole process environment, without taking the
+  suite's `ENV_LOCK`. It could therefore observe an environment another test was
+  concurrently mutating and fail intermittently (a preset read as `Balanced` instead of
+  the expected `Aggressive`, and a temp-file `PermissionDenied`). It now takes the lock,
+  matching every other test that touches the environment.
+
+- Add durable references to the reversible evidence store (EP-05 Part A). Retention
+  metadata is now versioned (`EntryMeta::version`, `META_VERSION`), and a **lease**
+  records a promise that an entry stays retrievable until a given time. Because the
+  promise lives in the entry's own metadata rather than a caller's memory, a reference
+  survives the TTL *and* the exit of the process that created it: a second process
+  running `gc()` will not delete a leased entry, and a leased entry is still served on
+  retrieval. `acquire_lease`/`release_lease` release independently of the promised
+  expiry, and re-acquiring for the same holder never shortens an existing promise.
+  `GcOutcome` gains `retained_protected` and `eviction_skipped_protected` so a caller can
+  tell "nothing was removable" from "something was protected".
+- Add admission-before-publication to the evidence store (EP-05 Part A).
+  `store_batch_within` takes an optional quota and refuses a write that would exceed it
+  with `TokenFoldError::QuotaExceeded` (exit code `5`), rejecting the **whole batch**
+  and writing nothing. Admission never evicts to make room — deleting another holder's
+  reference to admit new work is the exact failure a quota exists to prevent — and
+  re-storing identical content is not charged twice. `store_batch` keeps its previous
+  unlimited signature and behavior.
+- Treat pre-versioned store entries conservatively (EP-05 Part A). An entry written
+  before versioned metadata carries no lease field, so it cannot be shown to be
+  unleased; it is therefore never size-evicted before its own TTL has actually elapsed,
+  and is removed normally once that TTL passes. Old stores load without a migration step
+  and old readers keep working. The stop/upgrade/resume procedure is documented in
+  `docs/configuration.md`; a pre-EP-05 GC process cannot understand leases and must not
+  run against a root where they are enabled.
+- Add authorized and bounded retrieval (EP-05 Part B). `RetrievalStore::retrieve_authorized`
+  adds `RetrievalOutcome::Unauthorized` and `RetrievalOutcome::OverBudget`. An
+  unauthorized namespace is refused identically whether or not the hash exists, so the
+  refusal cannot become an existence oracle for another namespace; an over-budget entry
+  is refused whole and never truncated, because a partial JSON row presented as the
+  original would silently corrupt the recovered context. Authorization is evaluated
+  before the budget, so an unauthorized caller never learns an entry's size. Wired
+  through the proxy (HTTP `403` / `413`), the MCP `tokenfold_retrieve` tool, and
+  `tokenfold retrieve`, and configurable via `TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES`
+  and `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES` or `[retrieval].authorized_namespaces` /
+  `max_restore_bytes`. Both are **off by default**: an unconfigured installation behaves
+  exactly as before, and the Python binding maps the new variants without adding a new
+  exception type.
+
 - Add an explicitly enabled, lossless tool-result observation adapter for
   `/v1/chat/completions` (`tokenfold_adapters::observation`, enabled in the
   proxy with `--observations`). Only complete `role: "tool"` groups whose content
@@ -37,6 +110,30 @@
   recoverable drop is not read as data loss. Scoring is a deterministic dummy
   model: this certifies the record contract and the arithmetic, not downstream
   task quality, and no live or paid run was performed.
+- Add a trusted session ledger for append-only observation commits
+  (`tokenfold_adapters::session`, `X-TokenFold-Session-Id`, behind the existing
+  `--observations` flag). The stateless proxy could not tell a host replaying an
+  original result from one replaying its own committed output, so it could only
+  save tokens — never promise anything across turns. The ledger closes that gap: a
+  tool-result group this session has already been sent is not folded again, and a
+  half-committed parallel group is skipped whole. The id is caller-supplied and
+  therefore untrusted input, used only as an opaque key and never logged; an
+  absent, unknown, or expired id (`--observation-session-ttl-secs`,
+  `--observation-max-sessions`) yields no idempotence and no claim. With no session
+  header the path is byte-for-byte the previous behaviour, which is pinned by a test.
+  Measured against a free OpenRouter model over a five-turn commit-once transcript,
+  the ledger is worth 0 / 19 / 27 / 35 / 43 tokens per turn — without it each committed
+  observation is folded again and the body grows cumulatively.
+- Extend the paired runner with an offline observation arm (`--observation-arm`)
+  and an opt-in live arm (`--live-arm`). Both drive the real `tokenfold-proxy`; the
+  offline arm scores each fixture's tool result after the observation path rewrote
+  it against a loopback echo upstream, and the live arm forwards those requests to a
+  real provider (local Ollama, or an OpenRouter `:free` model) and scores the
+  model's own answers. Neither contacts a provider unless `--live-arm` is passed, and
+  a non-`:free` OpenRouter model is refused without `--live-allow-paid`, so the
+  default spend cap is zero. The `eval-harness` CI job builds the proxy and points
+  the harness at it (`TOKENFOLD_PROXY_BIN`); the live arm stays out of CI because it
+  needs a provider.
 - Add a concise v0.4 → v0.5 migration matrix
   (`docs/migration-v0.4-to-v0.5.md`) covering Rust, CLI, Python, TypeScript,
   receipts, redaction, and exit codes.

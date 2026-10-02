@@ -59,6 +59,10 @@ struct RetrievalSection {
     max_store_bytes: Option<u64>,
     backend: Option<String>,
     store_path: Option<PathBuf>,
+    /// EP-05: namespaces `tokenfold retrieve` may read. Empty/absent means unrestricted.
+    authorized_namespaces: Vec<String>,
+    /// EP-05: per-retrieval restored-context byte budget. Absent means unbounded.
+    max_restore_bytes: Option<usize>,
 }
 
 /// `[analytics]` — settings for the local stats ledger. `deny_unknown_fields` below makes these
@@ -127,6 +131,11 @@ pub struct Effective {
     pub retrieval_max_store_bytes: Option<u64>,
     pub retrieval_backend: String,
     pub retrieval_store_path: Option<PathBuf>,
+    /// Namespaces `tokenfold retrieve` may read. Empty means unrestricted (the pre-EP-05
+    /// behavior); a non-empty list turns retrieval into an authorization boundary.
+    pub retrieval_authorized_namespaces: Vec<String>,
+    /// Per-retrieval restored-context budget in bytes. `None` means unbounded.
+    pub retrieval_max_restore_bytes: Option<usize>,
     pub analytics_enabled: bool,
     pub analytics_ledger_path: PathBuf,
     pub analytics_retention_days: u64,
@@ -311,6 +320,30 @@ pub fn resolve(
         cfg.retrieval.store_path.clone()
     };
 
+    // EP-05 host contract. Both default to "unrestricted"/"unbounded" so an existing install keeps
+    // working unchanged; setting them is what turns retrieval into an enforced boundary.
+    let retrieval_authorized_namespaces =
+        if let Some(raw) = env_string("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES") {
+            raw.split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect()
+        } else {
+            cfg.retrieval.authorized_namespaces.clone()
+        };
+
+    let retrieval_max_restore_bytes =
+        if let Some(raw) = env_string("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES") {
+            Some(raw.trim().parse::<usize>().map_err(|_| {
+                TokenFoldError::ConfigError(format!(
+                    "invalid integer for TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES: {raw:?}"
+                ))
+            })?)
+        } else {
+            cfg.retrieval.max_restore_bytes
+        };
+
     let analytics_enabled = if let Some(v) = env_bool("TOKENFOLD_ANALYTICS_ENABLED").transpose()? {
         v
     } else {
@@ -408,6 +441,8 @@ pub fn resolve(
             retrieval_max_store_bytes,
             retrieval_backend,
             retrieval_store_path,
+            retrieval_authorized_namespaces,
+            retrieval_max_restore_bytes,
             analytics_enabled,
             analytics_ledger_path,
             analytics_retention_days,
@@ -636,6 +671,10 @@ mod tests {
 
     #[test]
     fn resolve_rejects_disabling_secret_redaction_via_disable_list() {
+        // Takes the lock because `resolve()` reads the whole process environment: without it this
+        // test could observe a half-mutated environment another test is concurrently writing, and
+        // the assertion below would depend on which thread won the race.
+        let _g = lock();
         // secret_redaction rejection itself is enforced by CompressionPolicyBuilder::build,
         // but `resolve()` must still surface the id through unmodified so that check can fire.
         let overrides = CliOverrides {

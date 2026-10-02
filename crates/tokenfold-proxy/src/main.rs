@@ -1,6 +1,7 @@
 mod server;
 
 use tokenfold_adapters::observation::ObservationPolicy;
+use tokenfold_adapters::session::SessionLedger;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -71,6 +72,13 @@ struct Cli {
     /// validation cost more than the compression can save.
     #[arg(long, default_value_t = 0)]
     observation_min_content_bytes: usize,
+    /// How long a session's committed observations are remembered. After this, a replayed
+    /// session is treated as unknown: no idempotence and no cross-turn claim.
+    #[arg(long, default_value_t = 3600)]
+    observation_session_ttl_secs: u64,
+    /// Most sessions tracked at once, so a caller cannot grow the map with session ids.
+    #[arg(long, default_value_t = 4096)]
+    observation_max_sessions: usize,
 }
 
 fn main() {
@@ -136,6 +144,10 @@ fn main() {
             enabled: cli.observations,
             min_content_tokens: cli.observation_min_content_bytes,
         },
+        sessions: SessionLedger::new(
+            Duration::from_secs(cli.observation_session_ttl_secs),
+            cli.observation_max_sessions,
+        ),
     };
 
     let http_server = match tiny_http::Server::http(&cli.bind) {

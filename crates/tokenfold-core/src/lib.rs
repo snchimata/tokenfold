@@ -1,3 +1,4 @@
+pub mod allocation;
 pub mod budget;
 pub mod codec;
 pub mod errors;

@@ -61,6 +61,10 @@ fn map_err(err: CoreError) -> PyErr {
         }
         CoreError::EstimatorError(msg) => EstimatorError::new_err(msg),
         CoreError::ConfigError(msg) => ConfigError::new_err(msg),
+        // A quota rejection is a configuration-shaped failure, so it surfaces as the same
+        // `ConfigError` a caller already handles -- adding a new exception type here would be a
+        // breaking binding change for a condition that is fixed by raising `max_store_bytes`.
+        CoreError::QuotaExceeded { .. } => ConfigError::new_err(err.to_string()),
         CoreError::InternalError(msg) => InternalError::new_err(msg),
         CoreError::Io(e) => PyOSError::new_err(e.to_string()),
     }
@@ -1053,6 +1057,19 @@ fn retrieve(
             "stored original for hash {:?} in namespace {resolved_namespace:?} has expired",
             reference.hash
         ))),
+        // Unreachable through this binding: it calls `retrieve` directly and never configures an
+        // authorization list or a restore budget. Both arms exist so the mapping stays total
+        // rather than relying on that remaining true by construction.
+        RetrievalOutcome::Unauthorized => Err(RetrievalError::new_err(format!(
+            "not authorized to read namespace {resolved_namespace:?}"
+        ))),
+        RetrievalOutcome::OverBudget { bytes, limit_bytes } => {
+            Err(RetrievalError::new_err(format!(
+                "stored original for hash {:?} is {bytes} bytes, over the {limit_bytes}-byte \
+             restore budget; it is not returned truncated",
+                reference.hash
+            )))
+        }
     }
 }
 

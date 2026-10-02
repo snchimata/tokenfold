@@ -251,6 +251,187 @@ fn tools_call_retrieve_explicit_namespace_overrides_json_marker_namespace() {
     std::fs::remove_dir_all(&store_path).ok();
 }
 
+// ---- EP-05 Part B: authorized namespaces and bounded retrieval ----
+
+#[test]
+fn tools_call_retrieve_refuses_a_namespace_outside_the_authorized_set() {
+    // A host granted one namespace must not be able to read another one it was not given, even
+    // though the hash is real and sitting in the same store root.
+    let store_path = unique_temp_path("retrieve_unauthorized");
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store
+        .store(b"another tenant's data", "other", None)
+        .unwrap();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "tokenfold_retrieve",
+            "arguments": {"hash": stored.hash, "namespace": "other"}
+        }
+    });
+    let responses = run_mcp_with_env(
+        &format!("{request}\n"),
+        &[
+            (
+                "TOKENFOLD_RETRIEVAL_STORE_PATH",
+                store_path.to_str().unwrap(),
+            ),
+            ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "mine"),
+        ],
+    );
+
+    let structured = &responses[0]["result"]["structuredContent"];
+    assert_eq!(structured["status"], "unauthorized");
+    // A refusal must not be a tool error -- the call succeeded and was correctly denied.
+    assert_eq!(responses[0]["result"]["isError"], false);
+    assert!(
+        structured.get("content").is_none(),
+        "an unauthorized retrieval must not leak content: {structured}"
+    );
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
+#[test]
+fn tools_call_retrieve_unauthorized_does_not_reveal_whether_the_hash_exists() {
+    // Both an existing hash and an absent one must answer identically, otherwise the status
+    // field becomes an existence oracle for namespaces the caller cannot read.
+    let store_path = unique_temp_path("retrieve_no_oracle");
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store.store(b"private", "other", None).unwrap();
+
+    let run_one = |hash: &str| {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "tokenfold_retrieve",
+                "arguments": {"hash": hash, "namespace": "other"}
+            }
+        });
+        run_mcp_with_env(
+            &format!("{request}\n"),
+            &[
+                (
+                    "TOKENFOLD_RETRIEVAL_STORE_PATH",
+                    store_path.to_str().unwrap(),
+                ),
+                ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "mine"),
+            ],
+        )[0]["result"]["structuredContent"]
+            .clone()
+    };
+
+    assert_eq!(run_one(&stored.hash), run_one(&"a".repeat(64)));
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
+#[test]
+fn tools_call_retrieve_still_serves_an_authorized_namespace() {
+    // Restricting the set must not break the namespaces that were actually granted.
+    let store_path = unique_temp_path("retrieve_authorized_ok");
+    let payload = b"my own recoverable original";
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store.store(payload, "mine", None).unwrap();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "tokenfold_retrieve",
+            "arguments": {"hash": stored.hash, "namespace": "mine"}
+        }
+    });
+    let responses = run_mcp_with_env(
+        &format!("{request}\n"),
+        &[
+            (
+                "TOKENFOLD_RETRIEVAL_STORE_PATH",
+                store_path.to_str().unwrap(),
+            ),
+            ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "mine,spare"),
+        ],
+    );
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["content"],
+        String::from_utf8_lossy(payload).into_owned()
+    );
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
+#[test]
+fn tools_call_retrieve_refuses_an_oversized_restore_and_never_truncates() {
+    // Bounded retrieval refuses rather than returning a prefix: a truncated JSON row handed back
+    // as the original would silently corrupt the recovered context.
+    let store_path = unique_temp_path("retrieve_over_budget");
+    let payload = b"{\"row\":1,\"payload\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}";
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store.store(payload, "default", None).unwrap();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "tokenfold_retrieve", "arguments": {"hash": stored.hash}}
+    });
+    let responses = run_mcp_with_env(
+        &format!("{request}\n"),
+        &[
+            (
+                "TOKENFOLD_RETRIEVAL_STORE_PATH",
+                store_path.to_str().unwrap(),
+            ),
+            ("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES", "10"),
+        ],
+    );
+
+    let structured = &responses[0]["result"]["structuredContent"];
+    assert_eq!(structured["status"], "over_budget");
+    assert_eq!(structured["bytes"], payload.len());
+    assert_eq!(structured["limit_bytes"], 10);
+    assert!(
+        structured.get("content").is_none(),
+        "an over-budget retrieval must return no partial content: {structured}"
+    );
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
+#[test]
+fn tools_call_retrieve_is_unrestricted_when_no_authorization_is_configured() {
+    // Backward compatibility: an existing host that configures nothing keeps the pre-EP-05
+    // behavior rather than being locked out of its own store.
+    let store_path = unique_temp_path("retrieve_unrestricted");
+    let payload = b"legacy unrestricted retrieval";
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_path);
+    let stored = store.store(payload, "anything", None).unwrap();
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "tokenfold_retrieve",
+            "arguments": {"hash": stored.hash, "namespace": "anything"}
+        }
+    });
+    let responses = run_mcp_with_env(
+        &format!("{request}\n"),
+        &[(
+            "TOKENFOLD_RETRIEVAL_STORE_PATH",
+            store_path.to_str().unwrap(),
+        )],
+    );
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["content"],
+        String::from_utf8_lossy(payload).into_owned()
+    );
+    std::fs::remove_dir_all(&store_path).ok();
+}
+
 #[test]
 fn tools_call_retrieve_requires_at_least_one_reference() {
     let request = serde_json::json!({

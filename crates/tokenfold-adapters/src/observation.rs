@@ -42,11 +42,13 @@
 //! already works, so a candidate that cannot be proven safe is never emitted.
 
 use serde_json::Value;
+use std::time::Instant;
 
 use tokenfold_core::codec::DecodeFormat;
 use tokenfold_core::token_estimator::{ByteHeuristicEstimator, TokenEstimator};
 use tokenfold_core::{CompressionInput, CompressionPolicy, InputFormat, TokenFoldError};
 
+use crate::session::SessionLedger;
 use crate::{AdapterFormat, verify_shape_parity};
 
 /// The only route this increment activates. Anything else is forwarded untouched rather than
@@ -139,6 +141,31 @@ pub fn compress_observations(
     policy: &ObservationPolicy,
     compression: &CompressionPolicy,
 ) -> Result<ObservationOutcome, TokenFoldError> {
+    compress_observations_in_session(format, payload, policy, compression, None)
+}
+
+/// [`compress_observations`] with a trusted session ledger attached.
+///
+/// This is what makes the session contract worth anything. Two behaviours change,
+/// and only when a session id is actually supplied:
+///
+/// * **Idempotence.** A tool-result group this session has already been sent is not
+///   folded again. Without this, a host that commits the transformed observation and
+///   replays it on the next turn would get a frame folded inside a frame -- which
+///   grows the body and breaks the very prefix the session is meant to keep stable.
+/// * **Commitment.** Every emitted observation body is recorded, so a later turn can
+///   be compared against what was actually sent rather than against what a stateless
+///   proxy hopes it sent.
+///
+/// With `session_id` of `None` this is exactly the stateless path, byte for byte: no
+/// ledger entry is consulted and none is written.
+pub fn compress_observations_in_session(
+    format: AdapterFormat,
+    payload: &[u8],
+    policy: &ObservationPolicy,
+    compression: &CompressionPolicy,
+    session: Option<(&SessionLedger, Option<&str>)>,
+) -> Result<ObservationOutcome, TokenFoldError> {
     let original_bytes = payload.len();
     let keep = |disposition: Disposition| ObservationOutcome {
         bytes: payload.to_vec(),
@@ -163,7 +190,11 @@ pub fn compress_observations(
     if !baseline.get("messages").is_some_and(Value::is_array) {
         return Ok(keep(Disposition::NotAChatRequest));
     }
-    let Some(eligible) = eligible_results(&baseline, policy) else {
+    let skip = |content: &str| match session {
+        Some((ledger, Some(id))) => ledger.is_committed(Some(id), content, Instant::now()),
+        _ => false,
+    };
+    let Some(eligible) = eligible_results(&baseline, policy, &skip) else {
         return Ok(keep(Disposition::NoEligibleResult));
     };
 
@@ -177,6 +208,15 @@ pub fn compress_observations(
                     ),
                 }));
             }
+            // Commit only what was actually emitted and verified, read back out of the
+            // candidate the caller is about to forward -- never the input we were given.
+            if let Some((ledger, Some(id))) = session {
+                ledger.commit(
+                    Some(id),
+                    &tool_result_contents(&candidate_bytes),
+                    Instant::now(),
+                );
+            }
             Ok(ObservationOutcome {
                 bytes: candidate_bytes,
                 disposition: Disposition::Compressed,
@@ -187,6 +227,26 @@ pub fn compress_observations(
         }
         Err(reason) => Ok(keep(Disposition::KeptBaseline { reason })),
     }
+}
+
+/// The content strings of every `role: "tool"` message in a serialized chat body.
+///
+/// Read back from the bytes that were actually emitted, so the ledger records what a
+/// provider received rather than what the adapter intended to send.
+fn tool_result_contents(body: &[u8]) -> Vec<String> {
+    let Ok(value) = serde_json::from_slice::<Value>(body) else {
+        return Vec::new();
+    };
+    value["messages"]
+        .as_array()
+        .map(|messages| {
+            messages
+                .iter()
+                .filter(|m| m.get("role").and_then(Value::as_str) == Some("tool"))
+                .filter_map(|m| m["content"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Applies Core's lossless JSON transforms to one result string.
@@ -212,7 +272,11 @@ fn compress_result(content: &str, compression: &CompressionPolicy) -> Option<Str
 /// A parallel group is all-or-nothing: consecutive tool results answering the same assistant
 /// message's `tool_calls` are dropped together if any one of them is ineligible. Half a group
 /// would leave one call's results compressed and its sibling's verbatim.
-fn eligible_results(baseline: &Value, policy: &ObservationPolicy) -> Option<Vec<Eligible>> {
+fn eligible_results(
+    baseline: &Value,
+    policy: &ObservationPolicy,
+    skip: &dyn Fn(&str) -> bool,
+) -> Option<Vec<Eligible>> {
     let messages = baseline.get("messages")?.as_array()?;
     let mut eligible: Vec<Eligible> = Vec::new();
     let mut index = 0usize;
@@ -236,10 +300,18 @@ fn eligible_results(baseline: &Value, policy: &ObservationPolicy) -> Option<Vec<
             continue;
         }
         if group.iter().all(|m| is_eligible(m, policy)) {
-            eligible.extend(group.into_iter().enumerate().map(|(offset, m)| Eligible {
-                message_index: index + offset,
-                content: m["content"].as_str().unwrap_or_default().to_string(),
-            }));
+            // A group the session already committed is skipped whole, never in part:
+            // re-folding one member of a parallel group would mix a committed frame with
+            // a fresh one and break the prefix this session is supposed to keep stable.
+            let any_committed = group
+                .iter()
+                .any(|m| m["content"].as_str().is_some_and(skip));
+            if !any_committed {
+                eligible.extend(group.into_iter().enumerate().map(|(offset, m)| Eligible {
+                    message_index: index + offset,
+                    content: m["content"].as_str().unwrap_or_default().to_string(),
+                }));
+            }
         }
         index = next;
     }
@@ -391,7 +463,9 @@ fn build_candidate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session::SessionLedger;
     use serde_json::json;
+    use std::time::Duration;
 
     fn compression_policy() -> CompressionPolicy {
         CompressionPolicy::builder().build().unwrap()
@@ -457,7 +531,121 @@ mod tests {
         )
         .unwrap()
     }
-    // __OBS_TESTS__
+
+    /// Runs a pass with a session ledger attached, returning the outcome.
+    fn run_in_session(
+        value: &Value,
+        ledger: &SessionLedger,
+        session: Option<&str>,
+    ) -> ObservationOutcome {
+        let payload = serde_json::to_vec(value).unwrap();
+        compress_observations_in_session(
+            AdapterFormat::OpenAiChat,
+            &payload,
+            &enabled(),
+            &compression_policy(),
+            Some((ledger, session)),
+        )
+        .unwrap()
+    }
+
+    // --- the trusted session contract ------------------------------------------
+
+    #[test]
+    fn a_committed_observation_is_not_folded_a_second_time() {
+        // The host commits turn 1's observation and replays it verbatim on turn 2. Without
+        // the ledger the adapter would fold the frame inside the frame: the body grows and
+        // the prefix the session is meant to hold breaks.
+        let ledger = SessionLedger::new(Duration::from_secs(300), 8);
+        let first = run_in_session(
+            &chat_with_results(vec![shrinkable_result()]),
+            &ledger,
+            Some("s1"),
+        );
+        assert!(first.disposition.is_compressed());
+        let committed_body = String::from_utf8(first.bytes.clone()).unwrap();
+
+        // Turn 2 replays exactly what the host committed.
+        let replayed: Value = serde_json::from_str(&committed_body).unwrap();
+        let second = run_in_session(&replayed, &ledger, Some("s1"));
+        assert!(
+            !second.disposition.is_compressed(),
+            "an already-committed observation was folded again: {:?}",
+            second.disposition
+        );
+        assert_eq!(
+            String::from_utf8(second.bytes.clone()).unwrap(),
+            committed_body,
+            "the committed prefix must be forwarded byte-for-byte"
+        );
+    }
+
+    #[test]
+    fn another_session_may_not_inherit_a_commitment() {
+        // Idempotence is per session. A different session id is a different conversation,
+        // so it must not be treated as already having committed this content.
+        let ledger = SessionLedger::new(Duration::from_secs(300), 8);
+        let first = run_in_session(
+            &chat_with_results(vec![shrinkable_result()]),
+            &ledger,
+            Some("s1"),
+        );
+        let replayed: Value = serde_json::from_slice(&first.bytes).unwrap();
+        let other = run_in_session(&replayed, &ledger, Some("s2"));
+        assert!(
+            !other.disposition.is_compressed(),
+            "session s2 folded content only s1 had committed"
+        );
+    }
+
+    #[test]
+    fn no_session_id_is_exactly_the_stateless_behaviour() {
+        // The contract must not change a single byte for a caller that supplies no session.
+        let ledger = SessionLedger::new(Duration::from_secs(300), 8);
+        let value = chat_with_results(vec![shrinkable_result()]);
+        let stateless = run(&value);
+        let unattached = run_in_session(&value, &ledger, None);
+        assert_eq!(stateless.bytes, unattached.bytes);
+        assert_eq!(stateless.disposition, unattached.disposition);
+        assert!(
+            ledger.is_empty(),
+            "a sessionless pass must not write a ledger entry"
+        );
+    }
+
+    #[test]
+    fn a_committed_group_is_skipped_whole_never_in_part() {
+        // A parallel group is all-or-nothing; skipping one committed member and folding
+        // its sibling would mix a committed frame with a fresh one.
+        let ledger = SessionLedger::new(Duration::from_secs(300), 8);
+        let two = chat_with_results(vec![shrinkable_result(), shrinkable_result()]);
+        let first = run_in_session(&two, &ledger, Some("s1"));
+        assert!(first.disposition.is_compressed());
+        assert_eq!(first.compressed_results, 2);
+
+        // Commit only the first member, then replay the pair.
+        let emitted = String::from_utf8(first.bytes.clone()).unwrap();
+        let parsed: Value = serde_json::from_str(&emitted).unwrap();
+        let second_member = parsed["messages"][3]["content"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        ledger.commit(
+            Some("s1"),
+            std::slice::from_ref(&second_member),
+            Instant::now(),
+        );
+
+        let replayed: Value =
+            serde_json::from_str(parsed["messages"][2]["content"].as_str().unwrap()).unwrap();
+        let replayed = chat_with_results(vec![replayed.to_string(), second_member]);
+        let outcome = run_in_session(&replayed, &ledger, Some("s1"));
+        assert!(
+            !outcome.disposition.is_compressed(),
+            "a half-committed parallel group was partially re-folded"
+        );
+    }
+
     // --- feature off, before anything is implemented ---------------------------
 
     #[test]
@@ -587,7 +775,6 @@ mod tests {
         );
         assert_eq!(outcome.compressed_results, 2);
     }
-    // __OBS_TESTS_2__
     // --- the cases that must NOT be rewritten ----------------------------------
 
     #[test]
@@ -659,7 +846,6 @@ mod tests {
             Disposition::NoEligibleResult
         );
     }
-    // __OBS_TESTS_3__
     // --- safety properties -----------------------------------------------------
 
     #[test]

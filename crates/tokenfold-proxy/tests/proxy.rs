@@ -823,6 +823,76 @@ fn retrieve_missing_hash_returns_a_clear_structured_404() {
 }
 
 #[test]
+fn retrieve_refuses_a_namespace_outside_the_authorized_set_with_403() {
+    // The proxy's retrieval route honors the same authorization boundary as MCP. 403 (not 404)
+    // so a caller can tell "I may not look here" from "it is not there".
+    let store_dir = unique_temp_path("retrieve_unauthorized");
+    let store_dir_str = store_dir.to_string_lossy().to_string();
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_dir);
+    let stored = store
+        .store(b"private to another tenant", "other", None)
+        .unwrap();
+
+    let proxy = ProxyProcess::start_with_env(
+        "https://example.invalid",
+        &["--retrieval-store-path", &store_dir_str],
+        &[("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "mine")],
+    );
+
+    let raw = format!(
+        "GET /v1/retrieve/{} HTTP/1.1\r\nHost: x\r\nX-TokenFold-Retrieve-Store: other\r\nConnection: close\r\n\r\n",
+        stored.hash
+    );
+    let response = raw_request(&proxy.addr, &raw);
+    assert!(
+        response.starts_with("HTTP/1.1 403"),
+        "response was: {response}"
+    );
+    assert!(response.contains("\"status\":\"unauthorized\""));
+    // The refusal must not carry the content it refused to serve.
+    assert!(
+        !response.contains("private to another tenant"),
+        "an unauthorized retrieval leaked content: {response}"
+    );
+
+    std::fs::remove_dir_all(&store_dir).ok();
+}
+
+#[test]
+fn retrieve_refuses_an_oversized_restore_with_413_and_no_partial_content() {
+    // A restore over the configured budget is refused outright; the entry is never truncated,
+    // because a partial JSON row presented as the original would corrupt the recovered context.
+    let store_dir = unique_temp_path("retrieve_over_budget");
+    let store_dir_str = store_dir.to_string_lossy().to_string();
+    let payload = b"{\"row\":1,\"payload\":\"aaaaaaaaaaaaaaaaaaaaaaaa\"}";
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&store_dir);
+    let stored = store.store(payload, "default", None).unwrap();
+
+    let proxy = ProxyProcess::start_with_env(
+        "https://example.invalid",
+        &["--retrieval-store-path", &store_dir_str],
+        &[("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES", "8")],
+    );
+
+    let raw = format!(
+        "GET /v1/retrieve/{} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+        stored.hash
+    );
+    let response = raw_request(&proxy.addr, &raw);
+    assert!(
+        response.starts_with("HTTP/1.1 413"),
+        "response was: {response}"
+    );
+    assert!(response.contains("\"status\":\"over_budget\""));
+    assert!(
+        !response.contains("aaaaaaaa"),
+        "an over-budget retrieval leaked partial content: {response}"
+    );
+
+    std::fs::remove_dir_all(&store_dir).ok();
+}
+
+#[test]
 fn retrieve_post_route_rejects_a_body_with_no_reference() {
     let proxy = ProxyProcess::start("https://example.invalid", &[]);
     let result = ureq::post(proxy.url("/v1/retrieve"))

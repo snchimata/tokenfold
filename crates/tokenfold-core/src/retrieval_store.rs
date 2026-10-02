@@ -131,19 +131,98 @@ pub enum RetrievalOutcome {
     Found(Vec<u8>),
     Missing,
     Expired,
+    /// The caller asked for a namespace it is not authorized to read.
+    ///
+    /// Reported instead of `Missing` so a host can tell "I may not look here" from "it is not
+    /// there". It never reveals whether the hash exists: an unauthorized read must not become an
+    /// existence oracle for another namespace.
+    Unauthorized,
+    /// The entry exists, but restoring it would exceed the caller's restored-context budget.
+    ///
+    /// The original is returned whole or not at all. A truncated JSON row handed back as if it
+    /// were the original would silently corrupt the recovered context, so the budget is enforced
+    /// by refusing, never by cutting.
+    OverBudget {
+        /// Size of the whole entry, which is what restoring it would cost.
+        bytes: usize,
+        /// The budget that was exceeded.
+        limit_bytes: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GcOutcome {
     pub expired_removed: usize,
     pub evicted_removed: usize,
+    /// Entries that were past their TTL but were kept because an unexpired lease still
+    /// promised them (or because they are legacy/unversioned entries, which are always
+    /// treated conservatively). Surfaced so a caller can tell "nothing was removable"
+    /// from "something was protected".
+    pub retained_protected: usize,
+    /// Eviction candidates skipped because they were leased or legacy.
+    pub eviction_skipped_protected: usize,
 }
+
+/// One outstanding promise that an entry stays retrievable until `retain_until_unix`,
+/// regardless of the entry's own TTL.
+///
+/// A lease is what makes a reference durable: the process that created the entry may exit,
+/// and its TTL may elapse, but a lease keeps the original recoverable for the holder. Leases
+/// are released explicitly and independently of their promised expiry — a holder that no
+/// longer needs the original gives it back before the clock runs out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lease {
+    /// Opaque, caller-supplied holder identity (a session id, a request id). It is never
+    /// logged and never interpreted; it only lets a holder release its own lease.
+    pub holder: String,
+    /// The retention floor. While `now < retain_until_unix`, this entry is not removable,
+    /// even if `stored_at_unix + ttl_seconds` has already passed.
+    pub retain_until_unix: u64,
+}
+
+/// The current retention-metadata schema version written by this build.
+///
+/// Version 0 is reserved for entries written before versioned metadata existed: they carry no
+/// leases and no quota history, so this build treats them conservatively (see
+/// [`EntryMeta::is_legacy`]) rather than guessing.
+pub const META_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EntryMeta {
+    /// Absent in entries written before versioned metadata; `#[serde(default)]` maps those
+    /// to 0 so an old store directory loads without a migration step.
+    #[serde(default)]
+    version: u32,
     stored_at_unix: u64,
     ttl_seconds: Option<u64>,
     bytes: usize,
+    /// Absent in pre-versioned entries, which is exactly why those are treated conservatively.
+    #[serde(default)]
+    leases: Vec<Lease>,
+}
+
+impl EntryMeta {
+    /// True for entries written before versioned metadata existed.
+    ///
+    /// A legacy entry cannot be known to be unleased, because the field that records leases did
+    /// not exist when it was written. Deleting one on quota pressure could break a reference
+    /// this build has no record of, so legacy entries are only ever removed by their own TTL —
+    /// and only after that TTL has actually elapsed.
+    fn is_legacy(&self) -> bool {
+        self.version < META_VERSION
+    }
+
+    /// True while an unexpired lease still promises this entry.
+    fn has_active_lease(&self, now: u64) -> bool {
+        self.leases
+            .iter()
+            .any(|lease| lease.retain_until_unix > now)
+    }
+
+    /// True when this entry must not be deleted: an unexpired lease promised it.
+    fn is_leased(&self, now: u64) -> bool {
+        self.has_active_lease(now)
+    }
 }
 
 // `pub` only because it's the type of a field inside the public `RetrievalStore::Memory`
@@ -218,10 +297,21 @@ impl RetrievalStore {
             .map(|mut markers| markers.remove(0))
     }
 
-    /// Stores a set as one publication unit. On failure, no newly-created entry remains.
-    pub fn store_batch(
+    /// Stores a set as one publication unit, subject to an optional admission quota.
+    ///
+    /// Admission runs **before** publication: if admitting this batch would push live stored
+    /// bytes past `max_store_bytes`, the whole batch is rejected with
+    /// [`TokenFoldError::QuotaExceeded`] and nothing is written. Admission never evicts to make
+    /// room — evicting here would destroy a reference some other holder still depends on, which
+    /// is exactly the failure a quota is supposed to prevent. Running GC first, or raising the
+    /// quota, is the caller's deliberate choice.
+    ///
+    /// Bytes for entries already present under the same hash are not counted twice: re-storing
+    /// identical content is idempotent and must not be charged against the quota twice.
+    pub fn store_batch_within(
         &self,
         entries: &[(&[u8], &str, Option<u64>)],
+        max_store_bytes: Option<u64>,
     ) -> Result<Vec<RetrievalMarker>, TokenFoldError> {
         let prepared: Vec<_> = entries
             .iter()
@@ -229,9 +319,11 @@ impl RetrievalStore {
                 validate_store_input(bytes, namespace)?;
                 let hash = hex_sha256(bytes);
                 let meta = EntryMeta {
+                    version: META_VERSION,
                     stored_at_unix: now_unix(),
                     ttl_seconds: *ttl_seconds,
                     bytes: bytes.len(),
+                    leases: Vec::new(),
                 };
                 let marker = RetrievalMarker {
                     hash,
@@ -243,6 +335,18 @@ impl RetrievalStore {
                 Ok((bytes.to_vec(), meta, marker))
             })
             .collect::<Result<_, TokenFoldError>>()?;
+
+        // Admission-before-publication. Only content that is not already stored counts as new.
+        if let Some(cap) = max_store_bytes {
+            let existing = self.live_bytes()?;
+            let increment = self.admitted_increment(&prepared)?;
+            if existing.saturating_add(increment) > cap {
+                return Err(TokenFoldError::QuotaExceeded {
+                    limit_bytes: cap,
+                    requested_bytes: existing.saturating_add(increment),
+                });
+            }
+        }
 
         match self {
             RetrievalStore::Memory(map) => {
@@ -281,6 +385,74 @@ impl RetrievalStore {
         Ok(prepared.into_iter().map(|(_, _, marker)| marker).collect())
     }
 
+    /// The unlimited-quota form of [`RetrievalStore::store_batch_within`], kept byte-for-byte
+    /// compatible with the pre-EP-05 signature and behavior.
+    ///
+    /// Stores a set as one publication unit. On failure, no newly-created entry remains.
+    pub fn store_batch(
+        &self,
+        entries: &[(&[u8], &str, Option<u64>)],
+    ) -> Result<Vec<RetrievalMarker>, TokenFoldError> {
+        self.store_batch_within(entries, None)
+    }
+
+    /// Total bytes currently held by entries this store would still consider live.
+    ///
+    /// Expired-but-leased and legacy entries are counted: both are still occupying disk, and
+    /// pretending otherwise would let a quota be met by silently over-writing protected data.
+    fn live_bytes(&self) -> Result<u64, TokenFoldError> {
+        Ok(match self {
+            RetrievalStore::Memory(map) => {
+                let guard = map.lock().unwrap_or_else(|e| e.into_inner());
+                guard.values().map(|e| e.meta.bytes as u64).sum()
+            }
+            RetrievalStore::Filesystem { root } => {
+                let mut total = 0u64;
+                for (meta_path, meta) in read_all_metadata(root)? {
+                    let _ = meta_path;
+                    total = total.saturating_add(meta.bytes as u64);
+                }
+                total
+            }
+        })
+    }
+
+    /// Net new bytes `prepared` would add, ignoring content already present under the same key.
+    fn admitted_increment(
+        &self,
+        prepared: &[(Vec<u8>, EntryMeta, RetrievalMarker)],
+    ) -> Result<u64, TokenFoldError> {
+        match self {
+            RetrievalStore::Memory(map) => {
+                let guard = map.lock().unwrap_or_else(|e| e.into_inner());
+                let mut increment = 0u64;
+                for (_, meta, marker) in prepared {
+                    let key = (marker.namespace.clone(), marker.hash.clone());
+                    if !guard.contains_key(&key) {
+                        increment = increment.saturating_add(meta.bytes as u64);
+                    }
+                }
+                Ok(increment)
+            }
+            RetrievalStore::Filesystem { root } => {
+                let mut increment = 0u64;
+                for (_, meta, marker) in prepared {
+                    let meta_path = root
+                        .join(&marker.namespace)
+                        .join(format!("{}.meta.json", marker.hash));
+                    let present = std::fs::read(&meta_path)
+                        .ok()
+                        .and_then(|raw| serde_json::from_slice::<EntryMeta>(&raw).ok())
+                        .is_some();
+                    if !present {
+                        increment = increment.saturating_add(meta.bytes as u64);
+                    }
+                }
+                Ok(increment)
+            }
+        }
+    }
+
     /// Looks up `hash` in `namespace`. Never returns a partial result: exactly one of
     /// `Found`/`Missing`/`Expired`.
     pub fn retrieve(&self, hash: &str, namespace: &str) -> RetrievalOutcome {
@@ -293,7 +465,13 @@ impl RetrievalStore {
                 let guard = map.lock().unwrap_or_else(|e| e.into_inner());
                 match guard.get(&(namespace.to_string(), hash.to_string())) {
                     None => RetrievalOutcome::Missing,
-                    Some(entry) if is_expired(&entry.meta) => RetrievalOutcome::Expired,
+                    // A lease is a promise that the original stays retrievable, so an entry that
+                    // is past its TTL but still leased is served, not reported as gone. GC keeps
+                    // the bytes for exactly this reason; refusing them here would make the
+                    // promise unkeepable.
+                    Some(entry) if is_expired(&entry.meta) && !entry.meta.is_leased(now_unix()) => {
+                        RetrievalOutcome::Expired
+                    }
                     Some(entry) => RetrievalOutcome::Found(entry.bytes.clone()),
                 }
             }
@@ -313,7 +491,7 @@ impl RetrievalStore {
                 let Ok(meta) = serde_json::from_slice::<EntryMeta>(&meta_bytes) else {
                     return RetrievalOutcome::Missing;
                 };
-                if is_expired(&meta) {
+                if is_expired(&meta) && !meta.is_leased(now_unix()) {
                     return RetrievalOutcome::Expired;
                 }
                 match std::fs::read(&data_path) {
@@ -324,10 +502,171 @@ impl RetrievalStore {
         }
     }
 
-    /// Deletes entries whose `ttl_seconds` has elapsed (entries stored with `ttl_seconds:
-    /// None` never expire), then — if `max_store_bytes` is given and total remaining stored
-    /// bytes still exceed it — evicts the oldest-`stored_at` entries first until under the cap.
+    /// Promises that `hash` stays retrievable in `namespace` until `retain_for_seconds` from now,
+    /// for `holder`.
+    ///
+    /// This is the durability primitive: the entry survives its own TTL, and survives the exit of
+    /// whichever process stored it, because the promise lives in the entry's metadata rather than
+    /// in a caller's memory. Acquiring a lease for an entry that does not exist is
+    /// [`TokenFoldError::InvalidInput`] — a lease cannot conjure content, it can only protect
+    /// content that is really there.
+    ///
+    /// Re-acquiring for the same holder and hash is idempotent and extends the existing promise
+    /// to the later of the two expiry times, so a retrying holder never shortens its own window.
+    pub fn acquire_lease(
+        &self,
+        hash: &str,
+        namespace: &str,
+        holder: &str,
+        retain_for_seconds: u64,
+    ) -> Result<Lease, TokenFoldError> {
+        if !is_safe_path_component(hash) || !is_safe_path_component(namespace) {
+            return Err(TokenFoldError::InvalidInput(format!(
+                "invalid retrieval lease target: hash {hash:?} namespace {namespace:?}"
+            )));
+        }
+        if holder.is_empty() {
+            return Err(TokenFoldError::InvalidInput(
+                "retrieval lease holder must not be empty".into(),
+            ));
+        }
+        let lease = Lease {
+            holder: holder.to_string(),
+            retain_until_unix: now_unix().saturating_add(retain_for_seconds),
+        };
+
+        match self {
+            RetrievalStore::Memory(map) => {
+                let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+                let entry = guard
+                    .get_mut(&(namespace.to_string(), hash.to_string()))
+                    .ok_or_else(|| missing_lease_target(hash, namespace))?;
+                merge_lease(&mut entry.meta, lease);
+                Ok(entry
+                    .meta
+                    .leases
+                    .iter()
+                    .find(|held| held.holder == holder)
+                    .cloned()
+                    .expect("merge_lease always leaves this holder's lease present"))
+            }
+            RetrievalStore::Filesystem { root } => {
+                let _lock = lock_store(root)?;
+                let meta_path = root.join(namespace).join(format!("{hash}.meta.json"));
+                let Ok(raw) = std::fs::read(&meta_path) else {
+                    return Err(missing_lease_target(hash, namespace));
+                };
+                let mut meta: EntryMeta = serde_json::from_slice(&raw).map_err(|e| {
+                    TokenFoldError::InternalError(format!(
+                        "failed to decode retrieval metadata for lease: {e}"
+                    ))
+                })?;
+                let effective = merge_lease(&mut meta, lease);
+                write_metadata_atomically(&meta_path, &meta)?;
+                Ok(effective)
+            }
+        }
+    }
+
+    /// Releases `holder`'s lease on `hash`, independently of whether the promise has expired.
+    ///
+    /// Releasing early is the normal way to give an entry back: the holder no longer needs the
+    /// original, so it becomes subject to its own TTL and to GC again immediately. Returns
+    /// `true` if a lease was actually removed, `false` if that holder held none — releasing is
+    /// idempotent from the caller's point of view either way.
+    pub fn release_lease(
+        &self,
+        hash: &str,
+        namespace: &str,
+        holder: &str,
+    ) -> Result<bool, TokenFoldError> {
+        if !is_safe_path_component(hash) || !is_safe_path_component(namespace) {
+            return Ok(false);
+        }
+
+        match self {
+            RetrievalStore::Memory(map) => {
+                let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+                let Some(entry) = guard.get_mut(&(namespace.to_string(), hash.to_string())) else {
+                    return Ok(false);
+                };
+                let before = entry.meta.leases.len();
+                entry.meta.leases.retain(|lease| lease.holder != holder);
+                Ok(entry.meta.leases.len() != before)
+            }
+            RetrievalStore::Filesystem { root } => {
+                let _lock = lock_store(root)?;
+                let meta_path = root.join(namespace).join(format!("{hash}.meta.json"));
+                let Ok(raw) = std::fs::read(&meta_path) else {
+                    return Ok(false);
+                };
+                let Ok(mut meta) = serde_json::from_slice::<EntryMeta>(&raw) else {
+                    return Ok(false);
+                };
+                let before = meta.leases.len();
+                meta.leases.retain(|lease| lease.holder != holder);
+                if meta.leases.len() == before {
+                    return Ok(false);
+                }
+                write_metadata_atomically(&meta_path, &meta)?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// [`RetrievalStore::retrieve`] under an explicit authorization and restored-context budget.
+    ///
+    /// This is the host-facing retrieval path, and it adds two refusals the plain `retrieve` does
+    /// not have:
+    ///
+    /// * `authorized_namespaces` — when it is non-empty, only those namespaces may be read. An
+    ///   unauthorized request returns [`RetrievalOutcome::Unauthorized`] without revealing
+    ///   whether the hash exists, so a host cannot probe another namespace's contents.
+    /// * `max_restore_bytes` — a bound on how much one retrieval may restore. Exceeding it returns
+    ///   [`RetrievalOutcome::OverBudget`]; the entry is never truncated, because a partial JSON
+    ///   row presented as the original is worse than no answer at all.
+    ///
+    /// An empty `authorized_namespaces` means unrestricted, preserving the pre-EP-05 behavior for
+    /// every existing caller.
+    pub fn retrieve_authorized(
+        &self,
+        hash: &str,
+        namespace: &str,
+        authorized_namespaces: &[String],
+        max_restore_bytes: Option<usize>,
+    ) -> RetrievalOutcome {
+        if !authorized_namespaces.is_empty()
+            && !authorized_namespaces
+                .iter()
+                .any(|allowed| allowed == namespace)
+        {
+            // Checked before the lookup on purpose: refusing first means an unauthorized caller
+            // cannot distinguish "exists" from "does not exist" from the returned variant.
+            return RetrievalOutcome::Unauthorized;
+        }
+        match self.retrieve(hash, namespace) {
+            RetrievalOutcome::Found(bytes) => match max_restore_bytes {
+                Some(limit) if bytes.len() > limit => RetrievalOutcome::OverBudget {
+                    bytes: bytes.len(),
+                    limit_bytes: limit,
+                },
+                _ => RetrievalOutcome::Found(bytes),
+            },
+            other => other,
+        }
+    }
+
+    /// Deletes entries whose `ttl_seconds` has elapsed *and* that no unexpired lease still promises
+    /// (entries stored with `ttl_seconds: None` never expire), then — if `max_store_bytes` is given
+    /// and total remaining stored bytes still exceed it — evicts the oldest-`stored_at` entries first
+    /// until under the cap.
+    ///
+    /// A leased entry survives both phases: a lease is a promise that outlives the process which
+    /// made it, so a second process running GC cannot take away a reference an active session is
+    /// still relying on. Legacy (unversioned) entries survive the eviction phase but not the
+    /// expiry phase, because they cannot be shown to be unleased.
     pub fn gc(&self, max_store_bytes: Option<u64>) -> Result<GcOutcome, TokenFoldError> {
+        let now = now_unix();
         match self {
             RetrievalStore::Memory(map) => {
                 let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
@@ -339,8 +678,17 @@ impl RetrievalStore {
                     .map(|(key, _)| key.clone())
                     .collect();
                 for key in expired {
-                    guard.remove(&key);
-                    outcome.expired_removed += 1;
+                    match guard.get(&key) {
+                        // An expired entry a lease still promises is kept, and counted as such so
+                        // "nothing was removable" is distinguishable from "nothing to remove".
+                        Some(entry) if !is_removable(&entry.meta, now) => {
+                            outcome.retained_protected += 1;
+                        }
+                        _ => {
+                            guard.remove(&key);
+                            outcome.expired_removed += 1;
+                        }
+                    }
                 }
 
                 if let Some(cap) = max_store_bytes {
@@ -356,6 +704,15 @@ impl RetrievalStore {
                         for (key, _, bytes) in remaining {
                             if total <= cap {
                                 break;
+                            }
+                            // Skip protected entries without giving up: an older protected entry
+                            // must not stop a younger evictable one from being reclaimed.
+                            let Some(entry) = guard.get(&key) else {
+                                continue;
+                            };
+                            if !is_evictable(&entry.meta, now) {
+                                outcome.eviction_skipped_protected += 1;
+                                continue;
                             }
                             guard.remove(&key);
                             total = total.saturating_sub(bytes);
@@ -396,6 +753,13 @@ impl RetrievalStore {
                         };
                         let data_path = ns_dir.join(format!("{hash}.bin"));
                         if is_expired(&meta) {
+                            // Expired but still promised: keep the bytes so the holder's reference
+                            // survives, and say so in the outcome rather than deleting silently.
+                            if !is_removable(&meta, now) {
+                                outcome.retained_protected += 1;
+                                live.push((meta_path, data_path, meta));
+                                continue;
+                            }
                             std::fs::remove_file(&meta_path).ok();
                             std::fs::remove_file(&data_path).ok();
                             outcome.expired_removed += 1;
@@ -413,6 +777,12 @@ impl RetrievalStore {
                             if total <= cap {
                                 break;
                             }
+                            // Same rule as the memory backend: a protected entry is skipped, and
+                            // the sweep continues to the next candidate rather than stopping.
+                            if !is_evictable(&meta, now) {
+                                outcome.eviction_skipped_protected += 1;
+                                continue;
+                            }
                             std::fs::remove_file(&meta_path).ok();
                             std::fs::remove_file(&data_path).ok();
                             total = total.saturating_sub(meta.bytes as u64);
@@ -424,6 +794,43 @@ impl RetrievalStore {
             }
         }
     }
+}
+
+/// Reads every readable `*.meta.json` under `root`, as `(meta_path, meta)` pairs.
+///
+/// A missing or unreadable directory yields an empty list rather than an error: a store that has
+/// never been written is empty, not broken. Unparseable individual metadata files are skipped
+/// for the same reason GC skips them — a half-written or foreign file must not make the whole
+/// store unreadable.
+fn read_all_metadata(root: &Path) -> Result<Vec<(PathBuf, EntryMeta)>, TokenFoldError> {
+    let mut out = Vec::new();
+    if !root.is_dir() {
+        return Ok(out);
+    }
+    for ns_entry in std::fs::read_dir(root)? {
+        let ns_entry = ns_entry?;
+        if !ns_entry.file_type()?.is_dir() {
+            continue;
+        }
+        let ns_dir = ns_entry.path();
+        for file_entry in std::fs::read_dir(&ns_dir)? {
+            let file_entry = file_entry?;
+            let meta_path = file_entry.path();
+            let Some(name) = meta_path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name.strip_suffix(".meta.json").is_none() {
+                continue;
+            }
+            let Ok(raw) = std::fs::read(&meta_path) else {
+                continue;
+            };
+            if let Ok(meta) = serde_json::from_slice::<EntryMeta>(&raw) {
+                out.push((meta_path, meta));
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn validate_store_input(bytes: &[u8], namespace: &str) -> Result<(), TokenFoldError> {
@@ -531,11 +938,73 @@ fn store_filesystem_entry(
     Ok(!existed)
 }
 
+/// True when this entry's own TTL has elapsed.
+///
+/// Deliberately ignores leases: an expired-but-leased entry is still *retained* (see
+/// [`is_removable`]), it just is no longer fresh. Callers decide between "expired" and
+/// "retained because promised" explicitly rather than conflating the two here.
 fn is_expired(meta: &EntryMeta) -> bool {
     match meta.ttl_seconds {
         None => false,
         Some(ttl) => now_unix().saturating_sub(meta.stored_at_unix) >= ttl,
     }
+}
+
+/// True when GC is allowed to delete this entry.
+///
+/// An entry is protected from expiry-driven deletion when an unexpired lease still promises it:
+/// the lease is a floor under the TTL, not an alternative to it. The entry still reports as
+/// `Expired` to a reader — it is genuinely past its TTL — but it is not thrown away.
+fn is_removable(meta: &EntryMeta, now: u64) -> bool {
+    is_expired(meta) && !meta.is_leased(now)
+}
+
+/// True when size-pressure eviction may delete this entry.
+///
+/// Protection is broader than for expiry: a leased entry is protected, and so is a legacy
+/// (unversioned) entry, because a legacy entry predates the lease field and cannot be shown to be
+/// unleased. Deleting one would break a reference this build has no record of.
+fn is_evictable(meta: &EntryMeta, now: u64) -> bool {
+    !meta.is_leased(now) && !meta.is_legacy()
+}
+
+/// Adds `lease` to `meta`, keeping the longer promise if the holder already has one, and returns
+/// the lease that is actually in force afterwards.
+///
+/// Idempotent per (holder, hash): a retried acquire must never *shorten* a window the holder
+/// already holds, because doing so would silently expire a reference the caller still believes is
+/// safe. The returned value is therefore the effective promise, which may be longer than the one
+/// requested — never shorter.
+fn merge_lease(meta: &mut EntryMeta, lease: Lease) -> Lease {
+    if let Some(existing) = meta
+        .leases
+        .iter_mut()
+        .find(|held| held.holder == lease.holder)
+    {
+        existing.retain_until_unix = existing.retain_until_unix.max(lease.retain_until_unix);
+        return existing.clone();
+    }
+    meta.leases.push(lease.clone());
+    lease
+}
+
+fn missing_lease_target(hash: &str, namespace: &str) -> TokenFoldError {
+    TokenFoldError::InvalidInput(format!(
+        "cannot lease hash {hash} in namespace {namespace:?}: no such stored entry"
+    ))
+}
+
+/// Rewrites a `*.meta.json` in place using the same stage-and-publish path as a store, so a lease
+/// update is never observable as a half-written file by a concurrent reader or GC.
+fn write_metadata_atomically(meta_path: &Path, meta: &EntryMeta) -> Result<(), TokenFoldError> {
+    let json = serde_json::to_vec_pretty(meta)
+        .map_err(|e| TokenFoldError::InternalError(format!("failed to encode metadata: {e}")))?;
+    let temp = stage_file(meta_path, &json)?;
+    if let Err(error) = publish_file(&temp, meta_path) {
+        std::fs::remove_file(&temp).ok();
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// Rejects values that would let a namespace or hash escape the store root via path
@@ -809,6 +1278,109 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
+    // --- EP-05 Part A: durable references, admission, and lifetime --------------
+    //
+    // The scenarios below are the EP-05 admission/GC matrix: an active reference outliving the
+    // creating process, an exhausted quota, a second process running GC, and a session resuming
+    // afterwards. Each asserts the *reference property* the plan asks for -- an unexpired promised
+    // reference stays retrievable, or the original simply stayed inline.
+
+    /// Stores `content` with its TTL already elapsed, returning the marker. Used to prove that
+    /// only a lease -- not the TTL -- is what keeps a promised reference alive.
+    fn store_expired_then_lease(root: &Path, content: &[u8], namespace: &str) -> RetrievalMarker {
+        RetrievalStore::filesystem(root)
+            .store(content, namespace, Some(0))
+            .unwrap()
+    }
+
+    /// Rewrites an entry's metadata exactly as a pre-EP-05 build wrote it: no `version`, no
+    /// `leases`.
+    fn downgrade_to_legacy_metadata(
+        root: &Path,
+        hash: &str,
+        ttl_seconds: Option<u64>,
+        bytes: usize,
+    ) {
+        let meta_path = root.join("default").join(format!("{hash}.meta.json"));
+        std::fs::write(
+            &meta_path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "stored_at_unix": now_unix(),
+                "ttl_seconds": ttl_seconds,
+                "bytes": bytes,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn an_unexpired_lease_survives_expiry_and_a_second_process_running_gc() {
+        // The core durability property: process A stores and leases an entry, then goes away.
+        // Process B opens the same store root and runs GC. The reference A was promised must
+        // still be there, because the promise was written to disk, not kept in A's memory.
+        let root = temp_root("lease_survives_gc");
+        let content = b"promised original";
+        let marker = store_expired_then_lease(&root, content, "default");
+
+        // Process A: lease it, then drop the store handle entirely.
+        {
+            let process_a = RetrievalStore::filesystem(&root);
+            process_a
+                .acquire_lease(&marker.hash, "default", "session-a", 3600)
+                .unwrap();
+        }
+
+        // Process B: an independent store over the same root, as a second process would have.
+        let process_b = RetrievalStore::filesystem(&root);
+        let outcome = process_b.gc(Some(0)).unwrap();
+        assert_eq!(
+            outcome.retained_protected, 1,
+            "GC should report the promised entry as protected, not silently keep it"
+        );
+        assert_eq!(outcome.expired_removed, 0);
+
+        // The original is byte-exact, and the session that was promised it can resume.
+        assert_eq!(
+            process_b.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Found(content.to_vec()),
+            "a promised reference must outlive the creating process and a foreign GC"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_released_lease_returns_the_entry_to_its_own_ttl() {
+        // Releasing is independent of the promised expiry: the holder gives the entry back
+        // early and it becomes collectable again immediately.
+        let root = temp_root("lease_release");
+        let marker = store_expired_then_lease(&root, b"released original", "default");
+
+        let store = RetrievalStore::filesystem(&root);
+        store
+            .acquire_lease(&marker.hash, "default", "session-a", 3600)
+            .unwrap();
+        assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 0);
+
+        assert!(
+            store
+                .release_lease(&marker.hash, "default", "session-a")
+                .unwrap()
+        );
+        // Releasing twice is not an error, it just reports that nothing was held.
+        assert!(
+            !store
+                .release_lease(&marker.hash, "default", "session-a")
+                .unwrap()
+        );
+
+        assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 1);
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Missing
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
     #[test]
     fn filesystem_store_and_gc_do_not_expose_partial_entries() {
         let root = temp_root("store_gc_race");
@@ -837,6 +1409,394 @@ mod tests {
         writer.join().unwrap();
         collector.join().unwrap();
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn one_holders_lease_does_not_survive_another_holders_release() {
+        // Leases are per holder: session B giving its own lease back must not un-promise the
+        // entry for session A.
+        let root = temp_root("lease_per_holder");
+        let content = b"two holders";
+        let marker = store_expired_then_lease(&root, content, "default");
+        let store = RetrievalStore::filesystem(&root);
+        store
+            .acquire_lease(&marker.hash, "default", "session-a", 3600)
+            .unwrap();
+        store
+            .acquire_lease(&marker.hash, "default", "session-b", 3600)
+            .unwrap();
+
+        assert!(
+            store
+                .release_lease(&marker.hash, "default", "session-b")
+                .unwrap()
+        );
+        assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 0);
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Found(content.to_vec())
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_expired_lease_no_longer_protects_the_entry() {
+        // A lease is a floor under the TTL, not a waiver of it: once the promise itself elapses,
+        // the entry is collectable again with no further action.
+        let store = RetrievalStore::memory();
+        let marker = store
+            .store(b"promise already elapsed", "default", Some(0))
+            .unwrap();
+        store
+            .acquire_lease(&marker.hash, "default", "session-a", 0)
+            .unwrap();
+
+        assert_eq!(store.gc(None).unwrap().expired_removed, 1);
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Missing
+        );
+    }
+
+    #[test]
+    fn reacquiring_a_lease_never_shortens_an_existing_promise() {
+        // A retrying holder must not be able to shrink its own window by re-acquiring with a
+        // shorter retention, which would silently expire a reference it still believes is safe.
+        let root = temp_root("lease_extend");
+        let marker = store_expired_then_lease(&root, b"long promise", "default");
+        let store = RetrievalStore::filesystem(&root);
+
+        let long = store
+            .acquire_lease(&marker.hash, "default", "session-a", 3600)
+            .unwrap();
+        let short = store
+            .acquire_lease(&marker.hash, "default", "session-a", 1)
+            .unwrap();
+        assert!(
+            short.retain_until_unix >= long.retain_until_unix,
+            "re-acquiring shortened the promise from {} to {}",
+            long.retain_until_unix,
+            short.retain_until_unix
+        );
+        assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 0);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn gc_never_evicts_a_leased_entry_but_still_reclaims_others() {
+        // Protection must not become a blanket refusal: with an over-cap store, the unprotected
+        // entries are still reclaimed while the promised one is kept and reported.
+        let store = RetrievalStore::memory();
+        let leased_content = b"leased payload";
+        let leased = store.store(leased_content, "default", None).unwrap();
+        store
+            .acquire_lease(&leased.hash, "default", "session-a", 3600)
+            .unwrap();
+        store
+            .store(b"unprotected payload one", "default", None)
+            .unwrap();
+        store
+            .store(b"unprotected payload two", "default", None)
+            .unwrap();
+
+        // A cap of 1 byte forces maximum pressure.
+        let outcome = store.gc(Some(1)).unwrap();
+        assert_eq!(
+            outcome.evicted_removed, 2,
+            "both unprotected entries should be reclaimed"
+        );
+        assert_eq!(outcome.eviction_skipped_protected, 1);
+        assert_eq!(
+            store.retrieve(&leased.hash, "default"),
+            RetrievalOutcome::Found(leased_content.to_vec())
+        );
+    }
+
+    #[test]
+    fn an_over_quota_write_is_rejected_without_evicting_protected_data() {
+        // Admission-before-publication: the quota refuses the write, and refusing must not cost
+        // anyone else's reference. The existing entry survives and nothing new lands.
+        let root = temp_root("quota_reject");
+        let store = RetrievalStore::filesystem(&root);
+        let existing = b"already stored";
+        store.store(existing, "default", None).unwrap();
+
+        let cap = (existing.len() as u64) + 4;
+        let err = store
+            .store_batch_within(
+                &[(b"a much larger payload".as_slice(), "default", None)],
+                Some(cap),
+            )
+            .unwrap_err();
+        match err {
+            TokenFoldError::QuotaExceeded {
+                limit_bytes,
+                requested_bytes,
+            } => {
+                assert_eq!(limit_bytes, cap);
+                assert!(requested_bytes > cap);
+            }
+            other => panic!("expected a quota rejection, got {other:?}"),
+        }
+
+        // The pre-existing entry is untouched, and the refused payload is absent.
+        assert_eq!(
+            store.retrieve(&hex_sha256(existing), "default"),
+            RetrievalOutcome::Found(existing.to_vec())
+        );
+        assert_eq!(
+            store.retrieve(&hex_sha256(b"a much larger payload"), "default"),
+            RetrievalOutcome::Missing
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_quota_exhaustion_mid_batch_rejects_the_whole_batch() {
+        // store_batch is one publication unit: a batch that does not fit must not land
+        // partially, or the caller is left with an unknown half-published set of references.
+        let store = RetrievalStore::memory();
+        let entries = [
+            (b"first entry bytes".as_slice(), "default", None),
+            (b"second entry bytes".as_slice(), "default", None),
+        ];
+        assert!(matches!(
+            store.store_batch_within(&entries, Some(10)),
+            Err(TokenFoldError::QuotaExceeded { .. })
+        ));
+        assert_eq!(
+            store.retrieve(&hex_sha256(b"first entry bytes"), "default"),
+            RetrievalOutcome::Missing
+        );
+        assert_eq!(
+            store.retrieve(&hex_sha256(b"second entry bytes"), "default"),
+            RetrievalOutcome::Missing
+        );
+    }
+
+    #[test]
+    fn restoring_identical_content_is_not_charged_twice_against_the_quota() {
+        // Storage is content-addressed and idempotent. Charging an already-present entry again
+        // would make a legitimate re-store look like quota growth and spuriously reject writes.
+        let store = RetrievalStore::memory();
+        let content = b"idempotent content";
+        let size = content.len() as u64;
+        store.store(content, "default", None).unwrap();
+
+        // Exactly enough room for one copy, not two.
+        assert!(
+            store
+                .store_batch_within(&[(content, "default", None)], Some(size))
+                .is_ok()
+        );
+        assert_eq!(
+            store.retrieve(&hex_sha256(content), "default"),
+            RetrievalOutcome::Found(content.to_vec())
+        );
+    }
+
+    #[test]
+    fn a_legacy_unversioned_entry_is_never_evicted_before_its_ttl() {
+        // An entry written before versioned metadata existed carries no lease field, so it
+        // cannot be shown to be unleased. Under size pressure it must be kept until its own TTL
+        // actually elapses, rather than deleted on the assumption that nobody needs it.
+        let root = temp_root("legacy_conservative");
+        let content = b"written before versioned metadata";
+        let marker = store_expired_then_lease(&root, content, "default");
+        downgrade_to_legacy_metadata(&root, &marker.hash, None, content.len());
+
+        let store = RetrievalStore::filesystem(&root);
+        let outcome = store.gc(Some(0)).unwrap();
+        assert_eq!(outcome.evicted_removed, 0);
+        assert_eq!(outcome.eviction_skipped_protected, 1);
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Found(content.to_vec()),
+            "a legacy entry must survive size pressure until its own TTL elapses"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_legacy_entry_is_still_removed_once_its_own_ttl_elapses() {
+        // "Conservative until expiry" is not "kept forever": once the TTL has genuinely passed,
+        // a legacy entry is collectable like any other.
+        let root = temp_root("legacy_expiry");
+        let content = b"legacy and expired";
+        let marker = store_expired_then_lease(&root, content, "default");
+        downgrade_to_legacy_metadata(&root, &marker.hash, Some(0), content.len());
+
+        let store = RetrievalStore::filesystem(&root);
+        assert_eq!(store.gc(None).unwrap().expired_removed, 1);
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Missing
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn memory_and_filesystem_agree_on_the_lease_lifetime_matrix() {
+        // The same contract on both backends, so a caller cannot get different durability
+        // depending on which one is configured.
+        for store in [
+            RetrievalStore::memory(),
+            RetrievalStore::filesystem(temp_root("parity")),
+        ] {
+            let content = b"backend parity payload";
+            let marker = store.store(content, "default", Some(0)).unwrap();
+            store
+                .acquire_lease(&marker.hash, "default", "holder", 3600)
+                .unwrap();
+            assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 0);
+            assert_eq!(
+                store.retrieve(&marker.hash, "default"),
+                RetrievalOutcome::Found(content.to_vec())
+            );
+            assert!(
+                store
+                    .release_lease(&marker.hash, "default", "holder")
+                    .unwrap()
+            );
+            assert_eq!(store.gc(Some(0)).unwrap().expired_removed, 1);
+            if let RetrievalStore::Filesystem { root } = store {
+                std::fs::remove_dir_all(&root).ok();
+            }
+        }
+    }
+
+    #[test]
+    fn leasing_an_entry_that_is_not_there_is_refused() {
+        // A lease protects content; it cannot invent it. Silently "succeeding" here would let a
+        // caller believe a reference is durable when nothing was ever stored.
+        let store = RetrievalStore::memory();
+        let err = store
+            .acquire_lease(&hex_sha256(b"never stored"), "default", "session-a", 60)
+            .unwrap_err();
+        assert!(matches!(err, TokenFoldError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn an_unsafe_namespace_cannot_be_leased_or_traversed() {
+        let store = RetrievalStore::memory();
+        let marker = store.store(b"safe content", "default", None).unwrap();
+        assert!(
+            store
+                .acquire_lease(&marker.hash, "../escape", "session-a", 60)
+                .is_err()
+        );
+        assert!(
+            !store
+                .release_lease(&marker.hash, "../escape", "session-a")
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn an_empty_lease_holder_is_refused() {
+        // An anonymous lease could never be released by anyone, so it would pin an entry for its
+        // whole promised window with no way to give it back.
+        let store = RetrievalStore::memory();
+        let marker = store.store(b"some content", "default", None).unwrap();
+        assert!(
+            store
+                .acquire_lease(&marker.hash, "default", "", 60)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn an_unauthorized_namespace_is_refused_without_revealing_existence() {
+        // A host must not be able to use retrieval to probe another namespace. Both a hash that
+        // exists and one that does not must produce the *same* answer, or the variant itself
+        // becomes an existence oracle.
+        let store = RetrievalStore::memory();
+        let present = store
+            .store(b"someone else's data", "other-tenant", None)
+            .unwrap();
+        let absent_hash = hex_sha256(b"never stored anywhere");
+        let allowed = vec!["my-tenant".to_string()];
+
+        let for_present = store.retrieve_authorized(&present.hash, "other-tenant", &allowed, None);
+        let for_absent = store.retrieve_authorized(&absent_hash, "other-tenant", &allowed, None);
+
+        assert_eq!(for_present, RetrievalOutcome::Unauthorized);
+        assert_eq!(
+            for_absent,
+            RetrievalOutcome::Unauthorized,
+            "an unauthorized lookup must not distinguish existing from absent"
+        );
+    }
+
+    #[test]
+    fn an_authorized_namespace_still_retrieves_normally() {
+        // Authorization is an addition to the contract, not a replacement: an allowed namespace
+        // keeps working exactly as before, including the missing/expired distinctions.
+        let store = RetrievalStore::memory();
+        let marker = store.store(b"my own data", "my-tenant", None).unwrap();
+        let allowed = vec!["my-tenant".to_string()];
+
+        assert_eq!(
+            store.retrieve_authorized(&marker.hash, "my-tenant", &allowed, None),
+            RetrievalOutcome::Found(b"my own data".to_vec())
+        );
+        assert_eq!(
+            store.retrieve_authorized(&hex_sha256(b"nope"), "my-tenant", &allowed, None),
+            RetrievalOutcome::Missing
+        );
+    }
+
+    #[test]
+    fn an_empty_authorization_list_preserves_the_pre_ep05_behavior() {
+        // Backward compatibility: an unconfigured host must not suddenly start refusing
+        // retrievals it used to be able to perform.
+        let store = RetrievalStore::memory();
+        let marker = store.store(b"unrestricted", "any-namespace", None).unwrap();
+        assert_eq!(
+            store.retrieve_authorized(&marker.hash, "any-namespace", &[], None),
+            RetrievalOutcome::Found(b"unrestricted".to_vec())
+        );
+    }
+
+    #[test]
+    fn an_oversized_restore_is_refused_and_never_truncated() {
+        // Bounded retrieval returns the original whole or not at all. A truncated JSON row handed
+        // back as the original would corrupt the recovered context silently.
+        let store = RetrievalStore::memory();
+        let original = b"{\"row\":1,\"payload\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}";
+        let marker = store.store(original, "default", None).unwrap();
+
+        let outcome = store.retrieve_authorized(&marker.hash, "default", &[], Some(10));
+        assert_eq!(
+            outcome,
+            RetrievalOutcome::OverBudget {
+                bytes: original.len(),
+                limit_bytes: 10,
+            },
+            "an over-budget restore must refuse, not return a prefix"
+        );
+
+        // Exactly at the limit is allowed: the bound is inclusive.
+        assert_eq!(
+            store.retrieve_authorized(&marker.hash, "default", &[], Some(original.len())),
+            RetrievalOutcome::Found(original.to_vec())
+        );
+    }
+
+    #[test]
+    fn a_budget_applies_after_authorization_not_before() {
+        // Order matters for what leaks: an unauthorized caller must get `Unauthorized` even when
+        // the entry would also have blown the budget, so the budget never discloses size to a
+        // caller who has no right to read the entry.
+        let store = RetrievalStore::memory();
+        let marker = store
+            .store(b"a fairly large private payload", "other", None)
+            .unwrap();
+        let allowed = vec!["mine".to_string()];
+        assert_eq!(
+            store.retrieve_authorized(&marker.hash, "other", &allowed, Some(1)),
+            RetrievalOutcome::Unauthorized
+        );
     }
 
     #[test]
