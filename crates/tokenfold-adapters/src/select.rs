@@ -464,7 +464,15 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             let launcher = root.with_extension("sh");
             let quoted = executable.to_str().unwrap().replace('\'', "'\\''");
-            std::fs::write(&launcher, format!("#!/bin/sh\nexec '{quoted}' \"$@\"\n")).unwrap();
+            let profile = root.with_extension("profraw");
+            let profile = profile.to_str().unwrap().replace('\'', "'\\''");
+            std::fs::write(
+                &launcher,
+                format!(
+                    "#!/bin/sh\nexport LLVM_PROFILE_FILE='{profile}'\nexec '{quoted}' \"$@\"\n"
+                ),
+            )
+            .unwrap();
             std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o700)).unwrap();
             launcher
         };
@@ -598,7 +606,15 @@ mod tests {
         assert!(std::fs::read_dir(&root).unwrap().next().is_none());
         std::fs::remove_dir(root).unwrap();
         #[cfg(unix)]
-        std::fs::remove_file(launcher).unwrap();
+        {
+            std::fs::remove_file(launcher).unwrap();
+            // env_clear deliberately removes llvm-cov's output path; keep the
+            // instrumented worker's own output outside the runtime scratch root.
+            let profile = root.with_extension("profraw");
+            if profile.exists() {
+                std::fs::remove_file(profile).unwrap();
+            }
+        }
     }
 
     struct BoundaryEstimator;
