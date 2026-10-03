@@ -184,7 +184,7 @@ pub struct Lease {
 ///
 /// Version 0 is reserved for entries written before versioned metadata existed: they carry no
 /// leases and no quota history, so this build treats them conservatively (see
-/// [`EntryMeta::is_legacy`]) rather than guessing.
+/// `EntryMeta::is_legacy`) rather than guessing.
 pub const META_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -336,27 +336,27 @@ impl RetrievalStore {
             })
             .collect::<Result<_, TokenFoldError>>()?;
 
-        // Admission-before-publication. Only content that is not already stored counts as new.
-        if let Some(cap) = max_store_bytes {
-            let existing = self.live_bytes()?;
-            let increment = self.admitted_increment(&prepared)?;
-            if existing.saturating_add(increment) > cap {
-                return Err(TokenFoldError::QuotaExceeded {
-                    limit_bytes: cap,
-                    requested_bytes: existing.saturating_add(increment),
-                });
-            }
-        }
-
         match self {
             RetrievalStore::Memory(map) => {
                 let mut guard = map.lock().unwrap_or_else(|e| e.into_inner());
+                check_admission(
+                    &prepared,
+                    max_store_bytes,
+                    guard.values().map(|entry| entry.meta.bytes as u64).sum(),
+                    |marker| guard.contains_key(&(marker.namespace.clone(), marker.hash.clone())),
+                )?;
                 for (bytes, meta, marker) in &prepared {
+                    let mut meta = meta.clone();
+                    if let Some(existing) =
+                        guard.get(&(marker.namespace.clone(), marker.hash.clone()))
+                    {
+                        preserve_retention(&mut meta, &existing.meta);
+                    }
                     guard.insert(
                         (marker.namespace.clone(), marker.hash.clone()),
                         MemoryEntry {
                             bytes: bytes.clone(),
-                            meta: meta.clone(),
+                            meta,
                         },
                     );
                 }
@@ -364,6 +364,18 @@ impl RetrievalStore {
             RetrievalStore::Filesystem { root } => {
                 std::fs::create_dir_all(root)?;
                 let _lock = lock_store(root)?;
+                if max_store_bytes.is_some() {
+                    let existing = read_all_metadata(root)?
+                        .iter()
+                        .fold(0u64, |total, (_, meta)| {
+                            total.saturating_add(meta.bytes as u64)
+                        });
+                    check_admission(&prepared, max_store_bytes, existing, |marker| {
+                        let dir = root.join(&marker.namespace);
+                        dir.join(format!("{}.meta.json", marker.hash)).is_file()
+                            && dir.join(format!("{}.bin", marker.hash)).is_file()
+                    })?;
+                }
                 let mut created = Vec::new();
                 for (bytes, meta, marker) in &prepared {
                     match store_filesystem_entry(root, bytes, meta, marker) {
@@ -396,65 +408,7 @@ impl RetrievalStore {
         self.store_batch_within(entries, None)
     }
 
-    /// Total bytes currently held by entries this store would still consider live.
-    ///
-    /// Expired-but-leased and legacy entries are counted: both are still occupying disk, and
-    /// pretending otherwise would let a quota be met by silently over-writing protected data.
-    fn live_bytes(&self) -> Result<u64, TokenFoldError> {
-        Ok(match self {
-            RetrievalStore::Memory(map) => {
-                let guard = map.lock().unwrap_or_else(|e| e.into_inner());
-                guard.values().map(|e| e.meta.bytes as u64).sum()
-            }
-            RetrievalStore::Filesystem { root } => {
-                let mut total = 0u64;
-                for (meta_path, meta) in read_all_metadata(root)? {
-                    let _ = meta_path;
-                    total = total.saturating_add(meta.bytes as u64);
-                }
-                total
-            }
-        })
-    }
-
-    /// Net new bytes `prepared` would add, ignoring content already present under the same key.
-    fn admitted_increment(
-        &self,
-        prepared: &[(Vec<u8>, EntryMeta, RetrievalMarker)],
-    ) -> Result<u64, TokenFoldError> {
-        match self {
-            RetrievalStore::Memory(map) => {
-                let guard = map.lock().unwrap_or_else(|e| e.into_inner());
-                let mut increment = 0u64;
-                for (_, meta, marker) in prepared {
-                    let key = (marker.namespace.clone(), marker.hash.clone());
-                    if !guard.contains_key(&key) {
-                        increment = increment.saturating_add(meta.bytes as u64);
-                    }
-                }
-                Ok(increment)
-            }
-            RetrievalStore::Filesystem { root } => {
-                let mut increment = 0u64;
-                for (_, meta, marker) in prepared {
-                    let meta_path = root
-                        .join(&marker.namespace)
-                        .join(format!("{}.meta.json", marker.hash));
-                    let present = std::fs::read(&meta_path)
-                        .ok()
-                        .and_then(|raw| serde_json::from_slice::<EntryMeta>(&raw).ok())
-                        .is_some();
-                    if !present {
-                        increment = increment.saturating_add(meta.bytes as u64);
-                    }
-                }
-                Ok(increment)
-            }
-        }
-    }
-
-    /// Looks up `hash` in `namespace`. Never returns a partial result: exactly one of
-    /// `Found`/`Missing`/`Expired`.
+    /// Looks up `hash` in `namespace`, returning a whole entry or an explicit absence.
     pub fn retrieve(&self, hash: &str, namespace: &str) -> RetrievalOutcome {
         if !is_safe_path_component(namespace) || !is_safe_path_component(hash) {
             return RetrievalOutcome::Missing;
@@ -796,12 +750,8 @@ impl RetrievalStore {
     }
 }
 
-/// Reads every readable `*.meta.json` under `root`, as `(meta_path, meta)` pairs.
-///
-/// A missing or unreadable directory yields an empty list rather than an error: a store that has
-/// never been written is empty, not broken. Unparseable individual metadata files are skipped
-/// for the same reason GC skips them — a half-written or foreign file must not make the whole
-/// store unreadable.
+/// Enumerates metadata for admission. Unreadable or corrupt metadata fails closed:
+/// skipping it would undercount occupied space and admit against an invented quota.
 fn read_all_metadata(root: &Path) -> Result<Vec<(PathBuf, EntryMeta)>, TokenFoldError> {
     let mut out = Vec::new();
     if !root.is_dir() {
@@ -822,12 +772,11 @@ fn read_all_metadata(root: &Path) -> Result<Vec<(PathBuf, EntryMeta)>, TokenFold
             if name.strip_suffix(".meta.json").is_none() {
                 continue;
             }
-            let Ok(raw) = std::fs::read(&meta_path) else {
-                continue;
-            };
-            if let Ok(meta) = serde_json::from_slice::<EntryMeta>(&raw) {
-                out.push((meta_path, meta));
-            }
+            let raw = std::fs::read(&meta_path)?;
+            let meta = serde_json::from_slice::<EntryMeta>(&raw).map_err(|e| {
+                TokenFoldError::InternalError(format!("invalid admission metadata: {e}"))
+            })?;
+            out.push((meta_path, meta));
         }
     }
     Ok(out)
@@ -899,6 +848,52 @@ fn publish_file(temp: &Path, destination: &Path) -> Result<(), TokenFoldError> {
     Ok(())
 }
 
+// Called only while holding the backend's publication lock: admission and the write are
+// one critical section, including across separate filesystem-store processes.
+fn check_admission(
+    prepared: &[(Vec<u8>, EntryMeta, RetrievalMarker)],
+    cap: Option<u64>,
+    existing: u64,
+    present: impl Fn(&RetrievalMarker) -> bool,
+) -> Result<(), TokenFoldError> {
+    let Some(cap) = cap else {
+        return Ok(());
+    };
+    let mut seen = std::collections::HashSet::new();
+    let increment = prepared.iter().fold(0u64, |total, (_, meta, marker)| {
+        if seen.insert((&marker.namespace, &marker.hash)) && !present(marker) {
+            total.saturating_add(meta.bytes as u64)
+        } else {
+            total
+        }
+    });
+    let requested = existing.saturating_add(increment);
+    if requested > cap {
+        return Err(TokenFoldError::QuotaExceeded {
+            limit_bytes: cap,
+            requested_bytes: requested,
+        });
+    }
+    Ok(())
+}
+
+// A repeated publication cannot erase another session's promise or shorten its TTL.
+fn preserve_retention(meta: &mut EntryMeta, existing: &EntryMeta) {
+    meta.version = meta.version.min(existing.version);
+    meta.leases = existing.leases.clone();
+    meta.ttl_seconds = match (meta.ttl_seconds, existing.ttl_seconds) {
+        (Some(new), Some(old)) => Some(
+            new.max(
+                existing
+                    .stored_at_unix
+                    .saturating_add(old)
+                    .saturating_sub(meta.stored_at_unix),
+            ),
+        ),
+        _ => None,
+    };
+}
+
 fn store_filesystem_entry(
     root: &Path,
     bytes: &[u8],
@@ -914,7 +909,15 @@ fn store_filesystem_entry(
         std::fs::remove_file(&data_path).ok();
         std::fs::remove_file(&meta_path).ok();
     }
-    let meta_json = serde_json::to_vec_pretty(meta).map_err(|e| {
+    let mut meta = meta.clone();
+    if existed {
+        let existing: EntryMeta =
+            serde_json::from_slice(&std::fs::read(&meta_path)?).map_err(|e| {
+                TokenFoldError::InternalError(format!("invalid retrieval metadata: {e}"))
+            })?;
+        preserve_retention(&mut meta, &existing);
+    }
+    let meta_json = serde_json::to_vec_pretty(&meta).map_err(|e| {
         TokenFoldError::InternalError(format!("failed to encode retrieval metadata: {e}"))
     })?;
     let data_temp = stage_file(&data_path, bytes)?;
@@ -953,8 +956,8 @@ fn is_expired(meta: &EntryMeta) -> bool {
 /// True when GC is allowed to delete this entry.
 ///
 /// An entry is protected from expiry-driven deletion when an unexpired lease still promises it:
-/// the lease is a floor under the TTL, not an alternative to it. The entry still reports as
-/// `Expired` to a reader — it is genuinely past its TTL — but it is not thrown away.
+/// the lease is a floor under the TTL, not an alternative to it. The entry is served as
+/// `Found` to a reader — it is genuinely past its TTL — but it is not thrown away.
 fn is_removable(meta: &EntryMeta, now: u64) -> bool {
     is_expired(meta) && !meta.is_leased(now)
 }
@@ -965,7 +968,7 @@ fn is_removable(meta: &EntryMeta, now: u64) -> bool {
 /// (unversioned) entry, because a legacy entry predates the lease field and cannot be shown to be
 /// unleased. Deleting one would break a reference this build has no record of.
 fn is_evictable(meta: &EntryMeta, now: u64) -> bool {
-    !meta.is_leased(now) && !meta.is_legacy()
+    !meta.is_leased(now) && !meta.is_legacy() && (meta.ttl_seconds.is_none() || is_expired(meta))
 }
 
 /// Adds `lease` to `meta`, keeping the longer promise if the holder already has one, and returns
@@ -1059,6 +1062,142 @@ pub fn default_store_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn admission_process_worker() {
+        let Some(root) = std::env::var_os("TOKENFOLD_TEST_ADMISSION_ROOT") else {
+            return;
+        };
+        let payload = std::env::var("TOKENFOLD_TEST_ADMISSION_PAYLOAD").unwrap();
+        let store = RetrievalStore::filesystem(root);
+        match store.store_batch_within(&[(payload.as_bytes(), "default", Some(3600))], Some(8)) {
+            Ok(_) | Err(TokenFoldError::QuotaExceeded { .. }) => {}
+            Err(error) => panic!("unexpected admission failure: {error}"),
+        }
+    }
+
+    #[test]
+    fn corrupt_metadata_cannot_be_skipped_by_quota_admission() {
+        let root = temp_root("corrupt_admission");
+        let store = RetrievalStore::filesystem(&root);
+        let marker = store
+            .store(b"already occupying space", "default", None)
+            .unwrap();
+        std::fs::write(
+            root.join("default")
+                .join(format!("{}.meta.json", marker.hash)),
+            b"not metadata",
+        )
+        .unwrap();
+        assert!(
+            store
+                .store_batch_within(&[(b"new entry", "default", None)], Some(100))
+                .is_err()
+        );
+        assert_eq!(
+            store.retrieve(&hex_sha256(b"new entry"), "default"),
+            RetrievalOutcome::Missing
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn admission_is_serialized_across_processes() {
+        let root = temp_root("concurrent_admission");
+        let mut children: Vec<_> = (0..8)
+            .map(|index| {
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "retrieval_store::tests::admission_process_worker",
+                    ])
+                    .env("TOKENFOLD_TEST_ADMISSION_ROOT", &root)
+                    .env(
+                        "TOKENFOLD_TEST_ADMISSION_PAYLOAD",
+                        format!("entry-{index:02}"),
+                    )
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap()
+            })
+            .collect();
+        for child in &mut children {
+            assert!(child.wait().unwrap().success());
+        }
+        let metadata = read_all_metadata(&root).unwrap();
+        assert_eq!(
+            metadata.len(),
+            1,
+            "parallel writers exceeded the one-entry quota"
+        );
+        let hash = metadata[0]
+            .0
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .strip_suffix(".meta.json")
+            .unwrap();
+        let store = RetrievalStore::filesystem(&root);
+        store.gc(Some(0)).unwrap();
+        assert!(matches!(
+            store.retrieve(hash, "default"),
+            RetrievalOutcome::Found(_)
+        ));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn admission_counts_each_new_key_once_per_batch() {
+        for store in [
+            RetrievalStore::memory(),
+            RetrievalStore::filesystem(temp_root("batch_duplicates")),
+        ] {
+            let content = b"one physical copy";
+            let entries = [(content.as_slice(), "default", None); 2];
+            assert!(
+                store
+                    .store_batch_within(&entries, Some(content.len() as u64))
+                    .is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn restoring_content_preserves_other_holders_leases() {
+        for store in [
+            RetrievalStore::memory(),
+            RetrievalStore::filesystem(temp_root("restore_lease")),
+        ] {
+            let content = b"promised to another session";
+            let marker = store.store(content, "default", Some(0)).unwrap();
+            store
+                .acquire_lease(&marker.hash, "default", "first", 3600)
+                .unwrap();
+            store.store(content, "default", Some(0)).unwrap();
+            store.gc(Some(0)).unwrap();
+            assert_eq!(
+                store.retrieve(&marker.hash, "default"),
+                RetrievalOutcome::Found(content.to_vec())
+            );
+        }
+    }
+
+    #[test]
+    fn promised_ttl_survives_size_pressure_and_a_shorter_restore() {
+        let root = temp_root("ttl_promise");
+        let store = RetrievalStore::filesystem(&root);
+        let content = b"needed by a resumed session";
+        let marker = store.store(content, "default", Some(3600)).unwrap();
+        store.store(content, "default", Some(0)).unwrap();
+        // A separately opened store represents a later GC owner.
+        RetrievalStore::filesystem(&root).gc(Some(0)).unwrap();
+        assert_eq!(
+            store.retrieve(&marker.hash, "default"),
+            RetrievalOutcome::Found(content.to_vec())
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
     use std::sync::atomic::{AtomicU64, Ordering};
 
     fn temp_root(tag: &str) -> PathBuf {

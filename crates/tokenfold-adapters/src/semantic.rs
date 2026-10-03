@@ -11,6 +11,11 @@
 //! degradation is visible in a receipt rather than being mistaken for "the strategy just ran and
 //! saved nothing".
 //!
+//! This prototype admits only claim-backed literal extracts of the same authorized baseline.
+//! Self-reported claims cannot prove free-form generated text. Literal extraction still does
+//! not establish semantic quality (for example, preserving negation); task evaluation remains
+//! required. The synchronous budget is checked after return and is not a hard deadline.
+//!
 //! # What this deliberately does not do
 //!
 //! It loads no model and downloads nothing. The strategy is a trait, so the deterministic fake used
@@ -120,6 +125,11 @@ fn verify(summary: &Summary, request: &SummaryRequest) -> Result<(), StrategyFai
         });
     }
     for claim in &summary.claims {
+        if claim.text.trim().is_empty() || claim.source.trim().is_empty() {
+            return Err(StrategyFailure::Unusable {
+                detail: "empty claim or source".into(),
+            });
+        }
         // An invented fact: an assertion whose text is not in the input at all. This is the
         // failure that makes summarization dangerous, because the output reads as confident.
         if !request.content.contains(claim.text.as_str()) {
@@ -133,6 +143,19 @@ fn verify(summary: &Summary, request: &SummaryRequest) -> Result<(), StrategyFai
                 cited: claim.source.clone(),
             });
         }
+    }
+    // Self-reported claims do not validate the text being sent. Until a separately reviewed
+    // generative verifier exists, only a literal extract of the authorized input is admissible.
+    if summary.claims.is_empty()
+        || !request.content.contains(&summary.text)
+        || summary
+            .claims
+            .iter()
+            .any(|claim| !summary.text.contains(&claim.text))
+    {
+        return Err(StrategyFailure::Unusable {
+            detail: "summary is not a claim-backed source extract".into(),
+        });
     }
     Ok(())
 }
@@ -156,6 +179,14 @@ pub fn summarize(
         reason: None,
     };
 
+    if request.content.as_bytes() != baseline {
+        return SemanticOutcome {
+            reason: Some(StrategyFailure::Unusable {
+                detail: "request differs from the authorized baseline".into(),
+            }),
+            ..untouched()
+        };
+    }
     let Some(strategy) = strategy else {
         return SemanticOutcome {
             reason: Some(StrategyFailure::NotConfigured),
@@ -195,6 +226,14 @@ pub fn summarize(
         };
     }
 
+    if summary.text.len() >= baseline.len() {
+        return SemanticOutcome {
+            reason: Some(StrategyFailure::Unusable {
+                detail: "summary is not smaller than the baseline".into(),
+            }),
+            ..untouched()
+        };
+    }
     SemanticOutcome {
         bytes: summary.text.into_bytes(),
         disposition: SemanticDisposition::Summarized,
@@ -205,11 +244,13 @@ pub fn summarize(
 
 /// A strategy that fails in a specific, named way. Each variant is one hostile behavior the
 /// fallback must survive.
+#[cfg(test)]
 struct HostileStrategy {
     behavior: Behavior,
     delay: Duration,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Behavior {
     /// Returns a summary asserting something absent from the input.
@@ -228,6 +269,7 @@ enum Behavior {
     Good,
 }
 
+#[cfg(test)]
 impl SemanticStrategy for HostileStrategy {
     fn name(&self) -> &str {
         "hostile-test-strategy"
@@ -273,7 +315,7 @@ impl SemanticStrategy for HostileStrategy {
                 detail: "the strategy gave up".into(),
             }),
             Behavior::Good => Ok(Summary {
-                text: "a verified summary of the build failure".into(),
+                text: "build failed".into(),
                 // Every claim is real and correctly attributed.
                 claims: vec![Claim {
                     text: "build failed".into(),
@@ -287,6 +329,29 @@ impl SemanticStrategy for HostileStrategy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct UncheckedText;
+    impl SemanticStrategy for UncheckedText {
+        fn name(&self) -> &str {
+            "unchecked-text"
+        }
+        fn summarize(&self, _: &SummaryRequest) -> Result<Summary, StrategyFailure> {
+            Ok(Summary {
+                text: "the build succeeded".into(),
+                claims: vec![Claim {
+                    text: "build failed".into(),
+                    source: "parser.rs".into(),
+                }],
+            })
+        }
+    }
+
+    #[test]
+    fn unchecked_summary_text_cannot_hide_behind_valid_claims() {
+        let out = summarize(BASELINE, &request(), Some(&UncheckedText), budget());
+        assert_eq!(out.disposition, SemanticDisposition::FellBack);
+        assert_eq!(out.bytes, BASELINE);
+    }
 
     const BASELINE: &[u8] = b"the build failed with a parse error in parser.rs";
     const CONTENT: &str = "the build failed with a parse error in parser.rs";
@@ -439,7 +504,7 @@ mod tests {
         assert_eq!(out.disposition, SemanticDisposition::Summarized);
         assert_eq!(out.reason, None);
         assert_eq!(out.strategy, "hostile-test-strategy");
-        assert!(out.bytes.starts_with(b"a verified summary"));
+        assert_eq!(out.bytes, b"build failed");
     }
 
     #[test]

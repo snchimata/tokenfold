@@ -14,9 +14,11 @@ name = "tokenfold"
 path = "src/main.rs"
 
 [dependencies]
-tokenfold-core = { version = "0.5.0", path = "../tokenfold-core" }
-tokenfold-output = { version = "0.5.0", path = "../tokenfold-output" }
-tokenfold-learn = { version = "0.5.0", path = "../tokenfold-learn" }
+tokenfold-adapters = { version = "0.5.1", path = "../tokenfold-adapters" }
+tokenfold-core = { version = "0.5.1", path = "../tokenfold-core" }
+tokenfold-output = { version = "0.5.1", path = "../tokenfold-output" }
+tokenfold-learn = { version = "0.5.1", path = "../tokenfold-learn" }
+tokenfold-rag = { version = "0.5.1", path = "../tokenfold-rag" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

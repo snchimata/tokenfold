@@ -14,8 +14,8 @@
 //! 2. **Companion tools.** A forced tool is frequently useless alone -- reading a file is
 //!    pointless without an edit tool. Companions are detected by explicit declaration from the
 //!    caller, never by guessing from a tool's description.
-//! 3. **Exact schema constraints.** A kept tool's JSON is copied **byte-for-byte**. This module
-//!    never rewrites, reorders keys inside, or "simplifies" a schema: a tool whose constraints are
+//! 3. **Exact schema constraints.** A kept tool's JSON values and insertion order are preserved. This module
+//!    never changes constraints, reorders keys inside, or "simplifies" a schema: a tool whose constraints are
 //!    silently altered is a tool the model will misuse.
 //!
 //! # Unknown tools are reported, never invented
@@ -126,10 +126,10 @@ pub fn select_tools(body: &[u8], policy: &ToolPolicy) -> ToolSelection {
     let forced = forced_tool(&value);
     // Unknown = declared by the caller but absent from the catalog. Reported, never added.
     let mut unknown: Vec<String> = Vec::new();
-    if let Some(name) = &forced {
-        if !names.contains(name) {
-            unknown.push(name.clone());
-        }
+    if let Some(name) = &forced
+        && !names.contains(name)
+    {
+        unknown.push(name.clone());
     }
     for companion in &policy.companions {
         if !names.contains(companion) {
@@ -236,6 +236,90 @@ fn tool_name(tool: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Query-aware lexical ranking with an explicit host-owned discovery fallback. Discovery
+/// must already be executable in the authorized catalog; this never fabricates a tool.
+/// Failure keeps the baseline, and every selected definition remains unchanged as a JSON value.
+pub fn select_tools_for_query(
+    body: &[u8],
+    query: &str,
+    discovery_tool: &str,
+    policy: &ToolPolicy,
+) -> ToolSelection {
+    if !policy.enabled {
+        return select_tools(body, policy);
+    }
+    let Ok(value) = serde_json::from_slice::<Value>(body) else {
+        return unchanged(body, ToolDisposition::NotAChatRequest);
+    };
+    let Some(tools) = value.get("tools").and_then(Value::as_array) else {
+        return unchanged(body, ToolDisposition::NotAChatRequest);
+    };
+    let names: Vec<_> = tools.iter().filter_map(tool_name).collect();
+    let mut unique = std::collections::HashSet::new();
+    if query.trim().is_empty()
+        || query.len() > 4096
+        || discovery_tool.is_empty()
+        || names.len() != tools.len()
+        || names.iter().any(|n| !unique.insert(n))
+        || !names.iter().any(|n| n == discovery_tool)
+    {
+        return unchanged(body, ToolDisposition::Unchanged);
+    }
+    let terms: std::collections::HashSet<_> = query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    let mut ranked: Vec<_> = tools
+        .iter()
+        .enumerate()
+        .map(|(index, tool)| {
+            let definition = tool.get("function").unwrap_or(tool);
+            let text = format!(
+                "{} {}",
+                names[index],
+                definition
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+            );
+            let words: std::collections::HashSet<_> = text
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|t| !t.is_empty())
+                .map(str::to_lowercase)
+                .collect();
+            (index, terms.intersection(&words).count())
+        })
+        .collect();
+    ranked.sort_by(|(a, sa), (b, sb)| sb.cmp(sa).then(a.cmp(b)));
+    let mut selected = policy.companions.clone();
+    selected.push(discovery_tool.into());
+    for (index, _) in ranked
+        .into_iter()
+        .filter(|(i, _)| names[*i] != discovery_tool && !policy.companions.contains(&names[*i]))
+        .take(policy.max_tools)
+    {
+        selected.push(names[index].clone());
+    }
+    let mut result = select_tools(
+        body,
+        &ToolPolicy {
+            enabled: true,
+            max_tools: 0,
+            companions: selected,
+        },
+    );
+    if !result.unknown.is_empty() {
+        result.bytes = body.to_vec();
+        result.saved_bytes = 0;
+        result.dropped.clear();
+        result.kept = names;
+        result.disposition = ToolDisposition::Unchanged;
+    }
+    result.companions.retain(|n| policy.companions.contains(n));
+    result
+}
+
 fn unchanged(body: &[u8], disposition: ToolDisposition) -> ToolSelection {
     ToolSelection {
         bytes: body.to_vec(),
@@ -251,6 +335,34 @@ fn unchanged(body: &[u8], disposition: ToolDisposition) -> ToolSelection {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_selection_keeps_ranked_schema_and_discovery_or_falls_back() {
+        let original = body(&["unrelated", "search", "discover", "other"]);
+        let selected = select_tools_for_query(&original, "search", "discover", &policy(1));
+        assert_eq!(selected.kept, vec!["search", "discover"]);
+        let parsed: Value = serde_json::from_slice(&selected.bytes).unwrap();
+        assert_eq!(parsed["tools"][0], tool("search"));
+        assert_eq!(parsed["tools"][1], tool("discover"));
+        assert_eq!(
+            select_tools_for_query(&original, "search", "missing", &policy(1)).bytes,
+            original
+        );
+        let invalid = ToolPolicy {
+            companions: vec!["missing".into()],
+            ..policy(1)
+        };
+        assert_eq!(
+            select_tools_for_query(&original, "search", "discover", &invalid).bytes,
+            original
+        );
+        let duplicate = body(&["search", "search", "discover"]);
+        assert_eq!(
+            select_tools_for_query(&duplicate, "search", "discover", &policy(1)).bytes,
+            duplicate
+        );
+    }
+
     use serde_json::json;
 
     fn tool(name: &str) -> Value {
@@ -486,7 +598,7 @@ mod tests {
         assert_eq!(out.disposition, ToolDisposition::Reduced);
         assert_eq!(
             out.saved_bytes,
-            out.bytes.len().max(0) * 0 + (body(&["a", "b", "c", "d"]).len() - out.bytes.len())
+            body(&["a", "b", "c", "d"]).len() - out.bytes.len()
         );
         assert!(out.bytes.len() < body(&["a", "b", "c", "d"]).len());
     }

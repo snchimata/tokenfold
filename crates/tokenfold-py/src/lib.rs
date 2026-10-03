@@ -388,6 +388,7 @@ impl PyCompressionPolicy {
         store_originals=false,
         retrieval_namespace=None,
         retrieval_ttl_seconds=None,
+        retrieval_max_store_bytes=None,
         retrieval_backend=None,
         retrieval_store_path=None,
         lossy=None,
@@ -406,6 +407,7 @@ impl PyCompressionPolicy {
         store_originals: bool,
         retrieval_namespace: Option<String>,
         retrieval_ttl_seconds: Option<u64>,
+        retrieval_max_store_bytes: Option<u64>,
         retrieval_backend: Option<String>,
         retrieval_store_path: Option<PathBuf>,
         lossy: Option<LossyArg>,
@@ -437,6 +439,7 @@ impl PyCompressionPolicy {
             builder = builder.retrieval_namespace(ns);
         }
         builder = builder.retrieval_ttl_seconds(retrieval_ttl_seconds);
+        builder = builder.retrieval_max_store_bytes(retrieval_max_store_bytes);
         if let Some(backend) = retrieval_backend {
             builder = builder.retrieval_backend(backend);
         }
@@ -775,6 +778,7 @@ fn effective_policy(
         builder = builder.store_originals(p.store_originals);
         builder = builder.retrieval_namespace(p.retrieval_namespace.clone());
         builder = builder.retrieval_ttl_seconds(p.retrieval_ttl_seconds);
+        builder = builder.retrieval_max_store_bytes(p.retrieval_max_store_bytes());
         builder = builder.retrieval_backend(p.retrieval_backend.clone());
         builder = builder.retrieval_store_path(p.retrieval_store_path.clone());
         builder = builder.task_scope(p.task_scope);
@@ -897,7 +901,7 @@ fn run_compress(
 // ---------------------------------------------------------------------------------------
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None, retrieval_max_store_bytes=None))]
 #[allow(clippy::too_many_arguments)]
 fn compress(
     py: Python<'_>,
@@ -908,6 +912,7 @@ fn compress(
     require_target: bool,
     encoding: Option<EncodingArg>,
     pruning: Option<PyRef<'_, PyPruningPolicy>>,
+    retrieval_max_store_bytes: Option<u64>,
 ) -> PyResult<PyCompressionResult> {
     if require_target && target_tokens.is_none() {
         return Err(ConfigError::new_err(
@@ -922,6 +927,12 @@ fn compress(
             "pruning requires target_tokens or keep_ratio",
         ));
     }
+    let policy = PyCompressionPolicy(
+        CorePolicy::builder()
+            .retrieval_max_store_bytes(retrieval_max_store_bytes)
+            .build()
+            .map_err(map_err)?,
+    );
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
@@ -939,7 +950,7 @@ fn compress(
         py,
         resolved_format,
         payload,
-        None,
+        Some(&policy),
         preset,
         target_tokens,
         None,
@@ -956,7 +967,7 @@ fn compress(
 }
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None, retrieval_max_store_bytes=None))]
 #[allow(clippy::too_many_arguments)]
 fn inspect(
     py: Python<'_>,
@@ -967,6 +978,7 @@ fn inspect(
     require_target: bool,
     encoding: Option<EncodingArg>,
     pruning: Option<PyRef<'_, PyPruningPolicy>>,
+    retrieval_max_store_bytes: Option<u64>,
 ) -> PyResult<Py<PyCompressionReport>> {
     if require_target && target_tokens.is_none() {
         return Err(ConfigError::new_err(
@@ -981,6 +993,12 @@ fn inspect(
             "pruning requires target_tokens or keep_ratio",
         ));
     }
+    let policy = PyCompressionPolicy(
+        CorePolicy::builder()
+            .retrieval_max_store_bytes(retrieval_max_store_bytes)
+            .build()
+            .map_err(map_err)?,
+    );
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
@@ -998,7 +1016,7 @@ fn inspect(
         py,
         resolved_format,
         payload,
-        None,
+        Some(&policy),
         preset,
         target_tokens,
         None,

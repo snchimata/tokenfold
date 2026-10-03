@@ -123,11 +123,7 @@ pub struct Effective {
     pub retrieval_store_originals: bool,
     pub retrieval_namespace: String,
     pub retrieval_ttl_seconds: Option<u64>,
-    /// Resolved and validated (precedence + `deny_unknown_fields`), but not yet consumed by
-    /// any command surface in this pass: `tokenfold retrieve gc` — the only
-    /// natural consumer of a size cap — isn't wired up yet. Kept `pub` and tested so a future
-    /// `gc` subcommand only needs to read it, not add config plumbing.
-    #[allow(dead_code)]
+    /// Atomic admission limit for compression-time evidence storage.
     pub retrieval_max_store_bytes: Option<u64>,
     pub retrieval_backend: String,
     pub retrieval_store_path: Option<PathBuf>,

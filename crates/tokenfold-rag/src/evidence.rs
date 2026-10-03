@@ -89,6 +89,9 @@ impl EvidenceIndex {
         let mut chunks = Vec::new();
 
         for hash in hashes {
+            if entries.contains_key(hash) {
+                continue;
+            }
             // `retrieve` (not `retrieve_authorized`): the caller already decided this namespace is
             // in scope by naming it, and authorization is enforced once, at the query boundary.
             match store.retrieve(hash, namespace) {
@@ -180,6 +183,7 @@ impl EvidenceIndex {
         self.bm25
             .retrieve(query, top_k)
             .into_iter()
+            .filter(|hit| hit.score > 0.0)
             .filter_map(|RetrievedChunk { id, score, .. }| {
                 // Re-verify against the store rather than trusting the indexed copy.
                 match store.retrieve(&id, &self.namespace) {
@@ -199,12 +203,21 @@ impl EvidenceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unrelated_queries_do_not_disclose_zero_score_entries_and_duplicates_count_once() {
+        let (store, hashes) = store_with(&[("parser token failure", "n", None)]);
+        let (index, report) =
+            EvidenceIndex::build(&store, "n", &[hashes[0].clone(), hashes[0].clone()], 1024);
+        assert_eq!(report.indexed, 1);
+        assert!(index.search(&store, "unrelated", 5, &[]).is_empty());
+        assert_eq!(index.search(&store, "parser", 5, &[]).len(), 1);
+    }
 
     fn store_with(entries: &[(&str, &str, Option<u64>)]) -> (RetrievalStore, Vec<String>) {
         let store = RetrievalStore::memory();
         let hashes = entries
             .iter()
-            .map(|(bytes, ns, ttl)| store.store(bytes.as_bytes(), *ns, *ttl).unwrap().hash)
+            .map(|(bytes, ns, ttl)| store.store(bytes.as_bytes(), ns, *ttl).unwrap().hash)
             .collect();
         (store, hashes)
     }
@@ -301,7 +314,8 @@ mod tests {
             .store(b"evidence that will outlive its ttl", "ns", None)
             .unwrap();
 
-        let (index, _) = EvidenceIndex::build(&store, "ns", &[marker.hash.clone()], 4096);
+        let (index, _) =
+            EvidenceIndex::build(&store, "ns", std::slice::from_ref(&marker.hash), 4096);
         assert_eq!(
             index
                 .search(&store, "outlive", 10, &no_authorization())
@@ -369,8 +383,8 @@ mod tests {
             .unwrap();
         assert_ne!(a.hash, b.hash);
 
-        let (index_a, _) = EvidenceIndex::build(&store, "a", &[a.hash.clone()], 4096);
-        let (index_b, _) = EvidenceIndex::build(&store, "b", &[b.hash.clone()], 4096);
+        let (index_a, _) = EvidenceIndex::build(&store, "a", std::slice::from_ref(&a.hash), 4096);
+        let (index_b, _) = EvidenceIndex::build(&store, "b", std::slice::from_ref(&b.hash), 4096);
 
         assert_eq!(index_a.namespace(), "a");
         assert_eq!(index_b.namespace(), "b");
@@ -398,7 +412,8 @@ mod tests {
             .unwrap();
 
         // Deliberately hand `a`'s index a hash that lives in `b`.
-        let (index_a, report) = EvidenceIndex::build(&store, "a", &[b.hash.clone()], 4096);
+        let (index_a, report) =
+            EvidenceIndex::build(&store, "a", std::slice::from_ref(&b.hash), 4096);
         assert_eq!(index_a.len(), 0);
         assert_eq!(report.rejected.len(), 1);
         assert!(
@@ -510,7 +525,7 @@ mod tests {
             .store(&[0, 159, 146, 150, 255][..], "ns", None)
             .unwrap()
             .hash;
-        let (index, report) = EvidenceIndex::build(&store, "ns", &[hash.clone()], 4096);
+        let (index, report) = EvidenceIndex::build(&store, "ns", std::slice::from_ref(&hash), 4096);
 
         assert!(index.is_empty());
         assert_eq!(report.rejected, vec![IndexRejection::NotText { hash }]);

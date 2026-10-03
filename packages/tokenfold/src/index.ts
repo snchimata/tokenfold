@@ -62,8 +62,34 @@ function argumentsFor(command: "compress" | "inspect", options: CompressionOptio
 function parseReceipt(bytes: Uint8Array, result: ProcessResult): CompressionReceipt {
   const text = Buffer.from(bytes).toString("utf8");
   const json = text.split("\ntokenfold:", 1)[0] ?? "";
-  try { return JSON.parse(json) as CompressionReceipt; }
+  try { return parseReport(json); }
   catch (cause) { throw new TokenFoldProcessError("tokenfold returned an invalid JSON receipt", { code: "invalid_report", exitCode: result.exitCode, signal: result.signal, stderr: result.stderr, cause }); }
+}
+/** Read archived v1 or current v2 receipts; unavailable sections remain null. */
+export function parseReport(input: string | Uint8Array): CompressionReceipt {
+  try {
+    const value = JSON.parse(typeof input === "string" ? input : new TextDecoder("utf-8", { fatal: true }).decode(input));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("not a receipt object");
+    if (!["1.0", "2.0"].includes(value.schema_version)) throw new Error("unsupported receipt schema_version");
+    if (value.schema_version === "1.0") {
+      if (!Object.hasOwn(value, "preset")) { value.preset = value.mode; delete value.mode; }
+      if (!Object.hasOwn(value, "output_encoding")) value.output_encoding = "native";
+    }
+    for (const key of ["original_tokens", "compressed_tokens", "saved_tokens", "savings_ratio", "savings_pct"]) {
+      if (typeof value[key] !== "number" || !Number.isFinite(value[key]) || value[key] < 0) throw new Error(`invalid ${key}`);
+    }
+    for (const key of ["status", "preset", "format", "output_encoding", "task_scope"]) {
+      if (typeof value[key] !== "string") throw new Error(`invalid ${key}`);
+    }
+    if (!value.estimator || typeof value.estimator.backend !== "string" || typeof value.estimator.is_exact !== "boolean"
+      || !Array.isArray(value.transforms) || !Array.isArray(value.warnings)) throw new Error("invalid receipt fields");
+    for (const key of ["request_id", "pipeline", "quality", "budget", "encoding", "pruning", "cache", "retrieval", "output_savings", "bypass", "command", "ledger"]) {
+      value[key] ??= null;
+    }
+    return value as CompressionReceipt;
+  } catch (cause) {
+    throw new TokenFoldProcessError("not a supported compression receipt", { code: "invalid_report", cause });
+  }
 }
 function optionsFor(input: Input | undefined, signal?: AbortSignal): RunOptions {
   const options: RunOptions = { env: { TOKENFOLD_ANALYTICS_ENABLED: "false" } };

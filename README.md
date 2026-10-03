@@ -221,7 +221,7 @@ provider's own `usage` when it reports any (streamed SSE or buffered JSON,
 merged snapshot by snapshot), a signed local-versus-provider delta, and how the
 attempt ended. A provider that reports no usage, or a body whose usage cannot
 be read cleanly, records `usage_disposition: absent|malformed|oversized` with a
-`null` count rather than a zero — and never changes what is forwarded.
+`null` count rather than a zero -- and never changes what is forwarded.
 
 ```python
 from openai import OpenAI

@@ -63,7 +63,7 @@ pub fn assign(session_id: &str, experiment_enabled: bool) -> Assignment {
     let roll = session_hash(session_id);
     Assignment {
         session_id: session_id.to_string(),
-        arm: if !experiment_enabled || roll % 2 == 0 {
+        arm: if !experiment_enabled || roll.is_multiple_of(2) {
             Arm::Control
         } else {
             Arm::Treatment
@@ -114,6 +114,23 @@ pub fn may_shape(
         return Err(ShapeRejection::ControlArm);
     }
     for path in protected_paths {
+        if path.is_empty() || path.starts_with('/') {
+            let before: serde_json::Value = serde_json::from_slice(original).map_err(|_| {
+                ShapeRejection::ProtectedPathLost {
+                    path: (*path).into(),
+                }
+            })?;
+            let after: serde_json::Value =
+                serde_json::from_slice(shaped).map_err(|_| ShapeRejection::ProtectedPathLost {
+                    path: (*path).into(),
+                })?;
+            if before.pointer(path).is_none() || before.pointer(path) != after.pointer(path) {
+                return Err(ShapeRejection::ProtectedPathLost {
+                    path: (*path).into(),
+                });
+            }
+            continue;
+        }
         let needle = path.as_bytes();
         if contains(original, needle) && !contains(shaped, needle) {
             return Err(ShapeRejection::ProtectedPathLost {
@@ -178,6 +195,59 @@ pub fn measure(original: &[u8], shaped: &[u8]) -> Delta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn json_pointer_protects_the_value_not_merely_its_field_name() {
+        let assignment = Assignment {
+            session_id: "s".into(),
+            arm: Arm::Treatment,
+            roll: 1,
+        };
+        let before = br#"{"protected":{"amount":100},"extra":"discard"}"#;
+        let same = br#"{"protected":{"amount":100}}"#;
+        let changed = br#"{"protected":{"amount":1}}"#;
+        assert!(may_shape(before, same, &[""], &assignment, ShapePolicy::default()).is_err());
+        assert!(
+            may_shape(
+                before,
+                same,
+                &["/protected/amount"],
+                &assignment,
+                ShapePolicy::default()
+            )
+            .is_ok()
+        );
+        assert!(
+            may_shape(
+                before,
+                changed,
+                &["/protected/amount"],
+                &assignment,
+                ShapePolicy::default()
+            )
+            .is_err()
+        );
+        assert!(
+            may_shape(
+                before,
+                b"bad json",
+                &["/protected/amount"],
+                &assignment,
+                ShapePolicy::default()
+            )
+            .is_err()
+        );
+        assert!(
+            may_shape(
+                before,
+                same,
+                &["/missing"],
+                &assignment,
+                ShapePolicy::default()
+            )
+            .is_err()
+        );
+    }
 
     // --- session-stable assignment --------------------------------------------
 
@@ -383,15 +453,14 @@ mod tests {
         // It either applies the shape wholly or returns the untouched original; there is no
         // "best effort" output that could have lost protected content.
         let assignment = treatment_session();
-        match may_shape(
+        if let Ok(bytes) = may_shape(
             b"original with <P>protected</P> content and length",
             b"<P>protected</P>",
             &["<P>"],
             &assignment,
             ShapePolicy { min_bytes: 1 },
         ) {
-            Ok(bytes) => assert_eq!(bytes, b"<P>protected</P>".to_vec()),
-            Err(_) => {}
+            assert_eq!(bytes, b"<P>protected</P>".to_vec())
         }
     }
 

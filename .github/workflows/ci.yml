@@ -20,6 +20,9 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: "-D warnings"
       # Tracked source must not cite the untracked design docs or their opaque
       # F-/D-/R- identifiers: neither resolves in a clone, so the reference is
       # dead for everyone but the author. CHANGELOG.md is exempt as released

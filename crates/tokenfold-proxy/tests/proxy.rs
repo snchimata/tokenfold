@@ -301,6 +301,38 @@ fn chat_with_one_tool_result() -> serde_json::Value {
 }
 
 #[test]
+fn observation_commitments_survive_proxy_restart() {
+    let root = unique_temp_path("durable-observations");
+    let path = root.join("ledger.json");
+    let args = [
+        "--observations",
+        "--observation-ledger-path",
+        path.to_str().unwrap(),
+    ];
+    let (upstream, received) = spawn_echo_upstream();
+    let proxy = ProxyProcess::start(&format!("http://{upstream}"), &args);
+    let raw = serde_json::to_vec(&chat_with_one_tool_result()).unwrap();
+    ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .header("X-TokenFold-Session-Id", "restart-session")
+        .send(&raw)
+        .unwrap();
+    let committed = received.lock().unwrap().clone();
+    assert!(committed.len() < raw.len());
+    drop(proxy);
+    let (upstream, received) = spawn_echo_upstream();
+    let proxy = ProxyProcess::start(&format!("http://{upstream}"), &args);
+    ureq::post(proxy.url("/v1/chat/completions"))
+        .header("Content-Type", "application/json")
+        .header("X-TokenFold-Session-Id", "restart-session")
+        .send(&committed)
+        .unwrap();
+    assert_eq!(*received.lock().unwrap(), committed);
+    drop(proxy);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn observations_are_off_unless_the_operator_opts_in() {
     let (upstream_addr, received) = spawn_echo_upstream();
     // No --observations: the default must be a byte-for-byte forward, because the feature rewrites

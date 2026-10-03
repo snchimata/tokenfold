@@ -31,7 +31,7 @@
 //! 2. **Inner round-trip.** Each replacement must still parse, and its decoded value must equal the
 //!    original inner value. A transform that emitted a well-formed envelope holding a truncated
 //!    observation passes check 3 and fails here.
-//! 3. **Envelope parity and recount.** [`verify_shape_parity`](crate::verify_shape_parity) still
+//! 3. **Envelope parity and recount.** [`verify_shape_parity`] still
 //!    holds, and the complete serialized candidate is *smaller*. Segment counts are not additive,
 //!    so the assembled body is what is measured — never the sum of per-result savings.
 //!

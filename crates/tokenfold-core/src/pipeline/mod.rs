@@ -190,7 +190,10 @@ fn maybe_store_originals(
         return Some(skipped());
     };
     Some(
-        match store.store(input_bytes, &policy.retrieval_namespace, Some(ttl_seconds)) {
+        match store.store_batch_within(
+            &[(input_bytes, &policy.retrieval_namespace, Some(ttl_seconds))],
+            policy.retrieval_max_store_bytes,
+        ) {
             Ok(_marker) => RetrievalReport {
                 store_namespace: policy.retrieval_namespace.clone(),
                 hash_algorithm: "sha256".to_string(),
@@ -824,9 +827,11 @@ fn apply_lossy_reduction(
     let mut marker_count = 0usize;
     if let Some(probe) = &preview_probe {
         for item in &outcome.dropped {
-            let would_store = probe
-                .store(&item.bytes, &policy.retrieval_namespace, Some(ttl_seconds))
-                .is_ok();
+            // A preview cannot know durable occupancy; configured quotas project no drops.
+            let would_store = policy.retrieval_max_store_bytes.is_none()
+                && probe
+                    .store(&item.bytes, &policy.retrieval_namespace, Some(ttl_seconds))
+                    .is_ok();
             if !would_store {
                 // Mirrors the real fail-closed branch below: put the item back rather than
                 // leave its marker in a projection that a real run would never produce.
@@ -853,9 +858,11 @@ fn apply_lossy_reduction(
                 )
             })
             .collect();
-        let stored_all = store
-            .as_ref()
-            .is_some_and(|store| store.store_batch(&entries).is_ok());
+        let stored_all = store.as_ref().is_some_and(|store| {
+            store
+                .store_batch_within(&entries, policy.retrieval_max_store_bytes)
+                .is_ok()
+        });
         if stored_all {
             persisted_bytes = outcome.dropped.iter().map(|item| item.bytes.len()).sum();
             marker_count = outcome.dropped.len();

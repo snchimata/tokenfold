@@ -919,3 +919,60 @@ fn v2_missing_retrieval_reference_exits_eight() {
         .unwrap();
     assert_eq!(out.status.code(), Some(8));
 }
+
+#[test]
+fn select_command_is_gated_and_unreachable_budget_keeps_all_context() {
+    let input = br#"{"prefix":"SYSTEM: ","groups":[{"id":"required","text":"required facts","required":true},{"id":"optional","text":" optional facts"}],"suffix":" END"}"#;
+    for experimental in [false, true] {
+        let mut cmd = Command::new(bin());
+        cmd.args(["select", "--query", "facts", "--target-tokens", "1"]);
+        if experimental {
+            cmd.arg("--experimental");
+        }
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        if experimental {
+            assert!(output.status.success());
+            assert_eq!(output.stdout, b"SYSTEM: required facts optional facts END");
+            let receipt: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+            assert_eq!(receipt["kind"], "context_selection");
+            assert_eq!(receipt["selected"], false);
+            assert_eq!(receipt["used_scorer"], false);
+            assert!(receipt.get("estimator").is_some());
+            assert!(receipt.get("text").is_none());
+        } else {
+            assert_eq!(output.status.code(), Some(5));
+            assert!(output.stdout.is_empty());
+        }
+    }
+}
+
+#[test]
+fn select_refuses_json_escaped_secrets_without_echoing_them() {
+    let input = br#"{"groups":[{"id":"g","text":"\u0073\u006b-ABCDEFGHIJ1234567890abcdefgh"}]}"#;
+    let mut child = Command::new(bin())
+        .args([
+            "select",
+            "--experimental",
+            "--query",
+            "facts",
+            "--target-tokens",
+            "1",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(input).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("ABCDEFGHIJ"));
+}

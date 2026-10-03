@@ -25,11 +25,10 @@
 //! The marker is plain text, so user content could in principle contain something that looks like
 //! one. Two rules keep that safe:
 //!
-//! 1. `compact` only ever substitutes positions it has itself chosen to deduplicate, so it never
-//!    reinterprets host content.
-//! 2. `expand` is strict and returns [`DedupError::DanglingReference`] for a marker-shaped string
-//!    whose target does not resolve. A host that literally contains marker-shaped text therefore
-//!    cannot be silently mangled -- the failure is loud instead.
+//! `compact` checks the candidate with the public decoder and keeps the baseline on any
+//! collision or byte mismatch (including non-canonical JSON). No private position list is
+//! required to decode emitted candidates. `expand` rejects dangling and forward references.
+//! A future escaping frame can extend eligibility without weakening this gate.
 
 use serde_json::Value;
 
@@ -155,19 +154,6 @@ fn tool_contents(body: &[u8]) -> Result<Vec<(usize, String)>, DedupError> {
 /// a data-loss bug: a reference that cannot be resolved means the body is not one this codec
 /// produced, and silently emitting it would hand the host a transcript with a hole in it.
 pub fn expand(body: &[u8]) -> Result<Vec<u8>, DedupError> {
-    expand_matching(body, None)
-}
-
-/// The shared expansion used by both the public `expand` and `compact`'s own round-trip gate.
-///
-/// `allowed` is `Some` only for the internal verification pass, where the caller knows exactly
-/// which positions it substituted and can therefore ignore marker-shaped *host* content elsewhere
-/// in the body. The public path passes `None`, which resolves every marker it finds and so fails
-/// loudly rather than mangling a string that merely looks like one.
-fn expand_matching(
-    body: &[u8],
-    allowed: Option<&std::collections::HashSet<usize>>,
-) -> Result<Vec<u8>, DedupError> {
     let mut value: Value = serde_json::from_slice(body).map_err(|_| DedupError::NotAChatRequest)?;
     let messages = value
         .get_mut("messages")
@@ -195,13 +181,6 @@ fn expand_matching(
         if message.get("role").and_then(Value::as_str) != Some("tool") {
             continue;
         }
-        // Internal gate: only positions this pass actually substituted may be rewritten, so a
-        // host string that happens to look like a marker is never touched here.
-        if let Some(allowed) = allowed {
-            if !allowed.contains(&message_index) {
-                continue;
-            }
-        }
         let Some(content) = message.get("content").and_then(Value::as_str) else {
             continue;
         };
@@ -211,6 +190,7 @@ fn expand_matching(
         // A marker may only point at real content that is itself not a marker.
         let target = contents
             .get(ref_index)
+            .filter(|_| ref_index < message_index)
             .and_then(|slot| slot.as_deref())
             .filter(|restored| parse_marker(restored).is_none())
             .ok_or(DedupError::DanglingReference { ref_index })?;
@@ -332,26 +312,10 @@ pub fn compact(body: &[u8], policy: &DedupPolicy) -> DedupOutcome {
         }
     };
 
-    // Gate 1: reversibility. Every occurrence must come back byte-identical, or emit nothing.
-    // Only the positions this pass substituted are expanded here, so host content that merely
-    // resembles a marker is preserved rather than being resolved (or failing) here. The strict,
-    // whole-body check remains available as the public `expand`.
-    let substituted: std::collections::HashSet<usize> =
-        replacements.iter().map(|(replace, _)| *replace).collect();
-    let restored = match expand_matching(&candidate, Some(&substituted)) {
-        Ok(restored) => restored,
-        Err(_) => {
-            return keep(DedupOutcome {
-                bytes: body.to_vec(),
-                disposition: DedupDisposition::NoExactRepeat,
-                deduped_results: 0,
-                saved_bytes: 0,
-            });
-        }
-    };
-    let restored_value: Value = serde_json::from_slice(&restored).unwrap_or(Value::Null);
-    let original_value: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
-    if restored_value != original_value {
+    // Use the public decoder, not a privileged decoder with out-of-band knowledge.
+    // Marker collisions and non-canonical JSON keep the baseline until an escaping/byte codec
+    // exists: a value-equality check cannot certify a byte-exact public round trip.
+    if expand(&candidate).as_deref() != Ok(body) {
         return keep(DedupOutcome {
             bytes: body.to_vec(),
             disposition: DedupDisposition::NoExactRepeat,
@@ -383,6 +347,36 @@ pub fn compact(body: &[u8], policy: &DedupPolicy) -> DedupOutcome {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn an_emitted_candidate_must_round_trip_through_the_public_decoder() {
+        let repeated = "long repeated observation with real bytes and provenance";
+        let original = tool_body(&[
+            ("tool", repeated),
+            ("tool", "[tf-dedup:v=1:ref=0]"),
+            ("tool", repeated),
+        ]);
+        let out = compact(&original, &policy());
+        if out.disposition.is_compacted() {
+            assert_eq!(expand(&out.bytes).unwrap(), original);
+        } else {
+            assert_eq!(out.bytes, original);
+        }
+    }
+
+    #[test]
+    fn pretty_printed_input_is_not_claimed_as_a_byte_exact_round_trip() {
+        let repeated = "long repeated observation with enough bytes to warrant deduplication";
+        let value: Value =
+            serde_json::from_slice(&tool_body(&[("tool", repeated), ("tool", repeated)])).unwrap();
+        let original = serde_json::to_vec_pretty(&value).unwrap();
+        let out = compact(&original, &policy());
+        if out.disposition.is_compacted() {
+            assert_eq!(expand(&out.bytes).unwrap(), original);
+        } else {
+            assert_eq!(out.bytes, original);
+        }
+    }
 
     fn policy() -> DedupPolicy {
         DedupPolicy {
@@ -445,27 +439,9 @@ mod tests {
         let original = tool_body(&[("tool", decoy), ("tool", repeated), ("tool", repeated)]);
 
         let out = compact(&original, &policy());
-        // The real duplicate is still found and compacted...
-        assert!(out.disposition.is_compacted(), "{:?}", out.disposition);
-        // ...and the decoy survives verbatim rather than being expanded into the first message.
-        let parsed: Value = serde_json::from_slice(&out.bytes).unwrap();
-        assert_eq!(parsed["messages"][0]["content"], json!(decoy));
-        assert_eq!(parsed["messages"][1]["content"], json!(repeated));
-        assert!(
-            parsed["messages"][2]["content"]
-                .as_str()
-                .unwrap()
-                .starts_with(MARKER_PREFIX)
-        );
-
-        // The strict public expansion refuses this body rather than resolving the decoy: a
-        // marker-shaped string the codec cannot prove it wrote is host data, and guessing is
-        // exactly the corruption this contract exists to prevent. Note the reference index: it is
-        // not merely "some error".
-        assert_eq!(
-            expand(&out.bytes),
-            Err(DedupError::DanglingReference { ref_index: 0 })
-        );
+        assert_eq!(out.disposition, DedupDisposition::NoExactRepeat);
+        assert_eq!(out.bytes, original);
+        assert_eq!(out.deduped_results, 0);
     }
 
     #[test]

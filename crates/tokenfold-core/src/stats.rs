@@ -324,7 +324,7 @@ pub fn filter_since(records: &[LedgerRecord], now: u64, window_secs: u64) -> Vec
 /// Renders `summary` as two CSV sections separated by a blank line: a one-row summary table,
 /// then the `recent_requests` table. A manual writer (no new dependency) is enough for this
 /// shape — every field is a plain number or a short known-alphabet string, so the only escaping
-/// that can ever matter is on `project`/`project_hash`/`bypass_reason`, handled by [`csv_field`].
+/// that can ever matter is on `project`/`project_hash`/`bypass_reason`, handled by `csv_field`.
 pub fn to_csv(summary: &StatsSummary) -> String {
     let mut out = String::new();
     out.push_str(
@@ -420,7 +420,7 @@ pub fn now_unix() -> u64 {
 /// Formats Unix seconds as an RFC3339 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) without pulling in
 /// a date/time crate: this is the one place in the codebase that needs calendar math, so a
 /// compact civil-from-days conversion (Howard Hinnant's well-known `civil_from_days` algorithm,
-/// see http://howardhinnant.github.io/date_algorithms.html) is a fair ponytail trade against
+/// see <http://howardhinnant.github.io/date_algorithms.html>) is a fair ponytail trade against
 /// adding `chrono`/`time` as a dependency for a couple of call sites.
 pub fn format_unix_timestamp(unix_secs: u64) -> String {
     let days = (unix_secs / 86_400) as i64;

@@ -163,10 +163,10 @@ fn upgrade_v1_receipt(mut value: serde_json::Value) -> serde_json::Value {
     let Some(object) = value.as_object_mut() else {
         return value;
     };
-    if !object.contains_key("preset") {
-        if let Some(mode) = object.remove("mode") {
-            object.insert("preset".to_string(), mode);
-        }
+    if !object.contains_key("preset")
+        && let Some(mode) = object.remove("mode")
+    {
+        object.insert("preset".to_string(), mode);
     }
     object
         .entry("output_encoding".to_string())
@@ -637,10 +637,7 @@ mod tests {
 
         let back: QualityReport = serde_json::from_value(json).unwrap();
         assert_eq!(back.quality_retention, None);
-        assert_eq!(
-            serde_json::to_value(&back).unwrap()["quality_retention"].is_null(),
-            true
-        );
+        assert!(serde_json::to_value(&back).unwrap()["quality_retention"].is_null());
     }
 
     #[test]
@@ -717,4 +714,14 @@ mod tests {
             );
         }
     }
+}
+
+/// Signed measurements are separate from the legacy nonnegative savings receipt.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OutputDelta {
+    pub schema_version: String,
+    pub baseline_tokens: usize,
+    pub shaped_tokens: usize,
+    pub delta_tokens: i64,
+    pub estimator: EstimatorInfo,
 }

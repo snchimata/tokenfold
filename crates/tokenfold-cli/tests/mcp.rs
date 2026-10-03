@@ -2,6 +2,88 @@
 //! JSON-RPC 2.0 over stdio, `initialize`/`tools/list`/`tools/call` for `tokenfold_compress` and
 //! `tokenfold_inspect`, and notifications (no `id`) never getting a response.
 
+use serde_json::json;
+
+#[test]
+fn evidence_search_requires_host_publication_and_honors_total_restore_budget() {
+    let root = unique_temp_path("search");
+    let manifest_path = unique_temp_path("search_manifest");
+    let store = tokenfold_core::retrieval_store::RetrievalStore::filesystem(&root);
+    let approved = store
+        .store(b"parser failed on token stream", "host", Some(3600))
+        .unwrap();
+    let _private = store
+        .store(b"parser confidential unpublished", "host", Some(3600))
+        .unwrap();
+    std::fs::write(
+        &manifest_path,
+        json!({"version":1,"namespaces":{"host":[approved.hash]}}).to_string(),
+    )
+    .unwrap();
+    let request = json!({"jsonrpc":"2.0", "id":1, "method":"tools/call", "params":{
+        "name":"tokenfold_retrieve", "arguments":{"query":"parser", "namespace":"host"}
+    }})
+    .to_string()
+        + "\n";
+    let envs = [
+        ("TOKENFOLD_RETRIEVAL_STORE_PATH", root.to_str().unwrap()),
+        (
+            "TOKENFOLD_RETRIEVAL_SEARCH_MANIFEST",
+            manifest_path.to_str().unwrap(),
+        ),
+        ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "host"),
+    ];
+    let responses = run_mcp_with_env(&request, &envs);
+    let result = &responses[0]["result"]["structuredContent"];
+    assert_eq!(result["status"], "found");
+    assert_eq!(result["hits"].as_array().unwrap().len(), 1);
+    assert_eq!(result["hits"][0]["hash"], approved.hash);
+    let mut bounded = envs.to_vec();
+    bounded.push(("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES", "1"));
+    let responses = run_mcp_with_env(&request, &bounded);
+    let result = &responses[0]["result"]["structuredContent"];
+    assert_eq!(result["status"], "over_budget");
+    assert!(result["hits"].as_array().unwrap().is_empty());
+    let unauthorized = request.replace("\"namespace\":\"host\"", "\"namespace\":\"other\"");
+    let responses = run_mcp_with_env(&unauthorized, &envs);
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["status"],
+        "unauthorized"
+    );
+    let missing = request.replace("parser", "nonmatchingword");
+    let responses = run_mcp_with_env(&missing, &envs);
+    assert_eq!(
+        responses[0]["result"]["structuredContent"]["status"],
+        "no_match"
+    );
+    let mut invalid = envs.to_vec();
+    invalid.push(("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES", "invalid"));
+    assert_eq!(
+        run_mcp_with_env(&request, &invalid)[0]["result"]["isError"],
+        true
+    );
+    // Removing publication takes effect on the next process/query, without stale index hits.
+    std::fs::write(
+        &manifest_path,
+        json!({"version":1,"namespaces":{}}).to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        run_mcp_with_env(&request, &envs)[0]["result"]["structuredContent"]["status"],
+        "no_match"
+    );
+    std::fs::write(
+        &manifest_path,
+        json!({"version":2,"namespaces":{}}).to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        run_mcp_with_env(&request, &envs)[0]["result"]["isError"],
+        true
+    );
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_file(manifest_path).unwrap();
+}
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -47,6 +129,78 @@ fn run_mcp_with_env(requests: &str, envs: &[(&str, &str)]) -> Vec<serde_json::Va
 
 fn run_mcp(requests: &str) -> Vec<serde_json::Value> {
     run_mcp_with_env(requests, &[])
+}
+
+#[test]
+fn pruning_and_retrieval_share_the_host_configured_store_after_restart() {
+    let store_path = unique_temp_path("pruning_host_store");
+    let content = include_str!("../../../examples/incident_feed.json");
+    let request = json!({"jsonrpc":"2.0", "id":1, "method":"tools/call", "params":{
+        "name":"tokenfold_compress", "arguments":{
+            "content":content, "format":"json", "target_tokens":50,
+            "pruning":{"keep_ratio":0.05, "retrieval_namespace":"host"}
+        }
+    }});
+    let envs = [
+        (
+            "TOKENFOLD_RETRIEVAL_STORE_PATH",
+            store_path.to_str().unwrap(),
+        ),
+        ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "host"),
+    ];
+    let responses = run_mcp_with_env(&format!("{request}\n"), &envs);
+    let result = &responses[0]["result"]["structuredContent"];
+    let compressed: serde_json::Value =
+        serde_json::from_str(result["content"].as_str().unwrap()).unwrap();
+    fn find_ref(value: &serde_json::Value) -> Option<serde_json::Value> {
+        if value.get("$tf_ref").is_some() {
+            return Some(value.clone());
+        }
+        match value {
+            serde_json::Value::Array(values) => values.iter().find_map(find_ref),
+            serde_json::Value::Object(values) => values.values().find_map(find_ref),
+            _ => None,
+        }
+    }
+    let marker = find_ref(&compressed).expect("expected a recoverable dropped row");
+    let request = json!({"jsonrpc":"2.0", "id":2, "method":"tools/call", "params":{
+        "name":"tokenfold_retrieve", "arguments":{"marker":marker.to_string()}
+    }});
+    let responses = run_mcp_with_env(&format!("{request}\n"), &envs);
+    let restored = &responses[0]["result"]["structuredContent"];
+    assert_eq!(restored["status"], "found");
+    let row: serde_json::Value =
+        serde_json::from_str(restored["content"].as_str().unwrap()).unwrap();
+    let original: serde_json::Value = serde_json::from_str(content).unwrap();
+    assert!(original["events"].as_array().unwrap().contains(&row));
+    std::fs::remove_dir_all(store_path).unwrap();
+}
+
+#[test]
+fn pruning_cannot_override_the_trusted_host_store_or_namespace() {
+    let store_path = unique_temp_path("trusted_store");
+    let other_path = unique_temp_path("untrusted_store");
+    for pruning in [
+        json!({"keep_ratio":0.05, "retrieval_store":other_path, "retrieval_namespace":"host"}),
+        json!({"keep_ratio":0.05, "retrieval_namespace":"other"}),
+    ] {
+        let request = json!({"jsonrpc":"2.0", "id":1, "method":"tools/call", "params":{
+            "name":"tokenfold_compress", "arguments":{"content":"{}", "format":"json", "pruning":pruning}
+        }});
+        let responses = run_mcp_with_env(
+            &format!("{request}\n"),
+            &[
+                (
+                    "TOKENFOLD_RETRIEVAL_STORE_PATH",
+                    store_path.to_str().unwrap(),
+                ),
+                ("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES", "host"),
+            ],
+        );
+        assert_eq!(responses[0]["result"]["isError"], true);
+    }
+    assert!(!store_path.exists());
+    assert!(!other_path.exists());
 }
 
 fn unique_temp_path(tag: &str) -> PathBuf {

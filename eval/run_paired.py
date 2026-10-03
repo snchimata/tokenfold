@@ -43,7 +43,8 @@ The `--live-arm` pass drives raw vs observation-compressed transcripts through a
 REAL model behind the real proxy and scores the model's own answers. Ollama
 (http://localhost:11434) and OpenRouter free models (:free, upstream
 https://openrouter.ai/api) are supported; a paid OpenRouter model is refused
-unless `--live-allow-paid` is passed, so the default spend cap is zero.
+even with `--live-allow-paid`: a priced runner with an enforced monetary cap is
+not yet available. The consent flag alone cannot enforce a spend cap.
 
 DEPENDENCIES
 ------------
@@ -69,6 +70,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -130,6 +132,25 @@ def proxy_binary() -> str | None:
     return _PROXY_BIN
 
 
+class _CallBudget:
+    """Shared across both arms; readiness and retries also consume attempts."""
+    def __init__(self, limit: int = 64):
+        self.limit = limit
+        self.used = 0
+        self.lock = threading.Lock()
+
+    def consume(self) -> None:
+        with self.lock:
+            if self.used >= self.limit:
+                raise ValueError("live upstream call budget exhausted")
+            self.used += 1
+
+
+class _NoRelayRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("live upstream redirects are not authorized")
+
+
 class _EchoUpstream(http.server.BaseHTTPRequestHandler):
     """Records the forwarded request body and answers it.
 
@@ -159,7 +180,14 @@ class _EchoUpstream(http.server.BaseHTTPRequestHandler):
             headers["Authorization"] = authorization
         try:
             request = urllib.request.Request(relay, data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(request, timeout=180) as response:
+            budget = getattr(self.server, "call_budget", None)
+            if budget is not None:
+                budget.consume()
+                value = json.loads(body)
+                value["max_tokens"] = min(value.get("max_tokens", 1024), 1024)
+                request.data = json.dumps(value).encode("utf-8")
+            opener = urllib.request.build_opener(_NoRelayRedirect())
+            with opener.open(request, timeout=180) as response:
                 self._respond(200, response.read())
         except Exception as exc:  # noqa: BLE001 - a relayed failure becomes a readable 502
             self._respond(502, str(exc).encode("utf-8", errors="replace")[:300])
@@ -448,7 +476,8 @@ def run_observation(tasks_dir: Path, min_content_bytes: int) -> tuple[list[dict]
 # `--live-arm` closes the last EP-04 item's offline gap by driving the real proxy
 # to a REAL model and scoring the model's own answers. Ollama (local, free) and
 # OpenRouter free models (`:free`) are supported; a paid OpenRouter model is
-# refused unless `--live-allow-paid` is passed, so the default spend cap is zero.
+# refused even with `--live-allow-paid`: a priced runner with an enforced monetary cap is
+# not yet available. The consent flag alone cannot enforce a spend cap.
 #
 # Both arms share one transcript per turn: `raw` forwards verbatim
 # (`--no-compress`), `candidate` runs the observation path. Each arm forwards to
@@ -658,13 +687,19 @@ _SESSION_HEADER = {"X-TokenFold-Session-Id": "live-paired-run"}
 
 
 def paid_guard(upstream: str | None, model: str | None, allow_paid: bool) -> None:
-    """Refuse an unapproved paid run: a non-`:free` OpenRouter model is a spend."""
-    if allow_paid or not upstream or "openrouter.ai" not in upstream:
+    """Only reviewed local/free endpoints; a consent flag is not a spend cap."""
+    if not upstream:
+        raise ValueError("live upstream is required")
+    parsed = urllib.parse.urlsplit(upstream)
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("live upstream must not contain credentials, query or fragment")
+    if parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1"):
         return
+    if parsed.scheme != "https" or parsed.hostname != "openrouter.ai" or parsed.port not in (None, 443):
+        raise ValueError("only loopback HTTP or HTTPS openrouter.ai live upstreams are reviewed")
     if not model or not model.endswith(":free"):
-        raise ValueError(
-            f"refusing paid OpenRouter model {model!r}; add ':free' or pass --live-allow-paid"
-        )
+        raise ValueError("paid live models require a priced runner with an enforced spend cap; --live-allow-paid is insufficient")
+
 
 
 def run_live(
@@ -683,6 +718,9 @@ def run_live(
     provider) through a per-arm relay; the model answers its own prompt, so a
     failure is a failure of what the observation path forwarded, never of a dummy
     scorer."""
+    paid_guard(upstream, model, False)
+    if not 1 <= turns <= 8 or not math.isfinite(timeout) or not 0 < timeout <= 180:
+        raise ValueError("live run requires 1..8 turns and a finite timeout in (0, 180]")
     binary = proxy_binary()
     if binary is None:
         raise ValueError(_PROXY_NOTICE)
@@ -690,13 +728,15 @@ def run_live(
         raise ValueError("--live-model is required with --live-arm")
     if not upstream:
         raise ValueError("--live-upstream is required with --live-arm")
-    if "openrouter.ai" in upstream and not api_key:
+    if urllib.parse.urlsplit(upstream).hostname == "openrouter.ai" and not api_key:
         raise ValueError("an OpenRouter upstream needs --live-api-key-env to resolve a key")
 
     results = [json.dumps(_live_report()), *(_live_join_result(t) for t in range(1, turns))]
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     relay = f"{upstream.rstrip('/')}/v1/chat/completions"
     raw_echo, cand_echo = _start_echo(relay), _start_echo(relay)
+    call_budget = _CallBudget()
+    raw_echo.call_budget = cand_echo.call_budget = call_budget
 
     def spawn(extra: list[str], echo: http.server.HTTPServer) -> subprocess.Popen:
         return subprocess.Popen(
@@ -838,6 +878,8 @@ def run_live(
         "model": model,
         "upstream": upstream,
         "turns": turns,
+        "upstream_attempts": call_budget.used,
+        "upstream_attempt_limit": call_budget.limit,
         "min_content_bytes": min_content_bytes,
         "session_commit_once": session,
         "commit_once": commit_once or session,
@@ -1432,7 +1474,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--live-allow-paid",
         action="store_true",
-        help="permit a non-:free OpenRouter model; off by default so a paid model is refused",
+        help="reserved consent flag; paid models remain refused until a priced spend-capped runner exists",
     )
     parser.add_argument(
         "--live-session",

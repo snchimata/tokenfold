@@ -5,6 +5,7 @@ mod format;
 mod mcp;
 mod render;
 mod rtk;
+mod select_cmd;
 mod stats_cmd;
 
 use std::path::{Path, PathBuf};
@@ -57,6 +58,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Experimental whole-group context selection with an optional approved local scorer.
+    Select(select_cmd::SelectArgs),
     /// Dry-run preview of achievable savings (previews per-transform even with no target).
     Inspect {
         #[arg(default_value = "-")]
@@ -378,6 +381,9 @@ fn main() {
             receipt_file,
             receipt_format,
         ),
+        Command::Select(args) => {
+            select_cmd::run(args, global.experimental, &*default_estimator()).map(|()| 0)
+        }
         Command::Decode {
             input,
             output,
@@ -511,6 +517,7 @@ fn build_policy(
         .store_originals(effective.retrieval_store_originals)
         .retrieval_namespace(effective.retrieval_namespace.clone())
         .retrieval_ttl_seconds(effective.retrieval_ttl_seconds)
+        .retrieval_max_store_bytes(effective.retrieval_max_store_bytes)
         .retrieval_backend(effective.retrieval_backend.clone())
         .retrieval_store_path(effective.retrieval_store_path.clone());
     if let Some(encoding) = encoding {

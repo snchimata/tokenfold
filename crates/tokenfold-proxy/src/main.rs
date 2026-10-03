@@ -20,7 +20,7 @@ use tokenfold_core::Preset;
 #[derive(Parser)]
 #[command(name = "tokenfold-proxy", version, about)]
 struct Cli {
-    /// Upstream base URL (e.g. https://api.openai.com). Fixed at process start; no request
+    /// Upstream base URL (e.g. <https://api.openai.com>). Fixed at process start; no request
     /// header or body field can redirect it (SSRF invariant).
     #[arg(long)]
     upstream: String,
@@ -79,6 +79,9 @@ struct Cli {
     /// Most sessions tracked at once, so a caller cannot grow the map with session ids.
     #[arg(long, default_value_t = 4096)]
     observation_max_sessions: usize,
+    /// Persist observation fingerprints across restarts. Host-owned, exclusively locked file.
+    #[arg(long, requires = "observations")]
+    observation_ledger_path: Option<PathBuf>,
 }
 
 fn main() {
@@ -126,6 +129,17 @@ fn main() {
             .unwrap_or(2)
             .clamp(2, 16)
     });
+    let session_ttl = Duration::from_secs(cli.observation_session_ttl_secs);
+    let sessions = match cli.observation_ledger_path {
+        Some(path) => {
+            SessionLedger::open_persistent(path, session_ttl, cli.observation_max_sessions)
+                .unwrap_or_else(|error| {
+                    eprintln!("error: observation ledger: {error}");
+                    std::process::exit(5)
+                })
+        }
+        None => SessionLedger::new(session_ttl, cli.observation_max_sessions),
+    };
     let config = server::ProxyConfig {
         workers,
         queue_capacity: cli.queue_capacity.map(usize::from).unwrap_or(workers * 2),
@@ -144,10 +158,7 @@ fn main() {
             enabled: cli.observations,
             min_content_tokens: cli.observation_min_content_bytes,
         },
-        sessions: SessionLedger::new(
-            Duration::from_secs(cli.observation_session_ttl_secs),
-            cli.observation_max_sessions,
-        ),
+        sessions,
     };
 
     let http_server = match tiny_http::Server::http(&cli.bind) {

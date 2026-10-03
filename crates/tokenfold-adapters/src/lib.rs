@@ -26,6 +26,7 @@
 pub mod dedup;
 pub mod manifest;
 pub mod observation;
+pub mod select;
 pub mod semantic;
 pub mod session;
 pub mod tools;

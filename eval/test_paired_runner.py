@@ -455,6 +455,25 @@ def test_the_live_envelope_is_a_valid_multi_turn_transcript():
     assert rp.LIVE_GOLD in results[0] and rp.LIVE_GOLD not in results[1]
 
 
+def test_live_egress_limits_count_every_attempt_and_refuse_redirects():
+    budget = rp._CallBudget(2)
+    budget.consume()
+    budget.consume()
+    try:
+        budget.consume()
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("retry must not bypass attempt cap")
+    assert budget.used == 2
+    try:
+        rp._NoRelayRedirect().redirect_request(None, None, 302, "redirect", {}, "https://evil.test")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("redirect must not widen approved egress")
+
+
 def test_the_paid_guard_refuses_an_unapproved_paid_model():
     for refused in ("nvidia/nemotron-3-ultra-550b-a55b", None, ""):
         try:
@@ -463,9 +482,15 @@ def test_the_paid_guard_refuses_an_unapproved_paid_model():
             pass
         else:
             raise AssertionError(f"a non-:free model must be refused: {refused!r}")
-    # :free passes, and anything outside OpenRouter is none of this function's business.
+    # Reviewed free and loopback endpoints pass; arbitrary paid endpoints do not.
     rp.paid_guard("https://openrouter.ai/api", "some/model:free", False)
-    rp.paid_guard("https://openrouter.ai/api", "some/model", True)
+    for url in ("https://openrouter.ai/api", "https://openrouter.ai.evil.test/api", "https://evil.test/openrouter.ai", "https://user:password@openrouter.ai/api"):
+        try:
+            rp.paid_guard(url, "some/model", True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("consent or misleading host must not bypass a missing spend cap")
     rp.paid_guard("http://localhost:11434", None, False)
 
 

@@ -6,7 +6,7 @@ on:
       version:
         description: Existing GitHub release version to publish
         required: true
-        default: 0.3.1
+        default: 0.5.1
 
 permissions:
   contents: read
@@ -37,6 +37,10 @@ jobs:
           test "$VERSION" = "$npm_version"
           test "v$VERSION" = "$(git describe --tags --exact-match)"
       - run: cargo publish -p tokenfold-core --dry-run --locked
+      - name: Validate registry packages from the locked source tree
+        run: |
+          cargo test -p tokenfold-adapters -p tokenfold-rag --locked
+          cargo package -p tokenfold-core -p tokenfold-adapters -p tokenfold-rag -p tokenfold-output -p tokenfold-learn -p tokenfold-cli --locked
       - run: npm ci
         working-directory: packages/tokenfold
       - run: npm run build
@@ -77,6 +81,8 @@ jobs:
             return 1
           }
           publish tokenfold-core
+          publish tokenfold-adapters
+          publish tokenfold-rag
           publish tokenfold-output
           publish tokenfold-learn
           publish tokenfold-cli

@@ -74,7 +74,7 @@ impl Default for ManifestPolicy {
 }
 
 /// What `build_manifest` produced, and why.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum ManifestDisposition {
     Disabled,
     /// Not a chat request with a `messages` array.
@@ -91,7 +91,7 @@ impl ManifestDisposition {
 }
 
 /// The manifest plus an honest account of everything that was dropped.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ManifestOutcome {
     pub facts: Vec<StateFact>,
     /// Serialized size of `facts`.
@@ -193,28 +193,20 @@ pub fn build_manifest(
                 dropped_secret += 1;
                 continue;
             }
-            match facts.iter_mut().find(|fact| fact.key == *key) {
-                Some(existing) => {
-                    if existing.value == *found {
-                        // Same key, same value, seen again: a pure duplicate. Keep the most recent
-                        // provenance so the manifest points at the freshest source.
-                        existing.provenance = provenance.clone();
-                    } else {
-                        // A real disagreement. Keep both and say so; resolving it would be
-                        // inventing state.
-                        conflicts += 1;
-                        facts.push(StateFact {
-                            key: key.clone(),
-                            value: found.clone(),
-                            provenance: provenance.clone(),
-                        });
-                    }
+            if let Some(existing) = facts
+                .iter_mut()
+                .find(|fact| fact.key == *key && fact.value == *found)
+            {
+                existing.provenance = provenance.clone();
+            } else {
+                if facts.iter().any(|fact| fact.key == *key) {
+                    conflicts += 1;
                 }
-                None => facts.push(StateFact {
+                facts.push(StateFact {
                     key: key.clone(),
                     value: found.clone(),
                     provenance: provenance.clone(),
-                }),
+                });
             }
         }
     }
@@ -243,7 +235,7 @@ pub fn build_manifest(
     let mut bytes = serialized_size(&facts);
     if bytes > policy.max_bytes {
         // Drop from the end, reporting each drop, until the manifest fits.
-        while bytes > policy.max_bytes && facts.len() > 1 {
+        while bytes > policy.max_bytes && !facts.is_empty() {
             facts.pop();
             truncated += 1;
             bytes = serialized_size(&facts);
@@ -261,14 +253,114 @@ pub fn build_manifest(
 }
 
 fn serialized_size(facts: &[StateFact]) -> usize {
+    if facts.is_empty() {
+        return 0;
+    } // no manifest is emitted
     serde_json::to_vec(facts)
         .map(|bytes| bytes.len())
         .unwrap_or(0)
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct TaskManifest {
+    pub schema_version: u32,
+    pub task_id: String,
+    pub revision: String,
+    pub outcome: ManifestOutcome,
+}
+
+/// Explicit task boundary: missing sources/required state, conflicts and truncation fall back.
+/// No prompt insertion is performed. Required keys are declared, never inferred.
+pub fn build_task_manifest(
+    body: &[u8],
+    declared_keys: &[String],
+    required_keys: &[String],
+    task_id: &str,
+    revision: &str,
+    policy: &ManifestPolicy,
+) -> Result<TaskManifest, String> {
+    if task_id.trim().is_empty() || revision.trim().is_empty() || !policy.enabled {
+        return Err("task manifest requires explicit task, revision and activation".into());
+    }
+    let outcome = build_manifest(body, declared_keys, policy);
+    if outcome.facts.is_empty()
+        || outcome.conflicts > 0
+        || outcome.truncated > 0
+        || outcome
+            .facts
+            .iter()
+            .any(|fact| fact.provenance.tool_call_id.is_empty())
+    {
+        return Err("state is conflicting, truncated or missing source identity".into());
+    }
+    if required_keys
+        .iter()
+        .any(|key| !outcome.facts.iter().any(|fact| &fact.key == key))
+    {
+        return Err("required state is unavailable".into());
+    }
+    let manifest = TaskManifest {
+        schema_version: 1,
+        task_id: task_id.into(),
+        revision: revision.into(),
+        outcome,
+    };
+    if serde_json::to_vec(&manifest)
+        .map_err(|e| e.to_string())?
+        .len()
+        > policy.max_bytes
+    {
+        return Err("task manifest exceeds its byte limit".into());
+    }
+    Ok(manifest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn task_manifest_requires_complete_unambiguous_bounded_state() {
+        let body = transcript(&[json!({"branch":"main"})]);
+        let required = keys(&["branch"]);
+        let out =
+            build_task_manifest(&body, &required, &required, "task", "rev1", &policy()).unwrap();
+        assert_eq!(out.schema_version, 1);
+        assert!(
+            build_task_manifest(
+                &body,
+                &required,
+                &keys(&["missing"]),
+                "task",
+                "rev1",
+                &policy()
+            )
+            .is_err()
+        );
+        let conflict = transcript(&[
+            json!({"branch":"main"}),
+            json!({"branch":"other"}),
+            json!({"branch":"other"}),
+        ]);
+        let facts = build_manifest(&conflict, &required, &policy());
+        assert_eq!(facts.conflicts, 1);
+        assert_eq!(facts.facts.len(), 2);
+        assert_eq!(facts.facts[1].provenance.message_index, 2);
+        assert!(
+            build_task_manifest(&conflict, &required, &required, "task", "rev1", &policy())
+                .is_err()
+        );
+        let tiny = ManifestPolicy {
+            max_bytes: 1,
+            ..policy()
+        };
+        let outcome = build_manifest(&body, &required, &tiny);
+        assert!(outcome.facts.is_empty());
+        assert_eq!(outcome.bytes, 0);
+        assert_eq!(outcome.truncated, 1);
+        assert!(build_task_manifest(&body, &required, &required, "task", "rev1", &tiny).is_err());
+    }
+
     use serde_json::json;
 
     fn policy() -> ManifestPolicy {

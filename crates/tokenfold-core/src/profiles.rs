@@ -11,12 +11,12 @@
 //!
 //! Searching and approving are different acts. A search produces candidates; approval is an
 //! explicit, named decision to activate exactly one. So an approved profile records who approved
-//! it and when, and reverting is just as first-class as applying -- a policy that cannot be rolled
+//! it and the quality floor, and reverting is just as first-class as applying -- a policy that cannot be rolled
 //! back is not safe to ship.
 //!
 //! # The built-in defaults never move
 //!
-//! [`DEFAULT_PROFILE_HASH`] is pinned by a test. A tuned policy is a new profile, never an edit to
+//! A tuned policy is a new profile, never an edit to
 //! an existing one, so a rollout cannot silently change what "balanced" means for anyone who
 //! never opted in.
 
@@ -87,7 +87,7 @@ impl Profile {
 
 /// Knobs this build actually reads. A profile may carry others, but they do nothing, and saying so
 /// is better than letting a caller believe they took effect.
-pub const KNOWN_KNOBS: &[&str] = &["target_tokens", "lossy_ratio", "max_transforms"];
+pub const KNOWN_KNOBS: &[&str] = &["target_tokens", "lossy_ratio"];
 
 /// The lowest quality score a candidate may have and still be eligible for approval.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -121,7 +121,10 @@ pub enum Rejection {
 /// Returns the reason rather than a bool so a rejection is explainable in a receipt. Every
 /// rejection path here is terminal: there is no "approved anyway" path.
 pub fn validate(candidate: &Profile, floor: QualityFloor) -> Result<(), Rejection> {
-    if !candidate.quality_score.is_finite() || !candidate.cost.is_finite() {
+    if !floor.minimum.is_finite()
+        || !candidate.quality_score.is_finite()
+        || !candidate.cost.is_finite()
+    {
         return Err(Rejection::NotFinite);
     }
     for (key, value) in &candidate.knobs {
@@ -129,7 +132,7 @@ pub fn validate(candidate: &Profile, floor: QualityFloor) -> Result<(), Rejectio
             return Err(Rejection::UnknownKnob { key: key.clone() });
         }
         let ok = match key.as_str() {
-            "target_tokens" | "max_transforms" => value.parse::<usize>().is_ok(),
+            "target_tokens" => value.parse::<usize>().is_ok(),
             "lossy_ratio" => value
                 .parse::<f64>()
                 .is_ok_and(|ratio| (0.0..=1.0).contains(&ratio)),
@@ -200,6 +203,41 @@ pub struct ActivePolicy {
     pub approved_against_floor: f64,
 }
 
+impl ActivePolicy {
+    /// Explicit activation on a caller's policy. Never enables pruning or changes a preset.
+    /// Revalidation prevents a modified approved struct from bypassing its quality floor.
+    pub fn apply(
+        &self,
+        baseline: &crate::CompressionPolicy,
+    ) -> Result<crate::CompressionPolicy, String> {
+        if self.approved_by.trim().is_empty() {
+            return Err("approval identity is required".into());
+        }
+        validate(
+            &self.profile,
+            QualityFloor {
+                minimum: self.approved_against_floor,
+            },
+        )
+        .map_err(|r| format!("profile rejected: {r:?}"))?;
+        let mut policy = baseline.clone();
+        for (key, value) in &self.profile.knobs {
+            match key.as_str() {
+                "target_tokens" => {
+                    policy.target_tokens = Some(value.parse().map_err(|_| "invalid target_tokens")?)
+                }
+                "lossy_ratio" if policy.lossy.is_some() => {
+                    policy.lossy_ratio = value.parse().map_err(|_| "invalid lossy_ratio")?
+                }
+                "lossy_ratio" => return Err("lossy_ratio requires separate pruning consent".into()),
+                _ => return Err(format!("knob is not implemented at runtime: {key}")),
+            }
+        }
+        policy.validate().map_err(|e| e.to_string())?;
+        Ok(policy)
+    }
+}
+
 /// Approves `candidate` as the active policy, or explains why not.
 pub fn approve(
     candidate: &Profile,
@@ -228,6 +266,35 @@ pub fn rollback(previous: &ActivePolicy) -> ActivePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activation_applies_supported_knobs_without_enabling_pruning() {
+        let baseline = crate::CompressionPolicy::builder().build().unwrap();
+        let profile = Profile::new("approved")
+            .knob("target_tokens", "512")
+            .measured(0.99, 0.1);
+        let active = approve(&profile, floor(), "reviewer").unwrap();
+        let applied = active.apply(&baseline).unwrap();
+        assert_eq!(applied.target_tokens, Some(512));
+        assert!(applied.lossy.is_none());
+        assert!(
+            approve(&good("lossy"), floor(), "reviewer")
+                .unwrap()
+                .apply(&baseline)
+                .is_err()
+        );
+        let mut modified = active;
+        modified.profile.quality_score = 0.1;
+        assert!(modified.apply(&baseline).is_err());
+        assert!(validate(&profile.knob("max_transforms", "3"), floor()).is_err());
+    }
+
+    #[test]
+    fn a_non_finite_quality_floor_cannot_approve_a_profile() {
+        for minimum in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(approve(&good("candidate"), QualityFloor { minimum }, "reviewer").is_err());
+        }
+    }
 
     fn floor() -> QualityFloor {
         QualityFloor { minimum: 0.95 }
@@ -319,7 +386,6 @@ mod tests {
         let p = Profile::new("full")
             .knob("target_tokens", "8192")
             .knob("lossy_ratio", "0.0")
-            .knob("max_transforms", "3")
             .measured(0.99, 0.1);
         assert!(validate(&p, floor()).is_ok());
     }
@@ -365,7 +431,7 @@ mod tests {
     #[test]
     fn search_results_are_deterministic_across_repeated_runs() {
         let candidates: Vec<Profile> = (0..8)
-            .map(|i| Profile::new(&format!("p{i}")).measured(0.96 + i as f64 * 0.001, 0.1))
+            .map(|i| Profile::new(format!("p{i}")).measured(0.96 + i as f64 * 0.001, 0.1))
             .collect();
         let first = search(&candidates, floor());
         for _ in 0..4 {

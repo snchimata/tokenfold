@@ -133,3 +133,15 @@ def test_an_unknown_receipt_schema_version_is_refused_not_guessed_at():
 def test_bytes_that_are_not_a_receipt_are_refused():
     with pytest.raises(tokenfold.TokenFoldError):
         tokenfold.parse_report(b"definitely not a receipt")
+
+
+def test_compression_admission_quota_keeps_rows_inline(tmp_path):
+    source = (Path(__file__).parents[1] / "examples" / "incident_feed.json").read_bytes()
+    pruning = tokenfold.PruningPolicy(keep_ratio=0.05, retrieval_store=tmp_path, retrieval_namespace="quota")
+    result = tokenfold.compress(source, format="json", pruning=pruning, retrieval_max_store_bytes=0)
+    assert b"$tf_ref" not in result.payload
+    assert json.loads(tokenfold.decode(result.payload)) == json.loads(source)
+    receipt = tokenfold.inspect(source, format="json", pruning=pruning, retrieval_max_store_bytes=0)
+    assert receipt.raw["pruning"]["pruned_items"] == 0
+    with pytest.raises(OverflowError):
+        tokenfold.compress(source, format="json", retrieval_max_store_bytes=-1)

@@ -18,9 +18,9 @@
 //! 2. **Requirements are declared, never inferred.** A caller marks a group `required` and it is
 //!    kept. Nothing here infers that a high-ranking row makes another row unnecessary, because
 //!    that inference is exactly the silent data loss this package exists to prevent.
-//! 3. **Selection is never empty.** A failing or absent scorer falls back to a declared strategy.
-//!    There is no path through this module that returns zero candidates because a scorer
-//!    misbehaved; the worst case is "weaker ranking", never "no context at all".
+//! 3. **Scorer failure never clears candidates.** It falls back to the declared ranking.
+//!    A budget below every optional group cost may still retain no optional groups; callers
+//!    must mark required context explicitly or keep their baseline on empty allocation.
 //!
 //! # Trust boundary
 //!
@@ -75,17 +75,21 @@ pub struct Group {
 impl Group {
     /// Total cost of retaining every member.
     pub fn total_cost(&self) -> usize {
-        self.members.iter().map(|m| m.cost).sum()
+        self.members
+            .iter()
+            .fold(0usize, |cost, member| cost.saturating_add(member.cost))
     }
 
     /// Highest member score, or `0.0` for an empty group so an empty required group sorts
     /// predictably instead of participating in NaN comparisons.
     pub fn best_score(&self) -> f64 {
+        if self.members.is_empty() {
+            return 0.0;
+        }
         self.members
             .iter()
             .map(|m| m.score)
             .fold(f64::NEG_INFINITY, f64::max)
-            .max(0.0)
     }
 }
 
@@ -122,7 +126,7 @@ pub fn allocate(groups: &[Group], budget_tokens: usize) -> (Vec<String>, Allocat
     let mut kept_flags = vec![false; groups.len()];
 
     let mut retained_cost = 0usize;
-    let mut required_cost = 0usize;
+    let mut required_cost = 0u128;
     for (index, group) in groups.iter().enumerate() {
         if !group.required {
             continue;
@@ -130,8 +134,9 @@ pub fn allocate(groups: &[Group], budget_tokens: usize) -> (Vec<String>, Allocat
         // Retained even when it does not fit. The budget is the softer contract; a caller that
         // declared a requirement explicitly would rather exceed its budget than lose the content.
         kept_flags[index] = true;
-        retained_cost += group.total_cost();
-        required_cost += group.total_cost();
+        retained_cost = retained_cost.saturating_add(group.total_cost());
+        required_cost = required_cost
+            .saturating_add(group.members.iter().map(|m| m.cost as u128).sum::<u128>());
         report.kept_required += 1;
     }
 
@@ -150,7 +155,12 @@ pub fn allocate(groups: &[Group], budget_tokens: usize) -> (Vec<String>, Allocat
     for (index, group) in optional {
         let cost = group.total_cost();
         // A zero-cost group is always worth keeping: there is no reason to drop evidence for free.
-        if retained_cost + cost <= budget_tokens {
+        if group
+            .members
+            .iter()
+            .try_fold(retained_cost, |sum, member| sum.checked_add(member.cost))
+            .is_some_and(|sum| sum <= budget_tokens)
+        {
             retained_cost += cost;
             kept_flags[index] = true;
         }
@@ -166,9 +176,10 @@ pub fn allocate(groups: &[Group], budget_tokens: usize) -> (Vec<String>, Allocat
         }
     }
     report.retained_cost = retained_cost;
-    if required_cost > budget_tokens {
+    if required_cost > budget_tokens as u128 {
         report.over_budget = true;
-        report.required_overflow = required_cost - budget_tokens;
+        report.required_overflow =
+            (required_cost - budget_tokens as u128).min(usize::MAX as u128) as usize;
     }
     (kept_ids, report)
 }
@@ -180,6 +191,8 @@ pub fn allocate(groups: &[Group], budget_tokens: usize) -> (Vec<String>, Allocat
 /// empty the selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectRejection {
+    /// The response was produced by a different model revision.
+    ModelRevision { got: String },
     /// The response declared a schema version this build does not speak.
     SchemaVersion { got: u32 },
     /// The response's ids are not exactly the request's ids -- missing, extra, or duplicated.
@@ -253,6 +266,21 @@ pub fn validate_response(
     request: &SelectRequest,
     response: &SelectResponse,
 ) -> Result<BTreeMap<String, f64>, SelectRejection> {
+    if request.schema_version != SELECT_SCHEMA_VERSION {
+        return Err(SelectRejection::SchemaVersion {
+            got: request.schema_version,
+        });
+    }
+    if response.model_revision != request.model_revision {
+        return Err(SelectRejection::ModelRevision {
+            got: response.model_revision.clone(),
+        });
+    }
+    if request.candidate_ids.len() > MAX_SELECT_BATCH {
+        return Err(SelectRejection::BatchTooLarge {
+            got: request.candidate_ids.len(),
+        });
+    }
     if response.schema_version != SELECT_SCHEMA_VERSION {
         return Err(SelectRejection::SchemaVersion {
             got: response.schema_version,
@@ -301,8 +329,9 @@ pub struct ScoredAllocation {
 /// Allocates with an optional scorer's ranking, falling back safely on any scorer problem.
 ///
 /// This is the entry point a caller should use whenever a scorer is configured. The guarantee it
-/// exists to provide: **the output is never empty and requirements are never dropped because a
-/// scorer misbehaved.** A scorer that is absent, timed out, or answers wrongly contributes nothing
+/// exists to provide: **requirements are never dropped because a scorer misbehaved.**
+/// Optional selections may be empty when the budget is insufficient; prompt adapters must
+/// keep their baseline in that case. A scorer that is absent, timed out, or answers wrongly contributes nothing
 /// beyond ordering; the declared fallback ranking (the caller's own scores, i.e. source order for a
 /// caller with none) is used instead, and the reason is reported rather than hidden.
 pub fn allocate_with_scorer(
@@ -369,6 +398,55 @@ pub fn allocate_with_scorer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn huge_group_costs_never_wrap_into_admission() {
+        let group = Group {
+            id: "huge".into(),
+            required: false,
+            members: vec![
+                Candidate {
+                    id: "a".into(),
+                    cost: usize::MAX,
+                    score: 1.0,
+                },
+                Candidate {
+                    id: "b".into(),
+                    cost: 1,
+                    score: 1.0,
+                },
+            ],
+        };
+        assert!(
+            allocate(std::slice::from_ref(&group), usize::MAX)
+                .0
+                .is_empty()
+        );
+        let required = Group {
+            required: true,
+            ..group
+        };
+        let (kept, report) = allocate(&[required], usize::MAX);
+        assert_eq!(kept, vec!["huge"]);
+        assert!(report.over_budget);
+        assert_eq!(report.required_overflow, 1);
+    }
+
+    #[test]
+    fn scorer_model_revision_must_match_the_request() {
+        let req = request(&["a"]);
+        let mut resp = response(&["a"], &[1.0]);
+        resp.model_revision = "another-model".into();
+        assert!(validate_response(&req, &resp).is_err());
+    }
+
+    #[test]
+    fn negative_scores_still_rank_instead_of_becoming_ties() {
+        let groups = vec![
+            group("low", vec![candidate("a", 10, -10.0)], false),
+            group("high", vec![candidate("b", 10, -1.0)], false),
+        ];
+        assert_eq!(allocate(&groups, 10).0, vec!["high"]);
+    }
 
     fn candidate(id: &str, cost: usize, score: f64) -> Candidate {
         Candidate {

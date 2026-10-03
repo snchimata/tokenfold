@@ -115,7 +115,7 @@ pub struct PruneOutcome {
 }
 
 /// Runs tiered lossy selection over `input`. Returns `Ok(None)` when there's nothing eligible to
-/// prune (no arrays of length >= [`MIN_ARRAY_LEN`] outside preserved paths, or `ratio >= 1.0`) —
+/// prune (no arrays of length >= `MIN_ARRAY_LEN` outside preserved paths, or `ratio >= 1.0`) —
 /// callers should treat that as a clean no-op, not force an empty transform report.
 pub fn prune(
     input: &[u8],

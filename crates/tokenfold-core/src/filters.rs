@@ -20,7 +20,7 @@
 //! Regex safety: this workspace's `regex` crate is provably linear-time regardless of pattern
 //! shape (no backtracking engine is linked in anywhere — see `deny.toml`'s ban on
 //! `fancy-regex`/`pcre2`, and `transforms::redaction`'s own module doc), so a nested-quantifier
-//! *pattern* cannot actually cause catastrophic backtracking here. [`check_pattern_safety`] is
+//! *pattern* cannot actually cause catastrophic backtracking here. `check_pattern_safety` is
 //! still applied to every user-supplied pattern as defense-in-depth: it rejects overlong
 //! patterns and obviously hostile nested-quantifier shapes so this module's safety contract
 //! doesn't silently depend on which regex engine happens to be linked in.
@@ -107,7 +107,7 @@ pub struct Filter {
     /// string comparison, not a shell glob or regex — see [`Filter::matches_command`].
     pub match_command: Vec<String>,
     /// Optional additional gate: a regex that must match somewhere in the captured output for
-    /// this filter to apply. Subject to the same [`check_pattern_safety`] guard as any other
+    /// this filter to apply. Subject to the same `check_pattern_safety` guard as any other
     /// user-supplied pattern.
     #[serde(default)]
     pub match_output: Option<String>,
@@ -132,7 +132,7 @@ impl FilterPack {
     }
 
     /// Schema-level validation: unknown fields are already rejected by `serde(deny_unknown_fields)`
-    /// at parse time; this additionally checks `schema_version` and runs [`check_pattern_safety`]
+    /// at parse time; this additionally checks `schema_version` and runs `check_pattern_safety`
     /// (plus a real regex compile) over every user-supplied pattern in every stage.
     pub fn validate(&self) -> Result<(), TokenFoldError> {
         if self.schema_version != SCHEMA_VERSION {

@@ -14,8 +14,8 @@
 //! already documents (`TOKENFOLD_RETRIEVAL_BACKEND`, `TOKENFOLD_RETRIEVAL_STORE_PATH`,
 //! `TOKENFOLD_ANALYTICS_LEDGER_DB`) rather than the full config file.
 //!
-//! `tokenfold_compress`/`tokenfold_inspect` reject `store_originals=true` until per-request MCP
-//! persistence is implemented, rather than accepting an option that has no effect.
+//! Recoverable pruning and retrieval share a host-configured filesystem root and namespace
+//! authorization. Tool-supplied alternate roots are refused. MCP never loads project config.
 //!
 //! Transport is newline-delimited JSON-RPC 2.0 over stdio, the standard MCP stdio framing: one
 //! JSON object per line in, one per line out. stdout carries only JSON-RPC messages; logs (none
@@ -164,6 +164,8 @@ fn retrieve_input_schema() -> Value {
                 "type": "string",
                 "description": "Reserved; not resolvable in this pass (RetrievalReport carries no per-entry content hash yet).",
             },
+            "query": {"type":"string", "description":"Search host-approved evidence instead of exact lookup. Requires TOKENFOLD_RETRIEVAL_SEARCH_MANIFEST."},
+            "top_k": {"type":"integer", "minimum":1, "maximum":20},
         },
     })
 }
@@ -300,7 +302,8 @@ fn build_policy(arguments: &Value, is_inspect: bool) -> Result<CompressionPolicy
     };
     let mut builder = CompressionPolicy::builder()
         .preset(preset)
-        .preview(is_inspect);
+        .preview(is_inspect)
+        .retrieval_max_store_bytes(env_u64("TOKENFOLD_RETRIEVAL_MAX_STORE_BYTES")?);
     if let Some(t) = arguments.get("target_tokens").and_then(Value::as_u64) {
         builder = builder.target_tokens(t as usize);
     }
@@ -312,6 +315,30 @@ fn build_policy(arguments: &Value, is_inspect: bool) -> Result<CompressionPolicy
         });
     }
     if let Some(pruning) = arguments.get("pruning") {
+        // Store location and authorization belong to the host, not model-supplied arguments.
+        let trusted_store = std::env::var_os("TOKENFOLD_RETRIEVAL_STORE_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(tokenfold_core::retrieval_store::default_store_path);
+        if pruning
+            .get("retrieval_store")
+            .and_then(Value::as_str)
+            .is_some_and(|path| *path != trusted_store)
+        {
+            return Err("pruning retrieval_store must match the host-configured store".into());
+        }
+        let namespace = pruning
+            .get("retrieval_namespace")
+            .and_then(Value::as_str)
+            .unwrap_or("default");
+        let authorized = authorized_namespaces_from_env();
+        if !authorized.is_empty() && !authorized.iter().any(|allowed| allowed == namespace) {
+            return Err("pruning namespace is unauthorized".into());
+        }
+        let backend =
+            std::env::var("TOKENFOLD_RETRIEVAL_BACKEND").unwrap_or_else(|_| "filesystem".into());
+        if backend != "filesystem" {
+            return Err("MCP pruning requires a persistent filesystem retrieval backend".into());
+        }
         let preserve_paths = pruning
             .get("preserve_paths")
             .and_then(Value::as_array)
@@ -331,14 +358,8 @@ fn build_policy(arguments: &Value, is_inspect: bool) -> Result<CompressionPolicy
         builder = builder.pruning(PruningPolicy {
             keep_ratio: pruning.get("keep_ratio").and_then(Value::as_f64),
             preserve_paths,
-            retrieval_store: pruning
-                .get("retrieval_store")
-                .and_then(Value::as_str)
-                .map(PathBuf::from),
-            retrieval_namespace: pruning
-                .get("retrieval_namespace")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+            retrieval_store: Some(trusted_store),
+            retrieval_namespace: Some(namespace.to_owned()),
         });
     }
     builder.build().map_err(|e| e.to_string())
@@ -348,6 +369,17 @@ fn build_policy(arguments: &Value, is_inspect: bool) -> Result<CompressionPolicy
 /// parses `tokenfold.toml` (see the top-of-file doc comment), so — consistently with that
 /// existing scope cut — only the same-named environment overrides `tokenfold-cli::config`
 /// already documents are honored here, defaulting to the standard filesystem store.
+fn env_u64(name: &str) -> Result<Option<u64>, String> {
+    std::env::var(name)
+        .ok()
+        .map(|raw| {
+            raw.trim()
+                .parse::<u64>()
+                .map_err(|_| format!("invalid non-negative integer for {name}"))
+        })
+        .transpose()
+}
+
 fn retrieval_store_from_env() -> Result<RetrievalStore, String> {
     let backend =
         std::env::var("TOKENFOLD_RETRIEVAL_BACKEND").unwrap_or_else(|_| "filesystem".to_string());
@@ -368,6 +400,9 @@ fn call_retrieve(arguments: &Value) -> Value {
 /// its own namespace), then `hash` (looked up under the `"default"` namespace — the tool schema
 /// has no namespace field of its own), then `report_ref`.
 fn run_retrieve(arguments: &Value) -> Result<Value, String> {
+    if arguments.get("query").is_some() {
+        return run_evidence_search(arguments);
+    }
     let marker = arguments.get("marker").and_then(Value::as_str);
     let hash_arg = arguments.get("hash").and_then(Value::as_str);
     let report_ref = arguments.get("report_ref").and_then(Value::as_str);
@@ -400,8 +435,103 @@ fn run_retrieve(arguments: &Value) -> Result<Value, String> {
         &reference.hash,
         &namespace,
         &authorized_namespaces_from_env(),
-        max_restore_bytes_from_env(),
+        max_restore_bytes_from_env()?,
     )))
+}
+
+// Publication is a host decision. A model cannot enumerate arbitrary store contents or
+// choose a manifest path. Rebuilding each query synchronizes expiry/deletion after restart.
+fn run_evidence_search(arguments: &Value) -> Result<Value, String> {
+    let query = arguments
+        .get("query")
+        .and_then(Value::as_str)
+        .filter(|q| !q.trim().is_empty() && q.len() <= 4096)
+        .ok_or("invalid search query")?;
+    let namespace = arguments
+        .get("namespace")
+        .and_then(Value::as_str)
+        .unwrap_or("default");
+    let allowed = authorized_namespaces_from_env();
+    if !allowed.is_empty() && !allowed.iter().any(|n| n == namespace) {
+        return Ok(json!({"status":"unauthorized", "source":"local_mcp"}));
+    }
+    let path = std::env::var_os("TOKENFOLD_RETRIEVAL_SEARCH_MANIFEST")
+        .ok_or("evidence search is not enabled by the host")?;
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    file.take(65537)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > 65536 {
+        return Err("search manifest exceeds 64 KiB".into());
+    }
+    let manifest: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    if manifest.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err("unsupported search manifest version".into());
+    }
+    let hashes = manifest
+        .get("namespaces")
+        .and_then(|v| v.get(namespace))
+        .and_then(Value::as_array);
+    let store = retrieval_store_from_env()?;
+    let mut approved = Vec::new();
+    let mut indexed_bytes = 0usize;
+    if let Some(hashes) = hashes {
+        if hashes.len() > 512 {
+            return Err("search manifest exceeds 512 entries per namespace".into());
+        }
+        for hash in hashes {
+            let hash = hash.as_str().ok_or("manifest hashes must be strings")?;
+            if parse_retrieval_reference(hash)
+                .map_err(|e| e.to_string())?
+                .hash
+                != hash
+            {
+                return Err("manifest requires bare SHA-256 hashes".into());
+            }
+            if approved.iter().any(|h| h == hash) {
+                continue;
+            }
+            if let RetrievalOutcome::Found(bytes) =
+                store.retrieve_authorized(hash, namespace, &allowed, Some(16384))
+            {
+                indexed_bytes += bytes.len();
+                if indexed_bytes > 1048576 {
+                    return Err("search index exceeds 1 MiB".into());
+                }
+                approved.push(hash.to_owned());
+            }
+        }
+    }
+    let top_k = match arguments.get("top_k") {
+        None => 5,
+        Some(value) => value
+            .as_u64()
+            .filter(|n| (1..=20).contains(n))
+            .ok_or("top_k must be 1..20")? as usize,
+    };
+    let (index, _) = tokenfold_rag::EvidenceIndex::build(&store, namespace, &approved, 16384);
+    let mut remaining = env_u64("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")?
+        .unwrap_or(65536)
+        .min(65536) as usize;
+    let mut hits = Vec::new();
+    let mut over_budget = false;
+    for hit in index.search(&store, query, top_k, &allowed) {
+        // Whole entries only: no snippet can masquerade as a complete original row.
+        if hit.text.len() > remaining {
+            over_budget = true;
+            continue;
+        }
+        remaining -= hit.text.len();
+        hits.push(
+            json!({"hash":hit.hash, "namespace":namespace, "content":hit.text, "score":hit.score}),
+        );
+    }
+    Ok(
+        json!({"status":if over_budget {"over_budget"} else if hits.is_empty() {"no_match"} else {"found"},
+        "source":"local_mcp", "hits":hits}),
+    )
 }
 
 /// The namespaces this MCP server is permitted to read, from
@@ -420,15 +550,11 @@ fn authorized_namespaces_from_env() -> Vec<String> {
         .collect()
 }
 
-/// The per-retrieval restored-context byte budget, from
-/// `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES`. Unset or unparseable means unbounded.
-///
-/// An unparseable value is treated as "no budget" rather than as an error so that a typo cannot
-/// take retrieval offline; the size is still reported honestly by the `over_budget` outcome.
-fn max_restore_bytes_from_env() -> Option<usize> {
-    std::env::var("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
+/// Per-retrieval byte budget. Malformed configured limits fail closed.
+fn max_restore_bytes_from_env() -> Result<Option<usize>, String> {
+    env_u64("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")?
+        .map(|n| usize::try_from(n).map_err(|_| "restore budget exceeds platform limits".into()))
+        .transpose()
 }
 
 /// `source` is honestly always `"local_mcp"`: this tool only ever reads the local retrieval

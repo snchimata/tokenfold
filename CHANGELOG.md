@@ -1,12 +1,53 @@
 # Changelog
 
-## Unreleased
+## [0.5.1] - 2026-10-02
+
+- Add opt-in restart-safe proxy observation commitments using an exclusively locked bounded
+  snapshot of SHA-256 fingerprints. Corruption refuses startup; failed writes clear trust.
+  Bound commitments per session and fix zero-capacity ledger admission.
+- Add experimental `tokenfold select`: whole caller-declared groups, protected required text,
+  actual approved direct-child scorer invocation, pinned model/schema/ID validation, deadline
+  and cancellation, deterministic fallback and complete-prompt token recount. Runtime replies
+  cannot rewrite text. No model is bundled or silently enabled; direct-child runtimes must not
+  launch descendants, and live task-quality qualification remains pending.
+
+- Make adapters and RAG independently packageable with versioned dependencies, crate
+  READMEs, isolated package-build verification and ordered publication before the CLI.
+- Apply configured retrieval quotas atomically during compression; quota exhaustion
+  keeps original rows inline. Expose the admission cap in Python compression/inspection.
+- Wire opt-in host-published MCP evidence search with namespace authorization, manifest
+  limits, positive-score matching, live validity checks and whole-entry restoration budgets.
+  Invalid MCP restore-budget configuration now fails closed instead of removing the limit.
+- Add explicit task/revision manifests with required-state and full serialized-size checks,
+  actual approved-profile knob application, protected JSON-pointer value equality checks,
+  signed output-token deltas with estimator provenance, and lexical tool-catalog ranking
+  retaining a caller-provided discovery tool. These APIs do not install host integrations.
+- Prevent allocator cost overflow; reject unsupported profile knobs rather than validating
+  no-op settings. Refuse paid live evaluation even with the legacy consent flag until an
+  enforceable priced spend cap exists; validate exact upstream hosts rather than substrings.
+
+- Verify the new-feature packages and fix their fail-closed contracts: quota admission and
+  publication share one lock; duplicate batch entries count once; re-publication preserves
+  leases and TTL promises; finite unexpired TTLs survive size-pressure GC. Corrupt metadata
+  refuses admission. Upgrade all store writers/GC processes together before relying on retention.
+- Route MCP pruning and retrieval through the same host-configured persistent store, reject
+  model-supplied alternate roots and unauthorized write namespaces, and test recovery after restart.
+- Add Node `parseReport` for archived v1/current v2 receipts and use it for CLI receipts;
+  unsupported versions and malformed top-level fields fail with `invalid_report`.
+- Require dedup candidates to round-trip byte-exactly through the public decoder. Marker
+  collisions and non-canonical JSON now keep the baseline instead of emitting undecodable data.
+- Reject semantic text that is not a claim-backed literal extract of the authorized baseline;
+  self-reported valid claims no longer permit unrelated invented output. Generative validation
+  remains unimplemented; the synchronous deadline is checked after return, not an interrupt.
+- Validate scorer model revisions and non-finite quality floors, preserve negative-score
+  ranking, and resolve strict lint failures in the new-feature modules. See
+  [implementation status](docs/new-features-status.md) for remaining integration and research gates.
 
 - Add tool-catalog selection (EP-12 / NF-20, `tokenfold_adapters::tools`). Reduces an oversized
   tool catalog while guaranteeing nothing load-bearing is lost. **Forced tools** (named by
   `tool_choice`) always survive and are exempt from the size limit — dropping one fails the request
   at the provider. **Companion tools** survive too, but are only ever those the caller *declares*;
-  they are never inferred from a tool's description. A kept tool's JSON is copied **byte-for-byte**,
+  they are never inferred from a tool's description. A kept tool's JSON values and key order are preserved,
   so schema constraints such as `required` and `additionalProperties` are never rewritten — a tool
   whose constraints are silently altered is a tool the model will misuse. Catalog order is
   preserved so a provider prefix cache is not disturbed. A forced or companion tool that is not in
@@ -101,7 +142,7 @@
   or dropped whole** (splitting one would emit a record whose meaning depends on a
   record that is no longer there), `required` is **declared and never inferred**
   (nothing here deduces that a high-ranking row makes another row unnecessary), and
-  selection is **never empty** because a scorer misbehaved. The result is returned in
+  scorer failure falls back to declared ranking; an insufficient budget can still retain no optional groups. The result is returned in
   source order, so applying it can never reorder a document, and allocation is
   deterministic (ties break by source position). Required content that cannot fit is
   retained anyway and reported as `over_budget` / `required_overflow` rather than
