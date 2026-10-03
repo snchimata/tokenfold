@@ -2,6 +2,97 @@
 
 ## Unreleased
 
+- Add tool-catalog selection (EP-12 / NF-20, `tokenfold_adapters::tools`). Reduces an oversized
+  tool catalog while guaranteeing nothing load-bearing is lost. **Forced tools** (named by
+  `tool_choice`) always survive and are exempt from the size limit — dropping one fails the request
+  at the provider. **Companion tools** survive too, but are only ever those the caller *declares*;
+  they are never inferred from a tool's description. A kept tool's JSON is copied **byte-for-byte**,
+  so schema constraints such as `required` and `additionalProperties` are never rewritten — a tool
+  whose constraints are silently altered is a tool the model will misuse. Catalog order is
+  preserved so a provider prefix cache is not disturbed. A forced or companion tool that is not in
+  the catalog is reported in `unknown` and **never fabricated**, because silently adding a tool the
+  provider does not have produces a request that fails far from its cause. Deterministic, and a
+  reduction is only emitted when it is strictly smaller. Off by default.
+- Add an isolated optional semantic strategy with a guaranteed fallback (EP-13 / NF-22,
+  `tokenfold_adapters::semantic`). A strategy runs behind a trait and is treated as **untrusted
+  output**. Every failure mode — inventing a fact, timing out, citing a source it was never given,
+  exceeding its output cap, returning empty, erroring, or simply not being configured — resolves to
+  the same declared fallback: the untouched lossless baseline, byte-identical. Invention is
+  detectable because a `Summary` carries attributed `Claim`s, and each claim's text *and* source
+  must occur in the request; a free-form summary cannot be checked, an attributed one can. A
+  rejected summary is never truncated into a shorter lie. The reason is always carried in
+  `SemanticOutcome::reason`, so a degradation is visible in a receipt rather than being mistaken
+  for "the strategy saved nothing". Loads no model and downloads nothing; model loading belongs in
+  the runtime, never in Core.
+- Add session-stable holdout assignment and an output-shaping guard (EP-11 / NF-18,
+  `tokenfold_core::holdout`). The arm is derived from **session identity only**, via a plain hash
+  rather than a random roll, so it is stable across turns *and* across process restarts — re-rolling
+  per turn would put a subject in both arms inside one conversation, contaminate the comparison, and
+  destroy any provider prefix cache. A disabled experiment puts every session in Control, since an
+  unconfigured experiment has no treatment to offer. `may_shape` refuses to apply a shaped output
+  that would drop a protected path, fall below a size floor, or is not actually smaller; there is no
+  intermediate "best effort" result that could have lost protected content. `Delta::signed` reports
+  a *negative* result honestly rather than suppressing it — a report that only ever shows wins has
+  stopped measuring.
+- Add versioned quality profiles with a hard quality floor and explicit approval (EP-10 / NF-11 +
+  NF-12, `tokenfold_core::profiles`). A tuner that searches for aggressive settings will find them,
+  so **every** candidate must clear a `QualityFloor` before it is even eligible: a below-floor
+  candidate is rejected outright, never demoted to a "worse but still valid" option, because a floor
+  that can be traded away is not a floor. An unmeasured or non-finite profile cannot clear it, and a
+  malformed candidate is reported as *malformed* rather than as a quality failure so the tuner looks
+  in the right place. Unknown knobs are rejected rather than silently ignored. Search is bounded and
+  deterministic, records every candidate and its outcome so it is auditable rather than a black box,
+  and deliberately does **not** break quality ties on cost — that is a policy decision, not a search
+  result. Approval is separate from search and requires a named approver, recording who approved it
+  and against which floor so a later lowering of the floor cannot retroactively legitimize it.
+  Rollback is a first-class operation. `Profile::policy_hash` covers name and knobs only (so a
+  policy can be identified independent of any one run) and is order-independent. Tuning produces a
+  **new** profile rather than editing an existing one, so a rollout cannot silently change what
+  "balanced" means for anyone who never opted in.
+
+- Add a rebuildable evidence-search index (EP-09 / NF-14, `tokenfold_rag::EvidenceIndex`). A BM25
+  index over approved retrieval-store entries, deliberately holding **no state of its own**: it is
+  derived entirely from entries already in the store and can be discarded and rebuilt at any moment
+  with identical results, which is what makes deletion and expiry synchronization tractable —
+  "restart" and "resync" are the same operation, and there is no persistent index to go stale.
+  Storage is not consent: only hashes the caller explicitly lists are published, so an entry is
+  never searchable merely because it exists. Isolation is structural rather than conventional — an
+  index is built for exactly one namespace and there is no API to widen it, even if handed another
+  namespace's hash. Expiry is honored **twice**: entries past their TTL are excluded at build time
+  and every hit is re-verified against the store at query time, so a slow rebuild cannot resurrect
+  content whose TTL has since elapsed. A hit names a stored hash and serves the *live* stored bytes,
+  never the index's own copy. Unauthorized namespaces are refused before the search runs, so a
+  caller without access learns nothing — not even whether the index holds anything. Oversized and
+  non-UTF-8 entries are rejected with a reason rather than silently truncated or lossily indexed;
+  the original remains retrievable by hash. Deterministic, and adds no model or vector dependency —
+  it reuses the existing BM25 index.
+- Add an exact duplicate-observation codec (EP-07 / NF-03,
+  `tokenfold_adapters::dedup`). A transcript that replays the same tool result pays full price for
+  every occurrence; this keeps the first inline and replaces the rest with a versioned
+  `[tf-dedup:v=1:ref=N]` reference. It is **exact** by design — near-repeats (one byte different)
+  are left completely alone, because a "similar enough" matcher would need a similarity definition
+  and guessing at one would silently rewrite content the host meant literally. A candidate is
+  emitted only if it round-trips (`expand(compact(x)) == x`, byte for byte) **and** is actually
+  smaller once marker overhead is counted on the serialized envelope; otherwise the untouched
+  baseline is returned. Dangling references are **rejected**, never guessed — `expand` returns
+  `DedupError::DanglingReference` for a marker pointing at a missing message or at another marker,
+  because emitting it would hand the host a transcript with a hole in it. Host content that merely
+  resembles a marker is never reinterpreted: `compact` only substitutes positions it chose itself,
+  and the strict public `expand` fails loudly rather than mangling a string it cannot prove it
+  wrote. Off by default; never suppresses tool execution and never reorders.
+- Add a source-backed state manifest (EP-08 / NF-04, `tokenfold_adapters::manifest`). Lifts
+  caller-declared keys out of late-turn observations so a model can decide with them in view.
+  **Nothing is inferred**: the caller names the exact keys, and only a value literally present
+  under one of them is copied — free-text observations are never mined for field names, and a key
+  that never appeared produces no placeholder. Every fact carries provenance (message index,
+  `tool_call_id`, tool name), which is what makes a late-turn decision auditable. Conflicting
+  observations of one key are **both kept and counted** rather than resolved, since picking a
+  winner would be inventing state; an identical repeat is deduplicated to the freshest source
+  because that is pure duplication, not disagreement. A secret-shaped value is dropped and counted
+  and never stored, reusing the pipeline's own detector; a body whose only declared key was a
+  secret still reports `Built` so "found nothing" and "found something we refused" stay
+  distinguishable. Fact-count and byte budgets are applied last and every drop is **reported**
+  through `truncated`, so a caller can never believe it has the whole picture. Off by default.
 - Add structured allocation with atomic groups and an optional scorer contract
   (EP-06, `tokenfold_core::allocation`). Allocation is factored out of `json_prune`
   into a reusable module that spends a budget over *caller-declared groups* without

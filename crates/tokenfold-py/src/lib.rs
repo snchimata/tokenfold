@@ -549,6 +549,23 @@ pub struct PyCompressionReport {
     raw: Py<PyAny>,
 }
 
+/// Reads a receipt from `bytes` using the versioned reader.
+///
+/// Exposed so a binding caller can read an *archived* receipt, not just one this process just
+/// produced. Going through the versioned reader is the point: an unrecognized `schema_version` is
+/// refused rather than best-effort parsed, so a caller can never be handed numbers from a contract
+/// this build does not actually read.
+///
+/// v1 receipts are normalized on the way in (`mode` -> `preset`, plus the sections v1 predates),
+/// so an old receipt stays readable without ever inventing a measurement for a section that was
+/// never recorded.
+#[pyfunction]
+fn parse_report<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Py<PyCompressionReport>> {
+    let report = tokenfold_core::report::CompressionReport::parse_versioned(bytes)
+        .map_err(|error| InvalidInputError::new_err(error.to_string()))?;
+    report_to_py(py, &report)
+}
+
 fn report_to_py(
     py: Python<'_>,
     report: &tokenfold_core::report::CompressionReport,
@@ -1099,6 +1116,7 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(compress, m)?)?;
     m.add_function(wrap_pyfunction!(inspect, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_report, m)?)?;
     m.add_function(wrap_pyfunction!(decode, m)?)?;
     m.add_function(wrap_pyfunction!(retrieve, m)?)?;
     Ok(())

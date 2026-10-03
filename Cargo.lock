@@ -1198,6 +1198,9 @@ dependencies = [
 [[package]]
 name = "tokenfold-rag"
 version = "0.5.0"
+dependencies = [
+ "tokenfold-core",
+]
 
 [[package]]
 name = "toml"

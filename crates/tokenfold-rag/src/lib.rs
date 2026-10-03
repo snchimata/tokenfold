@@ -6,8 +6,10 @@
 //! unimplemented (see [`vector`]).
 
 mod bm25;
+mod evidence;
 
 pub use bm25::{Bm25Index, Chunk, RetrievedChunk};
+pub use evidence::{EvidenceIndex, IndexBuildReport, IndexRejection, IndexedEntry};
 
 // ponytail: vector runtime intentionally deferred; add a real embedding index (e.g. HNSW) only
 // when a first consumer needs semantic (non-lexical) retrieval. Optional extensions like this

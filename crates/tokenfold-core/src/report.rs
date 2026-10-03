@@ -36,6 +36,32 @@ pub struct CompressionReport {
 }
 
 impl CompressionReport {
+    /// Reads a receipt, refusing any `schema_version` this build does not understand.
+    ///
+    /// This is the versioned reader. Plain `serde_json::from_slice` is still available and still
+    /// used on paths where the bytes came from this process, but a receipt from disk or from a
+    /// network must go through here: an unrecognized version is a hard error, never a best-effort
+    /// parse that could surface a missing number as a real one.
+    pub fn parse_versioned(bytes: &[u8]) -> Result<Self, ReportParseError> {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| ReportParseError::Malformed)?;
+        let version = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ReportParseError::Malformed)?
+            .to_string();
+        if !SUPPORTED_SCHEMA_VERSIONS.contains(&version.as_str()) {
+            return Err(ReportParseError::UnsupportedVersion { got: version });
+        }
+        // A known older shape is normalized here rather than refused: refusing a receipt we have
+        // shipped and documented would make every archived receipt unreadable. An *unknown*
+        // version is still refused, because we cannot know what it means.
+        if version == "1.0" {
+            value = upgrade_v1_receipt(value);
+        }
+        serde_json::from_value(value).map_err(|_| ReportParseError::Malformed)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         original_tokens: usize,
@@ -84,6 +110,71 @@ impl CompressionReport {
             warnings,
         }
     }
+}
+
+/// The schema version this build writes.
+pub const CURRENT_SCHEMA_VERSION: &str = "2.0";
+
+/// Receipt schema versions this build can read.
+///
+/// A reader must know which versions it understands *before* it starts handing numbers to a
+/// caller. Accepting an unknown version and parsing it best-effort is how an unavailable value
+/// quietly turns into a plausible-looking zero: v3 might make `original_tokens` optional, and a
+/// reader that "handled" the absence would report `0` rather than admitting it does not know.
+pub const SUPPORTED_SCHEMA_VERSIONS: &[&str] = &["1.0", "2.0"];
+
+/// Why a receipt could not be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReportParseError {
+    /// The bytes were not a JSON receipt at all.
+    Malformed,
+    /// The receipt declares a `schema_version` this build does not read.
+    ///
+    /// Refused rather than best-effort parsed. A caller that needs this receipt must be told the
+    /// format is unknown, not handed numbers from a contract it is not reading.
+    UnsupportedVersion { got: String },
+}
+
+impl std::fmt::Display for ReportParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReportParseError::Malformed => write!(f, "not a valid compression report"),
+            ReportParseError::UnsupportedVersion { got } => write!(
+                f,
+                "unsupported compression report schema_version {got:?}; this build reads {:?}",
+                SUPPORTED_SCHEMA_VERSIONS
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ReportParseError {}
+
+/// Normalizes a v1 receipt into the v2 field set.
+///
+/// Every mapping here is a *rename or a documented absence*, never an invented measurement:
+///
+/// * v1 named the preset field `mode`; v2 renamed it to `preset`. Same value, renamed.
+/// * v1 predates output re-encoding, so it always emitted the input's own encoding. `native` is
+///   therefore the truthful value, not a default that hides a difference.
+/// * v1 predates pruning accounting entirely, so it is `null` -- "not measured", which must not
+///   become a zero.
+fn upgrade_v1_receipt(mut value: serde_json::Value) -> serde_json::Value {
+    let Some(object) = value.as_object_mut() else {
+        return value;
+    };
+    if !object.contains_key("preset") {
+        if let Some(mode) = object.remove("mode") {
+            object.insert("preset".to_string(), mode);
+        }
+    }
+    object
+        .entry("output_encoding".to_string())
+        .or_insert_with(|| serde_json::json!("native"));
+    object
+        .entry("pruning".to_string())
+        .or_insert(serde_json::Value::Null);
+    value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -472,5 +563,158 @@ mod tests {
             schema["required"].as_array().unwrap().len(),
             expected_keys.len()
         );
+    }
+
+    // --- EP-02: the versioned reader, old receipts, and unavailable values --------
+    //
+    // These close the deliberately-open item: a reader must know which schema versions it
+    // understands *before* it exposes numbers, and an unavailable value must never surface as a
+    // plausible-looking zero.
+
+    #[test]
+    fn the_shipped_v1_receipt_fixture_is_still_readable() {
+        // v1 predates several sections; every one of them is absent there, and absence must parse
+        // as "unknown", not as a zero.
+        let bytes = include_bytes!("../../../tests/fixtures/compression_report_v1.json");
+        let report = CompressionReport::parse_versioned(bytes)
+            .expect("the shipped v1 receipt must remain readable");
+
+        assert_eq!(report.schema_version, "1.0");
+        assert_eq!(report.original_tokens, 4);
+        assert_eq!(report.savings_ratio, 0.0);
+        assert!(
+            report.estimator.model.is_none(),
+            "v1 has no model; must not be invented"
+        );
+    }
+
+    #[test]
+    fn absent_v1_sections_parse_as_unknown_rather_than_as_zero() {
+        // This is the property the item is really about: in a numeric-only schema, an absent
+        // section must stay absent. A reader that defaulted these to 0 would report "we measured
+        // zero" for something it never measured.
+        let bytes = include_bytes!("../../../tests/fixtures/compression_report_v1.json");
+        let report = CompressionReport::parse_versioned(bytes).unwrap();
+        let json = serde_json::to_value(&report).unwrap();
+
+        for key in [
+            "request_id",
+            "pipeline",
+            "quality",
+            "budget",
+            "encoding",
+            "pruning",
+            "cache",
+            "retrieval",
+            "output_savings",
+            "bypass",
+            "command",
+            "ledger",
+        ] {
+            assert!(
+                json[key].is_null(),
+                "absent section {key:?} was exposed as a value: {json:?}"
+            );
+        }
+        assert_eq!(report.quality, None);
+        assert_eq!(report.retrieval, None);
+    }
+
+    #[test]
+    fn an_absent_nested_metric_does_not_become_a_number_after_a_round_trip() {
+        // The numeric trap in its purest form: `Option<f64>` that serializes as `0.0` reads as a
+        // real measurement of zero.
+        let quality = QualityReport {
+            eval_profile_id: "smoke".to_string(),
+            task_scope: "all".to_string(),
+            validated_ratio_band: None,
+            quality_retention: None,
+            contrastive_failure_rate: None,
+            gate_passed: false,
+        };
+        let json = serde_json::to_value(&quality).unwrap();
+        assert!(json["quality_retention"].is_null());
+
+        let back: QualityReport = serde_json::from_value(json).unwrap();
+        assert_eq!(back.quality_retention, None);
+        assert_eq!(
+            serde_json::to_value(&back).unwrap()["quality_retention"].is_null(),
+            true
+        );
+    }
+
+    #[test]
+    fn a_v1_receipt_survives_read_then_write_without_gaining_or_losing_numbers() {
+        // Reading an old receipt and writing it back must not silently upgrade it into a v2 claim.
+        let bytes = include_bytes!("../../../tests/fixtures/compression_report_v1.json");
+        let report = CompressionReport::parse_versioned(bytes).unwrap();
+        let written = serde_json::to_vec(&report).unwrap();
+        let reread = CompressionReport::parse_versioned(&written).unwrap();
+        assert_eq!(reread, report, "a read/write cycle changed the receipt");
+        assert_eq!(reread.schema_version, "1.0");
+    }
+
+    #[test]
+    fn the_current_v2_receipt_fixture_is_readable_by_the_versioned_reader() {
+        let bytes = include_bytes!("../../../tests/fixtures/compression_report_v2.json");
+        let report = CompressionReport::parse_versioned(bytes).unwrap();
+        assert_eq!(report.schema_version, CURRENT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn an_unknown_future_schema_version_is_refused_rather_than_best_effort_parsed() {
+        // The whole point of versioning the reader. A v3 receipt may make numbers optional;
+        // parsing it anyway would turn "absent" into a number this build cannot justify.
+        let mut value: serde_json::Value = serde_json::from_slice(include_bytes!(
+            "../../../tests/fixtures/compression_report_v2.json"
+        ))
+        .unwrap();
+        value["schema_version"] = serde_json::json!("3.0");
+        let bytes = serde_json::to_vec(&value).unwrap();
+
+        assert_eq!(
+            CompressionReport::parse_versioned(&bytes),
+            Err(ReportParseError::UnsupportedVersion {
+                got: "3.0".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn a_receipt_with_no_schema_version_is_malformed_rather_than_assumed_current() {
+        // Defaulting an absent version to "the one I write" would let an unrelated document be
+        // read as a receipt.
+        let value = serde_json::json!({"original_tokens": 1, "compressed_tokens": 1});
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            CompressionReport::parse_versioned(&bytes),
+            Err(ReportParseError::Malformed)
+        );
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_receipt_are_malformed() {
+        assert_eq!(
+            CompressionReport::parse_versioned(b"not json at all"),
+            Err(ReportParseError::Malformed)
+        );
+    }
+
+    #[test]
+    fn every_supported_version_is_actually_supported_by_the_reader() {
+        // Keeps the constant honest: a version listed as readable but not handled would be a
+        // silent promise.
+        for version in SUPPORTED_SCHEMA_VERSIONS {
+            let mut value: serde_json::Value = serde_json::from_slice(include_bytes!(
+                "../../../tests/fixtures/compression_report_v2.json"
+            ))
+            .unwrap();
+            value["schema_version"] = serde_json::json!(version);
+            let bytes = serde_json::to_vec(&value).unwrap();
+            assert!(
+                CompressionReport::parse_versioned(&bytes).is_ok(),
+                "{version:?} is listed as supported but the reader rejected it"
+            );
+        }
     }
 }

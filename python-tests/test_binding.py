@@ -93,3 +93,43 @@ def test_invalid_inputs_are_typed_errors():
         tokenfold.compress("text", preset="unknown")
     with pytest.raises(tokenfold.RetrievalError):
         tokenfold.retrieve("0" * 64, retrieval_store=Path("missing-store"))
+
+
+# --- EP-02: receipt back-compatibility at the binding boundary ----------------
+#
+# The binding must not manufacture a number for a value the receipt did not contain, and must
+# report the schema version it actually read rather than assuming the current one.
+
+
+FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
+
+
+def test_an_archived_v1_receipt_is_still_understood_by_the_binding():
+    receipt = tokenfold.parse_report(
+        (FIXTURES / "compression_report_v1.json").read_bytes()
+    )
+    assert receipt.schema_version == "1.0"
+    assert receipt.original_tokens == 4
+    # v1 named the preset `mode`; the binding still surfaces it, under the current field name.
+    assert receipt.preset == "balanced"
+
+
+def test_an_absent_receipt_section_stays_absent_through_the_binding():
+    receipt = tokenfold.parse_report(
+        (FIXTURES / "compression_report_v1.json").read_bytes()
+    )
+    raw = receipt.raw
+    for key in ("quality", "budget", "retrieval", "pipeline", "ledger"):
+        assert raw[key] is None, f"{key} was exposed as a value, not as absent"
+
+
+def test_an_unknown_receipt_schema_version_is_refused_not_guessed_at():
+    value = json.loads((FIXTURES / "compression_report_v2.json").read_text())
+    value["schema_version"] = "99.0"
+    with pytest.raises(tokenfold.TokenFoldError):
+        tokenfold.parse_report(json.dumps(value).encode())
+
+
+def test_bytes_that_are_not_a_receipt_are_refused():
+    with pytest.raises(tokenfold.TokenFoldError):
+        tokenfold.parse_report(b"definitely not a receipt")
