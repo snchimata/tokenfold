@@ -61,6 +61,10 @@ fn map_err(err: CoreError) -> PyErr {
         }
         CoreError::EstimatorError(msg) => EstimatorError::new_err(msg),
         CoreError::ConfigError(msg) => ConfigError::new_err(msg),
+        // A quota rejection is a configuration-shaped failure, so it surfaces as the same
+        // `ConfigError` a caller already handles -- adding a new exception type here would be a
+        // breaking binding change for a condition that is fixed by raising `max_store_bytes`.
+        CoreError::QuotaExceeded { .. } => ConfigError::new_err(err.to_string()),
         CoreError::InternalError(msg) => InternalError::new_err(msg),
         CoreError::Io(e) => PyOSError::new_err(e.to_string()),
     }
@@ -384,6 +388,7 @@ impl PyCompressionPolicy {
         store_originals=false,
         retrieval_namespace=None,
         retrieval_ttl_seconds=None,
+        retrieval_max_store_bytes=None,
         retrieval_backend=None,
         retrieval_store_path=None,
         lossy=None,
@@ -402,6 +407,7 @@ impl PyCompressionPolicy {
         store_originals: bool,
         retrieval_namespace: Option<String>,
         retrieval_ttl_seconds: Option<u64>,
+        retrieval_max_store_bytes: Option<u64>,
         retrieval_backend: Option<String>,
         retrieval_store_path: Option<PathBuf>,
         lossy: Option<LossyArg>,
@@ -433,6 +439,7 @@ impl PyCompressionPolicy {
             builder = builder.retrieval_namespace(ns);
         }
         builder = builder.retrieval_ttl_seconds(retrieval_ttl_seconds);
+        builder = builder.retrieval_max_store_bytes(retrieval_max_store_bytes);
         if let Some(backend) = retrieval_backend {
             builder = builder.retrieval_backend(backend);
         }
@@ -543,6 +550,23 @@ pub struct PyCompressionReport {
     /// is available here rather than modeled as another dozen pyclasses.
     #[pyo3(get)]
     raw: Py<PyAny>,
+}
+
+/// Reads a receipt from `bytes` using the versioned reader.
+///
+/// Exposed so a binding caller can read an *archived* receipt, not just one this process just
+/// produced. Going through the versioned reader is the point: an unrecognized `schema_version` is
+/// refused rather than best-effort parsed, so a caller can never be handed numbers from a contract
+/// this build does not actually read.
+///
+/// v1 receipts are normalized on the way in (`mode` -> `preset`, plus the sections v1 predates),
+/// so an old receipt stays readable without ever inventing a measurement for a section that was
+/// never recorded.
+#[pyfunction]
+fn parse_report<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Py<PyCompressionReport>> {
+    let report = tokenfold_core::report::CompressionReport::parse_versioned(bytes)
+        .map_err(|error| InvalidInputError::new_err(error.to_string()))?;
+    report_to_py(py, &report)
 }
 
 fn report_to_py(
@@ -754,6 +778,7 @@ fn effective_policy(
         builder = builder.store_originals(p.store_originals);
         builder = builder.retrieval_namespace(p.retrieval_namespace.clone());
         builder = builder.retrieval_ttl_seconds(p.retrieval_ttl_seconds);
+        builder = builder.retrieval_max_store_bytes(p.retrieval_max_store_bytes());
         builder = builder.retrieval_backend(p.retrieval_backend.clone());
         builder = builder.retrieval_store_path(p.retrieval_store_path.clone());
         builder = builder.task_scope(p.task_scope);
@@ -876,7 +901,7 @@ fn run_compress(
 // ---------------------------------------------------------------------------------------
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None, retrieval_max_store_bytes=None))]
 #[allow(clippy::too_many_arguments)]
 fn compress(
     py: Python<'_>,
@@ -887,6 +912,7 @@ fn compress(
     require_target: bool,
     encoding: Option<EncodingArg>,
     pruning: Option<PyRef<'_, PyPruningPolicy>>,
+    retrieval_max_store_bytes: Option<u64>,
 ) -> PyResult<PyCompressionResult> {
     if require_target && target_tokens.is_none() {
         return Err(ConfigError::new_err(
@@ -901,6 +927,12 @@ fn compress(
             "pruning requires target_tokens or keep_ratio",
         ));
     }
+    let policy = PyCompressionPolicy(
+        CorePolicy::builder()
+            .retrieval_max_store_bytes(retrieval_max_store_bytes)
+            .build()
+            .map_err(map_err)?,
+    );
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
@@ -918,7 +950,7 @@ fn compress(
         py,
         resolved_format,
         payload,
-        None,
+        Some(&policy),
         preset,
         target_tokens,
         None,
@@ -935,7 +967,7 @@ fn compress(
 }
 
 #[pyfunction]
-#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None))]
+#[pyo3(signature = (payload, *, format=None, preset=None, target_tokens=None, require_target=false, encoding=None, pruning=None, retrieval_max_store_bytes=None))]
 #[allow(clippy::too_many_arguments)]
 fn inspect(
     py: Python<'_>,
@@ -946,6 +978,7 @@ fn inspect(
     require_target: bool,
     encoding: Option<EncodingArg>,
     pruning: Option<PyRef<'_, PyPruningPolicy>>,
+    retrieval_max_store_bytes: Option<u64>,
 ) -> PyResult<Py<PyCompressionReport>> {
     if require_target && target_tokens.is_none() {
         return Err(ConfigError::new_err(
@@ -960,6 +993,12 @@ fn inspect(
             "pruning requires target_tokens or keep_ratio",
         ));
     }
+    let policy = PyCompressionPolicy(
+        CorePolicy::builder()
+            .retrieval_max_store_bytes(retrieval_max_store_bytes)
+            .build()
+            .map_err(map_err)?,
+    );
     let resolved_format = format
         .map(FormatArg::resolve)
         .transpose()?
@@ -977,7 +1016,7 @@ fn inspect(
         py,
         resolved_format,
         payload,
-        None,
+        Some(&policy),
         preset,
         target_tokens,
         None,
@@ -1053,6 +1092,19 @@ fn retrieve(
             "stored original for hash {:?} in namespace {resolved_namespace:?} has expired",
             reference.hash
         ))),
+        // Unreachable through this binding: it calls `retrieve` directly and never configures an
+        // authorization list or a restore budget. Both arms exist so the mapping stays total
+        // rather than relying on that remaining true by construction.
+        RetrievalOutcome::Unauthorized => Err(RetrievalError::new_err(format!(
+            "not authorized to read namespace {resolved_namespace:?}"
+        ))),
+        RetrievalOutcome::OverBudget { bytes, limit_bytes } => {
+            Err(RetrievalError::new_err(format!(
+                "stored original for hash {:?} is {bytes} bytes, over the {limit_bytes}-byte \
+             restore budget; it is not returned truncated",
+                reference.hash
+            )))
+        }
     }
 }
 
@@ -1082,6 +1134,7 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(compress, m)?)?;
     m.add_function(wrap_pyfunction!(inspect, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_report, m)?)?;
     m.add_function(wrap_pyfunction!(decode, m)?)?;
     m.add_function(wrap_pyfunction!(retrieve, m)?)?;
     Ok(())

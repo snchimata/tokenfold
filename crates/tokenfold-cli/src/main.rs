@@ -1,10 +1,11 @@
-﻿mod args;
+mod args;
 mod config;
 mod diff;
 mod format;
 mod mcp;
 mod render;
 mod rtk;
+mod select_cmd;
 mod stats_cmd;
 
 use std::path::{Path, PathBuf};
@@ -57,6 +58,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Experimental whole-group context selection with an optional approved local scorer.
+    Select(select_cmd::SelectArgs),
     /// Dry-run preview of achievable savings (previews per-transform even with no target).
     Inspect {
         #[arg(default_value = "-")]
@@ -378,6 +381,9 @@ fn main() {
             receipt_file,
             receipt_format,
         ),
+        Command::Select(args) => {
+            select_cmd::run(args, global.experimental, &*default_estimator()).map(|()| 0)
+        }
         Command::Decode {
             input,
             output,
@@ -511,6 +517,7 @@ fn build_policy(
         .store_originals(effective.retrieval_store_originals)
         .retrieval_namespace(effective.retrieval_namespace.clone())
         .retrieval_ttl_seconds(effective.retrieval_ttl_seconds)
+        .retrieval_max_store_bytes(effective.retrieval_max_store_bytes)
         .retrieval_backend(effective.retrieval_backend.clone())
         .retrieval_store_path(effective.retrieval_store_path.clone());
     if let Some(encoding) = encoding {
@@ -1737,7 +1744,12 @@ fn cmd_retrieve(
         retrieval_store.or(resolved.effective.retrieval_store_path.clone()),
     )?;
 
-    match store.retrieve(&hash, &namespace) {
+    match store.retrieve_authorized(
+        &hash,
+        &namespace,
+        &resolved.effective.retrieval_authorized_namespaces,
+        resolved.effective.retrieval_max_restore_bytes,
+    ) {
         tokenfold_core::retrieval_store::RetrievalOutcome::Found(bytes) => {
             write_payload(output.as_deref(), &bytes)?;
             Ok(0)
@@ -1748,6 +1760,26 @@ fn cmd_retrieve(
         }
         tokenfold_core::retrieval_store::RetrievalOutcome::Expired => {
             eprintln!("stored original for hash {hash} in namespace {namespace:?} has expired");
+            Ok(8)
+        }
+        // Same exit code as missing/expired (8) but a distinct message: telling an operator they
+        // lack access is more useful than implying the entry is absent, and the message still
+        // discloses nothing about whether the hash exists.
+        tokenfold_core::retrieval_store::RetrievalOutcome::Unauthorized => {
+            eprintln!(
+                "not authorized to retrieve from namespace {namespace:?}; add it to \
+                 [retrieval].authorized_namespaces to grant access"
+            );
+            Ok(8)
+        }
+        // Reports the size so the operator can decide whether to raise the budget deliberately,
+        // rather than receiving a truncated row they might mistake for the original.
+        tokenfold_core::retrieval_store::RetrievalOutcome::OverBudget { bytes, limit_bytes } => {
+            eprintln!(
+                "stored original for hash {hash} is {bytes} bytes, over the configured \
+                 [retrieval].max_restore_bytes limit of {limit_bytes} bytes; it is not returned \
+                 truncated -- raise the limit or lower the target budget to retrieve it whole"
+            );
             Ok(8)
         }
     }

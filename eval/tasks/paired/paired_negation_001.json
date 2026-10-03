@@ -1,0 +1,10 @@
+{
+  "id": "paired_negation_001",
+  "family": "negation",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"deploy.status\",\n  \"request_id\": \"rq-77bd2e10\",\n  \"release\": \"rel-2026-09-30-3\",\n  \"services\": [\n    {\"name\": \"checkout\", \"state\": \"healthy\", \"rollback\": true},\n    {\"name\": \"ledger\", \"state\": \"healthy\", \"rollback\": true},\n    {\"name\": \"search\", \"state\": \"degraded\", \"rollback\": true},\n    {\"name\": \"notify\", \"state\": \"healthy\", \"rollback\": true},\n    {\"name\": \"billing\", \"state\": \"degraded\", \"rollback\": false}\n  ]\n}\n",
+  "query": "which single service was NOT rolled back?",
+  "gold_answer": "\"name\": \"billing\"",
+  "critical_atoms": ["rel-2026-09-30-3", "checkout", "ledger", "notify"],
+  "notes": "Negation: one service differs from four that share the rolled-back property, so dropping any of those four can surface a different, equally plausible name. Atom survival is a proxy for that -- it does not prove a model performed the negation."
+}

@@ -1,7 +1,271 @@
 # Changelog
 
-## Unreleased
+## [0.5.1] - 2026-10-02
 
+- Add opt-in restart-safe proxy observation commitments using an exclusively locked bounded
+  snapshot of SHA-256 fingerprints. Corruption refuses startup; failed writes clear trust.
+  Bound commitments per session and fix zero-capacity ledger admission.
+- Add experimental `tokenfold select`: whole caller-declared groups, protected required text,
+  actual approved direct-child scorer invocation, pinned model/schema/ID validation, deadline
+  and cancellation, deterministic fallback and complete-prompt token recount. Runtime replies
+  cannot rewrite text. No model is bundled or silently enabled; direct-child runtimes must not
+  launch descendants, and live task-quality qualification remains pending.
+
+- Make adapters and RAG independently packageable with versioned dependencies, crate
+  READMEs, isolated package-build verification and ordered publication before the CLI.
+- Apply configured retrieval quotas atomically during compression; quota exhaustion
+  keeps original rows inline. Expose the admission cap in Python compression/inspection.
+- Wire opt-in host-published MCP evidence search with namespace authorization, manifest
+  limits, positive-score matching, live validity checks and whole-entry restoration budgets.
+  Invalid MCP restore-budget configuration now fails closed instead of removing the limit.
+- Add explicit task/revision manifests with required-state and full serialized-size checks,
+  actual approved-profile knob application, protected JSON-pointer value equality checks,
+  signed output-token deltas with estimator provenance, and lexical tool-catalog ranking
+  retaining a caller-provided discovery tool. These APIs do not install host integrations.
+- Prevent allocator cost overflow; reject unsupported profile knobs rather than validating
+  no-op settings. Refuse paid live evaluation even with the legacy consent flag until an
+  enforceable priced spend cap exists; validate exact upstream hosts rather than substrings.
+
+- Verify the new-feature packages and fix their fail-closed contracts: quota admission and
+  publication share one lock; duplicate batch entries count once; re-publication preserves
+  leases and TTL promises; finite unexpired TTLs survive size-pressure GC. Corrupt metadata
+  refuses admission. Upgrade all store writers/GC processes together before relying on retention.
+- Route MCP pruning and retrieval through the same host-configured persistent store, reject
+  model-supplied alternate roots and unauthorized write namespaces, and test recovery after restart.
+- Add Node `parseReport` for archived v1/current v2 receipts and use it for CLI receipts;
+  unsupported versions and malformed top-level fields fail with `invalid_report`.
+- Require dedup candidates to round-trip byte-exactly through the public decoder. Marker
+  collisions and non-canonical JSON now keep the baseline instead of emitting undecodable data.
+- Reject semantic text that is not a claim-backed literal extract of the authorized baseline;
+  self-reported valid claims no longer permit unrelated invented output. Generative validation
+  remains unimplemented; the synchronous deadline is checked after return, not an interrupt.
+- Validate scorer model revisions and non-finite quality floors, preserve negative-score
+  ranking, and resolve strict lint failures in the new-feature modules. See
+  [implementation status](docs/new-features-status.md) for remaining integration and research gates.
+
+- Add tool-catalog selection (EP-12 / NF-20, `tokenfold_adapters::tools`). Reduces an oversized
+  tool catalog while guaranteeing nothing load-bearing is lost. **Forced tools** (named by
+  `tool_choice`) always survive and are exempt from the size limit — dropping one fails the request
+  at the provider. **Companion tools** survive too, but are only ever those the caller *declares*;
+  they are never inferred from a tool's description. A kept tool's JSON values and key order are preserved,
+  so schema constraints such as `required` and `additionalProperties` are never rewritten — a tool
+  whose constraints are silently altered is a tool the model will misuse. Catalog order is
+  preserved so a provider prefix cache is not disturbed. A forced or companion tool that is not in
+  the catalog is reported in `unknown` and **never fabricated**, because silently adding a tool the
+  provider does not have produces a request that fails far from its cause. Deterministic, and a
+  reduction is only emitted when it is strictly smaller. Off by default.
+- Add an isolated optional semantic strategy with a guaranteed fallback (EP-13 / NF-22,
+  `tokenfold_adapters::semantic`). A strategy runs behind a trait and is treated as **untrusted
+  output**. Every failure mode — inventing a fact, timing out, citing a source it was never given,
+  exceeding its output cap, returning empty, erroring, or simply not being configured — resolves to
+  the same declared fallback: the untouched lossless baseline, byte-identical. Invention is
+  detectable because a `Summary` carries attributed `Claim`s, and each claim's text *and* source
+  must occur in the request; a free-form summary cannot be checked, an attributed one can. A
+  rejected summary is never truncated into a shorter lie. The reason is always carried in
+  `SemanticOutcome::reason`, so a degradation is visible in a receipt rather than being mistaken
+  for "the strategy saved nothing". Loads no model and downloads nothing; model loading belongs in
+  the runtime, never in Core.
+- Add session-stable holdout assignment and an output-shaping guard (EP-11 / NF-18,
+  `tokenfold_core::holdout`). The arm is derived from **session identity only**, via a plain hash
+  rather than a random roll, so it is stable across turns *and* across process restarts — re-rolling
+  per turn would put a subject in both arms inside one conversation, contaminate the comparison, and
+  destroy any provider prefix cache. A disabled experiment puts every session in Control, since an
+  unconfigured experiment has no treatment to offer. `may_shape` refuses to apply a shaped output
+  that would drop a protected path, fall below a size floor, or is not actually smaller; there is no
+  intermediate "best effort" result that could have lost protected content. `Delta::signed` reports
+  a *negative* result honestly rather than suppressing it — a report that only ever shows wins has
+  stopped measuring.
+- Add versioned quality profiles with a hard quality floor and explicit approval (EP-10 / NF-11 +
+  NF-12, `tokenfold_core::profiles`). A tuner that searches for aggressive settings will find them,
+  so **every** candidate must clear a `QualityFloor` before it is even eligible: a below-floor
+  candidate is rejected outright, never demoted to a "worse but still valid" option, because a floor
+  that can be traded away is not a floor. An unmeasured or non-finite profile cannot clear it, and a
+  malformed candidate is reported as *malformed* rather than as a quality failure so the tuner looks
+  in the right place. Unknown knobs are rejected rather than silently ignored. Search is bounded and
+  deterministic, records every candidate and its outcome so it is auditable rather than a black box,
+  and deliberately does **not** break quality ties on cost — that is a policy decision, not a search
+  result. Approval is separate from search and requires a named approver, recording who approved it
+  and against which floor so a later lowering of the floor cannot retroactively legitimize it.
+  Rollback is a first-class operation. `Profile::policy_hash` covers name and knobs only (so a
+  policy can be identified independent of any one run) and is order-independent. Tuning produces a
+  **new** profile rather than editing an existing one, so a rollout cannot silently change what
+  "balanced" means for anyone who never opted in.
+
+- Add a rebuildable evidence-search index (EP-09 / NF-14, `tokenfold_rag::EvidenceIndex`). A BM25
+  index over approved retrieval-store entries, deliberately holding **no state of its own**: it is
+  derived entirely from entries already in the store and can be discarded and rebuilt at any moment
+  with identical results, which is what makes deletion and expiry synchronization tractable —
+  "restart" and "resync" are the same operation, and there is no persistent index to go stale.
+  Storage is not consent: only hashes the caller explicitly lists are published, so an entry is
+  never searchable merely because it exists. Isolation is structural rather than conventional — an
+  index is built for exactly one namespace and there is no API to widen it, even if handed another
+  namespace's hash. Expiry is honored **twice**: entries past their TTL are excluded at build time
+  and every hit is re-verified against the store at query time, so a slow rebuild cannot resurrect
+  content whose TTL has since elapsed. A hit names a stored hash and serves the *live* stored bytes,
+  never the index's own copy. Unauthorized namespaces are refused before the search runs, so a
+  caller without access learns nothing — not even whether the index holds anything. Oversized and
+  non-UTF-8 entries are rejected with a reason rather than silently truncated or lossily indexed;
+  the original remains retrievable by hash. Deterministic, and adds no model or vector dependency —
+  it reuses the existing BM25 index.
+- Add an exact duplicate-observation codec (EP-07 / NF-03,
+  `tokenfold_adapters::dedup`). A transcript that replays the same tool result pays full price for
+  every occurrence; this keeps the first inline and replaces the rest with a versioned
+  `[tf-dedup:v=1:ref=N]` reference. It is **exact** by design — near-repeats (one byte different)
+  are left completely alone, because a "similar enough" matcher would need a similarity definition
+  and guessing at one would silently rewrite content the host meant literally. A candidate is
+  emitted only if it round-trips (`expand(compact(x)) == x`, byte for byte) **and** is actually
+  smaller once marker overhead is counted on the serialized envelope; otherwise the untouched
+  baseline is returned. Dangling references are **rejected**, never guessed — `expand` returns
+  `DedupError::DanglingReference` for a marker pointing at a missing message or at another marker,
+  because emitting it would hand the host a transcript with a hole in it. Host content that merely
+  resembles a marker is never reinterpreted: `compact` only substitutes positions it chose itself,
+  and the strict public `expand` fails loudly rather than mangling a string it cannot prove it
+  wrote. Off by default; never suppresses tool execution and never reorders.
+- Add a source-backed state manifest (EP-08 / NF-04, `tokenfold_adapters::manifest`). Lifts
+  caller-declared keys out of late-turn observations so a model can decide with them in view.
+  **Nothing is inferred**: the caller names the exact keys, and only a value literally present
+  under one of them is copied — free-text observations are never mined for field names, and a key
+  that never appeared produces no placeholder. Every fact carries provenance (message index,
+  `tool_call_id`, tool name), which is what makes a late-turn decision auditable. Conflicting
+  observations of one key are **both kept and counted** rather than resolved, since picking a
+  winner would be inventing state; an identical repeat is deduplicated to the freshest source
+  because that is pure duplication, not disagreement. A secret-shaped value is dropped and counted
+  and never stored, reusing the pipeline's own detector; a body whose only declared key was a
+  secret still reports `Built` so "found nothing" and "found something we refused" stay
+  distinguishable. Fact-count and byte budgets are applied last and every drop is **reported**
+  through `truncated`, so a caller can never believe it has the whole picture. Off by default.
+- Add structured allocation with atomic groups and an optional scorer contract
+  (EP-06, `tokenfold_core::allocation`). Allocation is factored out of `json_prune`
+  into a reusable module that spends a budget over *caller-declared groups* without
+  doing any JSON traversal, so pruning, observation, and a future Select runtime can
+  share one rule. Three properties are guaranteed and tested: a group is kept **whole
+  or dropped whole** (splitting one would emit a record whose meaning depends on a
+  record that is no longer there), `required` is **declared and never inferred**
+  (nothing here deduces that a high-ranking row makes another row unnecessary), and
+  scorer failure falls back to declared ranking; an insufficient budget can still retain no optional groups. The result is returned in
+  source order, so applying it can never reorder a document, and allocation is
+  deterministic (ties break by source position). Required content that cannot fit is
+  retained anyway and reported as `over_budget` / `required_overflow` rather than
+  silently dropped — the budget is the softer contract.
+- Add a versioned, validated scorer request/response (EP-06). `SelectRequest` pins
+  `SELECT_SCHEMA_VERSION` and a `model_revision` for attribution and carries only opaque
+  candidate ids — no text. `SelectResponse` can carry scores and nothing else, so a
+  scorer structurally **cannot** rewrite candidate text or force retention; ranking is
+  the only influence it has. `validate_response` rejects a wrong schema version, a
+  batch over `MAX_SELECT_BATCH`, a non-finite score (NaN/±inf), and any id-set
+  mismatch including duplicates — detected via `BTreeMap::insert` returning a value, so
+  a collision is proven rather than silently letting the last write win. An oversized
+  request is refused up front rather than truncated, so a caller can never believe every
+  candidate was considered. Every rejection feeds `allocate_with_scorer`'s declared
+  fallback ranking, which is reported through `AllocationReport::used_fallback_ranking`
+  and `ScoredAllocation::rejection`. An in-process deterministic fake scorer ships as
+  the starting point; no model loading happens in Core and no download is performed.
+  Five proptest invariants cover whole-group retention, requirement survival, source
+  ordering, determinism, and scorer-failure degradation. **No default policy changed.**
+- Fix a pre-existing race in the CLI config tests: `resolve_rejects_disabling_secret_redaction_via_disable_list`
+  called `resolve()`, which reads the whole process environment, without taking the
+  suite's `ENV_LOCK`. It could therefore observe an environment another test was
+  concurrently mutating and fail intermittently (a preset read as `Balanced` instead of
+  the expected `Aggressive`, and a temp-file `PermissionDenied`). It now takes the lock,
+  matching every other test that touches the environment.
+
+- Add durable references to the reversible evidence store (EP-05 Part A). Retention
+  metadata is now versioned (`EntryMeta::version`, `META_VERSION`), and a **lease**
+  records a promise that an entry stays retrievable until a given time. Because the
+  promise lives in the entry's own metadata rather than a caller's memory, a reference
+  survives the TTL *and* the exit of the process that created it: a second process
+  running `gc()` will not delete a leased entry, and a leased entry is still served on
+  retrieval. `acquire_lease`/`release_lease` release independently of the promised
+  expiry, and re-acquiring for the same holder never shortens an existing promise.
+  `GcOutcome` gains `retained_protected` and `eviction_skipped_protected` so a caller can
+  tell "nothing was removable" from "something was protected".
+- Add admission-before-publication to the evidence store (EP-05 Part A).
+  `store_batch_within` takes an optional quota and refuses a write that would exceed it
+  with `TokenFoldError::QuotaExceeded` (exit code `5`), rejecting the **whole batch**
+  and writing nothing. Admission never evicts to make room — deleting another holder's
+  reference to admit new work is the exact failure a quota exists to prevent — and
+  re-storing identical content is not charged twice. `store_batch` keeps its previous
+  unlimited signature and behavior.
+- Treat pre-versioned store entries conservatively (EP-05 Part A). An entry written
+  before versioned metadata carries no lease field, so it cannot be shown to be
+  unleased; it is therefore never size-evicted before its own TTL has actually elapsed,
+  and is removed normally once that TTL passes. Old stores load without a migration step
+  and old readers keep working. The stop/upgrade/resume procedure is documented in
+  `docs/configuration.md`; a pre-EP-05 GC process cannot understand leases and must not
+  run against a root where they are enabled.
+- Add authorized and bounded retrieval (EP-05 Part B). `RetrievalStore::retrieve_authorized`
+  adds `RetrievalOutcome::Unauthorized` and `RetrievalOutcome::OverBudget`. An
+  unauthorized namespace is refused identically whether or not the hash exists, so the
+  refusal cannot become an existence oracle for another namespace; an over-budget entry
+  is refused whole and never truncated, because a partial JSON row presented as the
+  original would silently corrupt the recovered context. Authorization is evaluated
+  before the budget, so an unauthorized caller never learns an entry's size. Wired
+  through the proxy (HTTP `403` / `413`), the MCP `tokenfold_retrieve` tool, and
+  `tokenfold retrieve`, and configurable via `TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES`
+  and `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES` or `[retrieval].authorized_namespaces` /
+  `max_restore_bytes`. Both are **off by default**: an unconfigured installation behaves
+  exactly as before, and the Python binding maps the new variants without adding a new
+  exception type.
+
+- Add an explicitly enabled, lossless tool-result observation adapter for
+  `/v1/chat/completions` (`tokenfold_adapters::observation`, enabled in the
+  proxy with `--observations`). Only complete `role: "tool"` groups whose content
+  is a JSON object/array string are eligible, and a parallel group is
+  all-or-nothing: one ineligible member leaves the whole group verbatim, so a
+  request never mixes compressed and untouched copies of one call's results.
+  Core's transforms run on the result strings only, never on the provider
+  envelope, and every candidate is verified three ways before it is emitted —
+  restoring the originals must reproduce the baseline exactly (proving no sibling
+  value or key order changed), each replacement must decode back to the original
+  inner value, and the assembled body must be smaller. Anything short of that
+  returns the untouched baseline with a reason on stderr. The adapter is selected
+  by explicit route, never by sniffing the body; routes it does not own keep the
+  pre-existing whole-body behavior unchanged. Off by default — with the flag
+  absent, `/v1/chat/completions` forwards byte-for-byte exactly as before. No
+  redaction, pruning, retrieval, history replacement, or cross-turn prefix
+  stability is claimed by this increment.
+- Add the paired raw-vs-candidate evaluation runner (`eval/run_paired.py`,
+  fixtures in `eval/tasks/paired/`, contract tests in
+  `eval/test_paired_runner.py`, wired into the `eval-harness` CI job). It
+  defines a versioned paired-run record (task and environment-snapshot digest,
+  arm, model and policy revision, seed/attempt, outcome, evidence references,
+  and the optional per-attempt usage measurement), a fail-closed reader, and
+  the predeclared aggregation: all four paired outcomes, the conditional
+  contrastive regression rate, the absolute success delta, and a
+  task-clustered confidence interval. Unavailable is reported as unavailable —
+  with no raw successes the CFR has no denominator, so it is `null` and cannot
+  clear a ceiling rather than being recorded as `0.0`. An arm without its
+  partner, a duplicated arm and an invalid environment run are each reported
+  instead of being dropped or counted as a model failure. Offline execution
+  drives the real CLI from a resettable per-arm sandbox whose two start digests
+  are asserted equal, and resolves `$tf_ref` retrieval before scoring so a
+  recoverable drop is not read as data loss. Scoring is a deterministic dummy
+  model: this certifies the record contract and the arithmetic, not downstream
+  task quality, and no live or paid run was performed.
+- Add a trusted session ledger for append-only observation commits
+  (`tokenfold_adapters::session`, `X-TokenFold-Session-Id`, behind the existing
+  `--observations` flag). The stateless proxy could not tell a host replaying an
+  original result from one replaying its own committed output, so it could only
+  save tokens — never promise anything across turns. The ledger closes that gap: a
+  tool-result group this session has already been sent is not folded again, and a
+  half-committed parallel group is skipped whole. The id is caller-supplied and
+  therefore untrusted input, used only as an opaque key and never logged; an
+  absent, unknown, or expired id (`--observation-session-ttl-secs`,
+  `--observation-max-sessions`) yields no idempotence and no claim. With no session
+  header the path is byte-for-byte the previous behaviour, which is pinned by a test.
+  Measured against a free OpenRouter model over a five-turn commit-once transcript,
+  the ledger is worth 0 / 19 / 27 / 35 / 43 tokens per turn — without it each committed
+  observation is folded again and the body grows cumulatively.
+- Extend the paired runner with an offline observation arm (`--observation-arm`)
+  and an opt-in live arm (`--live-arm`). Both drive the real `tokenfold-proxy`; the
+  offline arm scores each fixture's tool result after the observation path rewrote
+  it against a loopback echo upstream, and the live arm forwards those requests to a
+  real provider (local Ollama, or an OpenRouter `:free` model) and scores the
+  model's own answers. Neither contacts a provider unless `--live-arm` is passed, and
+  a non-`:free` OpenRouter model is refused without `--live-allow-paid`, so the
+  default spend cap is zero. The `eval-harness` CI job builds the proxy and points
+  the harness at it (`TOKENFOLD_PROXY_BIN`); the live arm stays out of CI because it
+  needs a provider.
 - Add a concise v0.4 → v0.5 migration matrix
   (`docs/migration-v0.4-to-v0.5.md`) covering Rust, CLI, Python, TypeScript,
   receipts, redaction, and exit codes.
@@ -13,6 +277,38 @@
   harness contract tests and a strict `audit_quality_sample.py --check`
   (reviewer metadata must parse, the reviewed commit must resolve in the
   repository, sampled fixtures must match, no pending items) to pull-request CI. The full baseline `--gate` is enforced by the required `eval-harness` CI job and passes on the v0.5 corpus.
+- Tighten `tokenfold-adapters` `verify_shape_parity` for OpenAI-shaped payloads: the per-message
+  `tool_calls`, `function_call`, `tool_call_id`, and `name` fields must now match the original
+  exactly, including added or removed fields. Previously a call's `id`, `function.name`,
+  `function.arguments`, or a result's `tool_call_id` could be rewritten without failing
+  verification. `compress_for` and the default compression behavior are unchanged.
+- Add a versioned per-attempt measurement event to the proxy's stderr
+  (`tokenfold.measurement {...}`, schema 1.0 from `tokenfold_core::measurement`,
+  with a canonical fixture in `tests/fixtures/measurement_event_v1.json`): one
+  terminal event per forwarded attempt, carrying local before/after counts with
+  estimator provenance, the provider's reported `usage` (streamed SSE or
+  buffered JSON, merged snapshot by snapshot so a repeated cumulative snapshot
+  is never double-counted), a signed local-versus-provider delta, the requested
+  model's tokenizer resolution, the applied policy revision, and the attempt's
+  completion state. Unavailable numbers serialize as `null`, never `0`; a
+  malformed or oversized usage payload disables accounting for that attempt
+  without changing what is forwarded. `X-TokenFold-Session-Id` is hashed before
+  it is recorded. Receipt and statistics schemas are unchanged.
+- Read measurement usage from newline-delimited JSON responses and accept Ollama's
+  top-level `prompt_eval_count`/`eval_count` counters as the prompt/completion
+  equivalent. A streaming `/api/chat` body from a local Ollama endpoint is one
+  JSON object per line rather than a single document, so it previously reported
+  `usage_disposition: "malformed"` with `provider_usage: null` and suppressed the
+  counts the final object carries. A body where no line parses as an object is
+  still `malformed`, so a broken document never reads as a clean `absent`.
+- Fix two proxy behaviors that made refusals and rejections unreliable to observe:
+  a request refused for conflicting framing (and a body refused as oversized) is now
+  drained before the response is written. Closing a socket that still holds unread
+  request bytes resets the connection and discards the response the proxy had
+  already written, so a client saw a transport fault instead of the `400`/`413` —
+  it could not distinguish a refusal from a network error. The proxy's startup
+  line now reports the address it actually bound rather than the one requested,
+  so `--bind 127.0.0.1:0` reports the kernel-assigned port instead of `0`.
 
 ## [0.5.0] - 2026-09-02
 

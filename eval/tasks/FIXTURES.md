@@ -198,6 +198,55 @@ The full explanation has two parts:
 
 Measured 2026-07-12 (after both the `per_variant` split and the fixture
 correction): `diff_compaction`'s default form (`task_scope=code_review`)
+
+## Fixture set: `eval/tasks/paired/`
+
+5 hand-authored fixtures backing `eval/run_paired.py`'s paired raw-vs-candidate
+aggregation and its offline driver. One per failure mode the contract names:
+
+| `id`                                | `family`               | What it pins |
+|-------------------------------------|------------------------|--------------|
+| `paired_numeric_threshold_001`       | `numeric_threshold`    | A required numeric literal (`breach_threshold_ms`) that the answer is a comparison *against*; losing it yields a plausible wrong answer rather than an obvious failure. |
+| `paired_negation_001`               | `negation`             | One service differs from four sharing a property, so dropping any of the four surfaces a different, equally plausible name. |
+| `paired_earlier_id_001`             | `earlier_id_reference` | An identifier introduced at step 1 and referenced by three later steps; compressing the earliest step alone orphans every reference while the payload still looks complete. |
+| `paired_dependent_calls_001`        | `dependent_tool_calls` | Each call's argument is a prior call's output, so a dropped producer silently invalidates a consumer that still parses. |
+| `paired_pruned_row_001`             | `needed_pruned_row`    | A row recoverable pruning may drop that the task still needs. At ratio `0.1` it *is* dropped (9 markers), so retrieval resolution is what separates "recoverable" from "lost" — a non-discriminating version of this fixture would pass against a pruner that dropped nothing. |
+
+Each is `{id, family, tier, source, query, gold_answer, critical_atoms, notes}`;
+`load_tasks` fails closed on an ungrounded atom, a missing `gold_answer`, or a
+duplicate id.
+
+### Fixture policy checklist (`paired`)
+
+- **Data classification:** `public`. All 5 fixtures are synthetic,
+  hand-authored tool-result payloads (fake metrics, deploy status, trace
+  steps, dependent tool calls, shipment records). No real user, customer, or
+  production data.
+- **License/source:** Authored for this project alongside `eval/run_paired.py`.
+  No external source, no third-party license implications.
+- **PII/secret scan result:** None. IDs (`rq-4c1f90ab`, `sh-1003`, `acct-88213`,
+  `res_5510`, `rel-2026-09-30-3`) are fabricated and use `.invalid`/reserved-looking
+  hostnames. No real secrets, credentials, names, or email addresses.
+- **Retention owner:** Project maintainer.
+- **Approval record:** Authored and self-approved with the paired runner. No
+  separate reviewer sign-off; this is a mechanism-proving corpus, not a
+  reviewed, first-consumer-representative one.
+
+### Scorer status for `paired/`
+
+`run_paired.py --run-offline` scores with a **deterministic dummy model**, not a
+real one: it returns the gold answer if the observation still carries it
+(whitespace-insensitively, resolved through `$tf_ref` retrieval first) and a
+fixed `<unavailable>` otherwise. A green offline run therefore proves the record
+contract, the pairing, the sandbox and the aggregation — it is **not** evidence
+about any real model's reasoning, and it cannot promote a lossy default. Live
+budgeted execution is a separate, unapproved step.
+
+`structural_check` (well-formed envelope + declared-atom survival) is reported
+separately from `downstream_success` on purpose: a payload can be perfectly
+well-formed and already useless, and conflating the two is how a broken
+transform gets reported as a quality regression — or the reverse.
+
 scores `quality_retention=0.362`, `contrastive_failure_rate=0.5`,
 `critical_token_survival_rate=0.5` — all three miss the draft
 Balanced thresholds (`>=0.95` / `<=0.005` / `>=0.99`), and the header-only

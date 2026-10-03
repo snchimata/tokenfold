@@ -1,0 +1,10 @@
+{
+  "id": "paired_dependent_calls_001",
+  "family": "dependent_tool_calls",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"plan.execute\",\n  \"request_id\": \"rq-2f8b6d03\",\n  \"calls\": [\n    {\"call_id\": \"call_1\", \"tool\": \"find_account\", \"arguments\": {\"email\": \"ops@example.invalid\"}, \"output\": {\"account_id\": \"acct-88213\"}},\n    {\"call_id\": \"call_2\", \"tool\": \"list_invoices\", \"arguments\": {\"account_id\": \"acct-88213\"}, \"output\": {\"invoice_ids\": [\"inv-7710\", \"inv-7711\"]}},\n    {\"call_id\": \"call_3\", \"tool\": \"get_invoice\", \"arguments\": {\"account_id\": \"acct-88213\", \"invoice_id\": \"inv-7711\"}, \"output\": {\"amount_due\": 4310, \"currency\": \"EUR\"}}\n  ]\n}\n",
+  "query": "which invoice did the last dependent call fetch, and for which account?",
+  "gold_answer": "\"invoice_id\": \"inv-7711\"",
+  "critical_atoms": ["call_1", "acct-88213", "call_2", "call_3"],
+  "notes": "Two dependent tool calls: call 2's argument is call 1's output and call 3's arguments are call 1's and call 2's outputs. Each argument value therefore appears as both a producer and a consumer, and dropping a producer silently invalidates a consumer that still looks well-formed."
+}

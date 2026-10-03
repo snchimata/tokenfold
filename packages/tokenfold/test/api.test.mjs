@@ -11,6 +11,7 @@ import {
   compress,
   decode,
   inspect,
+  parseReport,
   retrieve,
   run,
 } from "../dist/index.js";
@@ -18,6 +19,20 @@ import {
 const testBinary = process.env.TOKENFOLD_TEST_BINARY;
 if (!testBinary) throw new Error("TOKENFOLD_TEST_BINARY must point to a tokenfold binary");
 process.env.TOKENFOLD_BINARY_PATH = testBinary;
+
+test("versioned reader retains archived receipts and refuses unsupported shapes", async () => {
+  const fixtures = path.join(import.meta.dirname, "..", "..", "..", "tests", "fixtures");
+  const old = parseReport(await readFile(path.join(fixtures, "compression_report_v1.json")));
+  assert.equal(old.schema_version, "1.0");
+  assert.equal(old.preset, "balanced");
+  assert.equal(old.output_encoding, "native");
+  for (const key of ["quality", "budget", "retrieval", "pipeline", "pruning", "encoding", "ledger"]) assert.equal(old[key], null);
+  const current = JSON.parse(await readFile(path.join(fixtures, "compression_report_v2.json"), "utf8"));
+  assert.deepEqual(parseReport(JSON.stringify(current)), current);
+  for (const value of [null, [], {}, { ...current, schema_version: "99.0" }, { ...current, original_tokens: null }]) {
+    assert.throws(() => parseReport(JSON.stringify(value)), error => error instanceof TokenFoldProcessError && error.code === "invalid_report");
+  }
+});
 
 test("resolves an explicit binary", async () => {
   assert.equal(binaryPath(), testBinary);

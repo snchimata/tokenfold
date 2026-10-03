@@ -19,6 +19,12 @@ const { payload, report, text } = await compress(input, {
 Payloads are `Uint8Array`; the `text` convenience getter decodes UTF-8 strictly.
 `inspect` returns only the side-effect-free receipt.
 
+`parseReport(jsonOrBytes)` reads archived v1 and current v2 receipts. It preserves the
+source schema version, normalizes v1 `mode` to `preset`, and leaves unavailable sections
+as `null`. Unknown versions and invalid required top-level fields raise
+`TokenFoldProcessError` with `code: "invalid_report"`; this is not recursive JSON Schema
+validation. `compress` and `inspect` use the same versioned reader.
+
 Recoverable pruning is explicit and generic-JSON-only:
 
 ```ts

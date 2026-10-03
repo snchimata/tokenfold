@@ -1,0 +1,10 @@
+{
+  "id": "paired_numeric_threshold_001",
+  "family": "numeric_threshold",
+  "tier": "A",
+  "source": "{\n  \"tool\": \"metrics.range\",\n  \"request_id\": \"rq-4c1f90ab\",\n  \"window\": \"2026-09-30T00:00:00Z/2026-09-30T06:00:00Z\",\n  \"series\": [\n    {\"host\": \"web-01\", \"p99_ms\": 812, \"errors\": 3},\n    {\"host\": \"web-02\", \"p99_ms\": 1455, \"errors\": 41},\n    {\"host\": \"web-03\", \"p99_ms\": 933, \"errors\": 7},\n    {\"host\": \"api-01\", \"p99_ms\": 2210, \"errors\": 58},\n    {\"host\": \"api-02\", \"p99_ms\": 780, \"errors\": 2},\n    {\"host\": \"api-03\", \"p99_ms\": 1180, \"errors\": 19}\n  ],\n  \"breach_threshold_ms\": 1000\n}\n",
+  "query": "which hosts breached the 1000ms p99 threshold, and how many?",
+  "gold_answer": "\"breach_threshold_ms\": 1000",
+  "critical_atoms": ["rq-4c1f90ab", "web-02", "api-01", "api-03"],
+  "notes": "A required numeric threshold: the answer is a comparison against 1000ms, so the threshold literal itself must survive alongside the per-host numbers it is compared to. Losing the literal turns a correct answer into a plausible wrong one rather than an obvious failure."
+}

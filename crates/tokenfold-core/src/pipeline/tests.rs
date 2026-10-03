@@ -1,6 +1,32 @@
 use super::*;
 use crate::budget::CompressionPolicy;
 
+#[test]
+fn admission_exhaustion_keeps_every_pruned_row_inline() {
+    let root = std::env::temp_dir().join(format!("tokenfold_quota_{}", std::process::id()));
+    let bytes = include_bytes!("../../../../examples/incident_feed.json").to_vec();
+    let policy = CompressionPolicy::builder()
+        .pruning(crate::PruningPolicy {
+            keep_ratio: Some(0.05),
+            preserve_paths: vec![],
+            retrieval_store: Some(root.clone()),
+            retrieval_namespace: Some("quota".into()),
+        })
+        .retrieval_max_store_bytes(Some(0))
+        .build()
+        .unwrap();
+    let output = crate::compress(CompressionInput::json(bytes.clone()), &policy).unwrap();
+    assert!(!String::from_utf8_lossy(&output.bytes).contains("$tf_ref"));
+    let restored = crate::decode(&output.bytes, crate::codec::DecodeFormat::Auto).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&restored).unwrap(),
+        serde_json::from_slice::<Value>(&bytes).unwrap()
+    );
+    if root.exists() {
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
 struct MockEstimator(usize);
 
 impl TokenEstimator for MockEstimator {

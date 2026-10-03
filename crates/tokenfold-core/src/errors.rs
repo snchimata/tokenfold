@@ -10,6 +10,20 @@ pub enum TokenFoldError {
     EstimatorError(String),
     #[error("config error: {0}")]
     ConfigError(String),
+    /// A write was refused because admitting it would exceed the configured store quota.
+    ///
+    /// This is a *rejection*, not an eviction: nothing is deleted to make room, so a reference
+    /// some other holder still depends on is never destroyed to admit new work. Exit code 5,
+    /// shared with other configuration failures, because it is resolved by configuration
+    /// (raise the quota) or by an explicit GC — never by silently dropping data.
+    #[error(
+        "retrieval store quota exceeded: this write needs {requested_bytes} bytes but the \
+         configured limit is {limit_bytes} bytes; no data was evicted and nothing was written"
+    )]
+    QuotaExceeded {
+        limit_bytes: u64,
+        requested_bytes: u64,
+    },
     #[error("internal error: {0}")]
     InternalError(String),
     #[error("io error: {0}")]
@@ -29,6 +43,7 @@ impl TokenFoldError {
             TokenFoldError::SafetyViolation(_) | TokenFoldError::RedactionFailed(_) => 3,
             TokenFoldError::EstimatorError(_) => 4,
             TokenFoldError::ConfigError(_) => 5,
+            TokenFoldError::QuotaExceeded { .. } => 5,
             TokenFoldError::InternalError(_) | TokenFoldError::Io(_) => 6,
         }
     }
@@ -45,6 +60,16 @@ mod tests {
         assert_eq!(TokenFoldError::RedactionFailed("x".into()).exit_code(), 3);
         assert_eq!(TokenFoldError::EstimatorError("x".into()).exit_code(), 4);
         assert_eq!(TokenFoldError::ConfigError("x".into()).exit_code(), 5);
+        // A quota rejection shares the configuration bucket: it is fixed by configuration or an
+        // explicit GC, never by evicting data to make room.
+        assert_eq!(
+            TokenFoldError::QuotaExceeded {
+                limit_bytes: 10,
+                requested_bytes: 20
+            }
+            .exit_code(),
+            5
+        );
         assert_eq!(TokenFoldError::InternalError("x".into()).exit_code(), 6);
         let io_err = TokenFoldError::from(std::io::Error::other("x"));
         assert_eq!(io_err.exit_code(), 6);

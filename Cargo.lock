@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-adapters"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-admin"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ed25519-dalek",
  "serde",
@@ -1128,20 +1128,22 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "tokenfold-adapters",
  "tokenfold-core",
  "tokenfold-learn",
  "tokenfold-output",
+ "tokenfold-rag",
  "toml",
 ]
 
 [[package]]
 name = "tokenfold-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "proptest",
  "regex",
@@ -1156,38 +1158,39 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-image"
-version = "0.5.0"
+version = "0.5.1"
 
 [[package]]
 name = "tokenfold-learn"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "tokenfold-core",
 ]
 
 [[package]]
 name = "tokenfold-output"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "tokenfold-core",
 ]
 
 [[package]]
 name = "tokenfold-proxy"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "ctrlc",
  "serde",
  "serde_json",
  "tiny_http",
+ "tokenfold-adapters",
  "tokenfold-core",
  "ureq",
 ]
 
 [[package]]
 name = "tokenfold-py"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "pyo3",
  "serde_json",
@@ -1196,7 +1199,10 @@ dependencies = [
 
 [[package]]
 name = "tokenfold-rag"
-version = "0.5.0"
+version = "0.5.1"
+dependencies = [
+ "tokenfold-core",
+]
 
 [[package]]
 name = "toml"

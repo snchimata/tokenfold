@@ -49,3 +49,22 @@ booleans, and ratio numbers mirrored from `crates/tokenfold-core/src/modes.rs`.
   `tests/golden/MANIFEST.toml`'s SHA-256 field and the Rust golden-test
   runner; any change to expected bytes requires a deliberate manifest update
   per the "Updating golden fixtures" note at the bottom of that file.
+
+## Fixture set: `tests/fixtures/measurement_event_v1.json` (+ `.schema.json`)
+
+One canonical measurement event for the provider-usage accounting contract,
+plus the JSON Schema for the same shape. No payload text: counters, IDs (a
+hashed session key), revisions, and states only.
+
+- **Data classification:** `public`. Structural event data, not content.
+- **License/source:** Authored for this project; mirrors
+  `crates/tokenfold-core/src/measurement.rs`, which is the source of truth.
+- **PII/secret scan result:** N/A — the schema has no free-text or payload
+  field, and the session key is a digest rather than a caller identifier.
+- **Retention owner:** Project maintainer.
+- **Approval record:** Authored and self-approved with the measurement-event
+  contract. Drift is rejected by
+  `measurement.rs::canonical_v1_measurement_event_fixture_round_trips_without_schema_drift`,
+  which requires the schema's property set to equal the fixture's key set and
+  the fixture to round-trip through `MeasurementEvent` byte-for-byte.
+

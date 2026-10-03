@@ -41,6 +41,8 @@ pub struct CompressionPolicy {
     /// "use `retrieval_store::DEFAULT_TTL_SECONDS`" (this is a *default*, not "never expire" —
     /// that per-entry meaning belongs to `RetrievalStore::store`'s own `ttl_seconds` parameter).
     pub retrieval_ttl_seconds: Option<u64>,
+    /// Admission limit for new originals; quota failure keeps source data inline.
+    pub(crate) retrieval_max_store_bytes: Option<u64>,
     /// Backend name passed to `RetrievalStore::open` ("memory" | "filesystem" |
     /// "sqlite" — the latter fails clearly, handled as best-effort skip, see
     /// `pipeline::maybe_store_originals`).
@@ -120,6 +122,10 @@ pub enum TaskScope {
 }
 
 impl CompressionPolicy {
+    pub fn retrieval_max_store_bytes(&self) -> Option<u64> {
+        self.retrieval_max_store_bytes
+    }
+
     pub fn builder() -> CompressionPolicyBuilder {
         CompressionPolicyBuilder::default()
     }
@@ -197,6 +203,7 @@ pub struct CompressionPolicyBuilder {
     store_originals: bool,
     retrieval_namespace: Option<String>,
     retrieval_ttl_seconds: Option<u64>,
+    retrieval_max_store_bytes: Option<u64>,
     retrieval_backend: Option<String>,
     retrieval_store_path: Option<PathBuf>,
     lossy: Option<LossyPath>,
@@ -275,6 +282,11 @@ impl CompressionPolicyBuilder {
         self
     }
 
+    pub fn retrieval_max_store_bytes(mut self, limit: Option<u64>) -> Self {
+        self.retrieval_max_store_bytes = limit;
+        self
+    }
+
     pub fn retrieval_ttl_seconds(mut self, ttl_seconds: Option<u64>) -> Self {
         self.retrieval_ttl_seconds = ttl_seconds;
         self
@@ -332,6 +344,7 @@ impl CompressionPolicyBuilder {
                 .retrieval_namespace
                 .unwrap_or_else(|| "default".to_string()),
             retrieval_ttl_seconds: self.retrieval_ttl_seconds,
+            retrieval_max_store_bytes: self.retrieval_max_store_bytes,
             retrieval_backend: self
                 .retrieval_backend
                 .unwrap_or_else(|| "filesystem".to_string()),

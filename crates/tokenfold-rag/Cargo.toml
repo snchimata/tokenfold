@@ -5,5 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Bounded BM25 search over authorized Tokenfold evidence."
+readme = "README.md"
 
 [dependencies]
+tokenfold-core = { version = "0.5.1", path = "../tokenfold-core" }

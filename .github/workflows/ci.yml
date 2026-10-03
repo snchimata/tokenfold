@@ -20,6 +20,9 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: "-D warnings"
       # Tracked source must not cite the untracked design docs or their opaque
       # F-/D-/R- identifiers: neither resolves in a clone, so the reference is
       # dead for everyone but the author. CHANGELOG.md is exempt as released
@@ -194,14 +197,16 @@ jobs:
     env:
       TOKENFOLD_LEARNED_MODULE: json
       TOKENFOLD_BIN: ${{ github.workspace }}/target/release/tokenfold
+      TOKENFOLD_PROXY_BIN: ${{ github.workspace }}/target/release/tokenfold-proxy
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --locked -p tokenfold-cli
+      - run: cargo build --release --locked -p tokenfold-cli -p tokenfold-proxy
       - run: python eval/test_baseline_fixture_contract.py
       - run: python eval/test_baseline_cli.py
+      - run: python eval/test_paired_runner.py
       - run: python eval/test_audit_quality_sample.py
       - run: python eval/run_baselines.py --gate
       - run: python eval/audit_quality_sample.py --check

@@ -4,7 +4,7 @@
 //! kinds of output-token savings claims:
 //!
 //! - **measured**: both the baseline and shaped output text are available, so token counts
-//!   are computed exactly via a [`TokenEstimator`](tokenfold_core::token_estimator::TokenEstimator).
+//!   are counted with explicit estimator provenance via a [`TokenEstimator`].
 //! - **estimated**: no real shaped-output text exists yet, so savings are projected from the
 //!   input compression ratio. This is a rough heuristic proxy, not a measurement, and the
 //!   report stays clearly labeled as such via the `profile`/`provenance` fields.
@@ -12,11 +12,30 @@
 use tokenfold_core::report::OutputSavingsReport;
 use tokenfold_core::token_estimator::TokenEstimator;
 
-/// Build a "measured" output savings report by exactly counting tokens in both the baseline
+pub use tokenfold_core::report::OutputDelta;
+
+pub fn measure_output_delta(
+    baseline: &[u8],
+    shaped: &[u8],
+    estimator: &dyn TokenEstimator,
+) -> OutputDelta {
+    let before = estimator.count_bytes(baseline);
+    let after = estimator.count_bytes(shaped);
+    OutputDelta {
+        schema_version: "1.0".into(),
+        baseline_tokens: before,
+        shaped_tokens: after,
+        delta_tokens: (before as i128 - after as i128).clamp(i64::MIN as i128, i64::MAX as i128)
+            as i64,
+        estimator: estimator.info(),
+    }
+}
+
+/// Build a "measured" output savings report by counting tokens in both the baseline
 /// and shaped output byte slices via `estimator`.
 ///
 /// Use this when real shaped-output text is available (e.g. after an output-shaping transform
-/// has actually run), so the savings figure is an exact count rather than a projection.
+/// has actually run). Estimator provenance distinguishes exact local counts from approximations.
 pub fn measure_output_savings(
     baseline_output: &[u8],
     shaped_output: &[u8],
@@ -24,14 +43,20 @@ pub fn measure_output_savings(
 ) -> OutputSavingsReport {
     let baseline_tokens = estimator.count_bytes(baseline_output);
     let shaped_tokens = estimator.count_bytes(shaped_output);
-    let backend = estimator.info().backend;
+    let info = estimator.info();
+    let backend = info.backend;
 
     OutputSavingsReport {
         profile: "measured".to_string(),
         estimated_output_tokens_saved: None,
         measured_output_tokens_saved: Some(baseline_tokens.saturating_sub(shaped_tokens)),
         provenance: format!(
-            "measured: exact token counts for baseline and shaped output via {backend}"
+            "measured: {} token counts for baseline and shaped output via {backend}",
+            if info.is_exact {
+                "exact local"
+            } else {
+                "approximate local"
+            }
         ),
     }
 }
@@ -65,6 +90,21 @@ pub fn estimate_output_savings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signed_delta_reports_regressions_and_estimator_provenance() {
+        let delta = measure_output_delta(b"abcd", b"abcdefghijkl", &ByteHeuristicEstimator);
+        assert_eq!(delta.baseline_tokens, 1);
+        assert_eq!(delta.shaped_tokens, 3);
+        assert_eq!(delta.delta_tokens, -2);
+        assert!(!delta.estimator.is_exact);
+        assert!(
+            measure_output_savings(b"abcd", b"abcdefghijkl", &ByteHeuristicEstimator)
+                .provenance
+                .contains("approximate")
+        );
+    }
+
     use tokenfold_core::token_estimator::ByteHeuristicEstimator;
 
     #[test]

@@ -1,5 +1,8 @@
 mod server;
 
+use tokenfold_adapters::observation::ObservationPolicy;
+use tokenfold_adapters::session::SessionLedger;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{
@@ -17,7 +20,7 @@ use tokenfold_core::Preset;
 #[derive(Parser)]
 #[command(name = "tokenfold-proxy", version, about)]
 struct Cli {
-    /// Upstream base URL (e.g. https://api.openai.com). Fixed at process start; no request
+    /// Upstream base URL (e.g. <https://api.openai.com>). Fixed at process start; no request
     /// header or body field can redirect it (SSRF invariant).
     #[arg(long)]
     upstream: String,
@@ -61,6 +64,24 @@ struct Cli {
     /// Retrieval-store filesystem root override; defaults to the standard XDG-based path.
     #[arg(long)]
     retrieval_store_path: Option<PathBuf>,
+    /// Enable lossless tool-result observation compression on /v1/chat/completions. Off by
+    /// default: it rewrites request bodies, so an operator opts in explicitly.
+    #[arg(long)]
+    observations: bool,
+    /// Skip tool results smaller than this many bytes. Below the threshold, re-encoding and
+    /// validation cost more than the compression can save.
+    #[arg(long, default_value_t = 0)]
+    observation_min_content_bytes: usize,
+    /// How long a session's committed observations are remembered. After this, a replayed
+    /// session is treated as unknown: no idempotence and no cross-turn claim.
+    #[arg(long, default_value_t = 3600)]
+    observation_session_ttl_secs: u64,
+    /// Most sessions tracked at once, so a caller cannot grow the map with session ids.
+    #[arg(long, default_value_t = 4096)]
+    observation_max_sessions: usize,
+    /// Persist observation fingerprints across restarts. Host-owned, exclusively locked file.
+    #[arg(long, requires = "observations")]
+    observation_ledger_path: Option<PathBuf>,
 }
 
 fn main() {
@@ -108,6 +129,17 @@ fn main() {
             .unwrap_or(2)
             .clamp(2, 16)
     });
+    let session_ttl = Duration::from_secs(cli.observation_session_ttl_secs);
+    let sessions = match cli.observation_ledger_path {
+        Some(path) => {
+            SessionLedger::open_persistent(path, session_ttl, cli.observation_max_sessions)
+                .unwrap_or_else(|error| {
+                    eprintln!("error: observation ledger: {error}");
+                    std::process::exit(5)
+                })
+        }
+        None => SessionLedger::new(session_ttl, cli.observation_max_sessions),
+    };
     let config = server::ProxyConfig {
         workers,
         queue_capacity: cli.queue_capacity.map(usize::from).unwrap_or(workers * 2),
@@ -122,6 +154,11 @@ fn main() {
         target_tokens: cli.target_tokens,
         retrieval_backend: cli.retrieval_backend,
         retrieval_store_path: cli.retrieval_store_path,
+        observations: ObservationPolicy {
+            enabled: cli.observations,
+            min_content_tokens: cli.observation_min_content_bytes,
+        },
+        sessions,
     };
 
     let http_server = match tiny_http::Server::http(&cli.bind) {
@@ -131,9 +168,13 @@ fn main() {
             std::process::exit(6);
         }
     };
+    // Report the address actually bound, not the one requested: with `--bind 127.0.0.1:0` the
+    // kernel assigns the port, and this line is how a caller learns it. Printing the requested
+    // string instead would report port 0 and hide which socket is really serving.
     eprintln!(
         "tokenfold-proxy listening on {} -> {}",
-        cli.bind, config.upstream
+        http_server.server_addr(),
+        config.upstream
     );
     let stopping = Arc::new(AtomicBool::new(false));
     let signal = Arc::clone(&stopping);

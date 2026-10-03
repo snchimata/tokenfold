@@ -21,7 +21,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
+use tokenfold_adapters::ObservationPolicy;
+use tokenfold_adapters::observation::{compress_observations_in_session, format_for_route};
+use tokenfold_adapters::session::SessionLedger;
 use tokenfold_core::budget::CompressionPolicyBuilder;
+use tokenfold_core::measurement::{
+    CompletionState, EventSink, MeasurementEvent, MeasurementReader, MeasurementSpec,
+    UsageDisposition, format_event_line, opaque_id, resolve_model,
+};
 use tokenfold_core::report::{CompressionReport, TransformStatus};
 use tokenfold_core::retrieval_store::{
     RetrievalOutcome, RetrievalStore, parse_retrieval_reference,
@@ -45,6 +52,12 @@ pub struct ProxyConfig {
     pub retrieval_backend: String,
     /// Retrieval-store filesystem root override; `None` means `retrieval_store::default_store_path()`.
     pub retrieval_store_path: Option<PathBuf>,
+    /// Lossless tool-result observation compression. Disabled unless the operator opts in.
+    pub observations: ObservationPolicy,
+    /// What each session has already been sent, so a committed observation is never
+    /// folded a second time and cross-turn stability is evidenced rather than assumed.
+    /// Requests with no `X-TokenFold-Session-Id` never touch it.
+    pub sessions: SessionLedger,
 }
 
 pub fn run(config: &ProxyConfig, server: &tiny_http::Server, stopping: &AtomicBool) {
@@ -124,6 +137,11 @@ fn handle(config: &ProxyConfig, mut request: Request) -> u16 {
     let headers = request.headers().to_vec();
 
     if let Err(message) = check_framing(&headers) {
+        // Drain before responding. A request we reject unread leaves data in the socket's
+        // receive buffer, and closing on top of that makes the peer reset the connection
+        // instead of reading the 400 we just wrote — the rejection silently becomes a reset.
+        // Bounded, and never allowed to delay the refusal by more than the body limit.
+        discard_body(&mut request, config.max_body_bytes);
         let (status, resp) = error_response(400, &message);
         let _ = request.respond(resp);
         return status;
@@ -137,22 +155,26 @@ fn handle(config: &ProxyConfig, mut request: Request) -> u16 {
         (Method::Get, "/health") => {
             json_response(200, &json!({"status": "ok", "upstream": config.upstream}))
         }
-        (Method::Post, "/v1/compress") => match read_body(&mut request, config.max_body_bytes) {
-            Ok(body) => handle_compress(config, &headers, &body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
-        },
-        (Method::Post, "/v1/retrieve") => match read_body(&mut request, config.max_body_bytes) {
-            Ok(body) => handle_retrieve_post(config, &headers, &body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
-        },
+        (Method::Post, "/v1/compress") => {
+            match read_body_or_refuse(&mut request, config.max_body_bytes) {
+                Ok(body) => handle_compress(config, &headers, &body),
+                Err(refusal) => refusal,
+            }
+        }
+        (Method::Post, "/v1/retrieve") => {
+            match read_body_or_refuse(&mut request, config.max_body_bytes) {
+                Ok(body) => handle_retrieve_post(config, &headers, &body),
+                Err(refusal) => refusal,
+            }
+        }
         (Method::Get, "/v1/retrieve/stats") => handle_retrieve_stats(),
         (Method::Get, p) if p.starts_with("/v1/retrieve/") => {
             handle_retrieve_get(config, &headers, p)
         }
         (Method::Get, "/stats") => handle_stats(&url),
-        _ => match read_body(&mut request, config.max_body_bytes) {
+        _ => match read_body_or_refuse(&mut request, config.max_body_bytes) {
             Ok(body) => handle_passthrough(config, method, &url, &headers, body),
-            Err(status) => error_response(status, "request body exceeds max_body_bytes"),
+            Err(refusal) => refusal,
         },
     };
     let _ = request.respond(resp);
@@ -195,6 +217,38 @@ fn check_framing(headers: &[Header]) -> Result<(), String> {
     Ok(())
 }
 
+/// Reads and throws away a rejected request's body, bounded by `max_bytes`. Best-effort: a peer
+/// that sent fewer bytes than it declared simply ends the read early, and a socket error is not
+/// worth reporting — the request is already being refused either way.
+fn discard_body(request: &mut Request, max_bytes: usize) {
+    let _ = std::io::copy(
+        &mut request.as_reader().take(max_bytes as u64),
+        &mut std::io::sink(),
+    );
+}
+
+/// [`read_body`], but a refusal is also delivered instead of a connection reset.
+///
+/// An oversized body is only partly read before the 413, so the socket still holds unread bytes
+/// when the connection closes; that turns the 413 into a reset on the client, which cannot tell a
+/// refusal from a network fault. Draining what is left lets the refusal actually arrive. Bounded
+/// by the same limit, so an over-large body cannot cost unbounded work.
+fn read_body_or_refuse(
+    request: &mut Request,
+    max_bytes: usize,
+) -> Result<Vec<u8>, (u16, Response<BodyReader>)> {
+    match read_body(request, max_bytes) {
+        Ok(body) => Ok(body),
+        Err(status) => {
+            discard_body(request, max_bytes);
+            Err(error_response(
+                status,
+                "request body exceeds max_body_bytes",
+            ))
+        }
+    }
+}
+
 fn read_body(request: &mut Request, max_bytes: usize) -> Result<Vec<u8>, u16> {
     let mut buf = Vec::new();
     let mut limited = request.as_reader().take(max_bytes as u64 + 1);
@@ -227,7 +281,7 @@ fn handle_compress(
         Ok((response_value, report)) => {
             let (status, mut resp) = json_response(200, &response_value);
             let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
-            for header in report_headers(&report, request_id) {
+            for header in report_headers(&report, &request_id) {
                 resp.add_header(header);
             }
             (status, resp)
@@ -368,18 +422,37 @@ fn detect_format(bytes: &[u8]) -> InputFormat {
     }
 }
 
-fn detect_passthrough_format(bytes: &[u8]) -> Option<InputFormat> {
-    let value: Value = serde_json::from_slice(bytes).ok()?;
-    let obj = value.as_object()?;
-    let messages = obj.get("messages")?.as_array()?;
-    if messages.is_empty() {
-        return None;
-    }
-    Some(if obj.contains_key("system") {
-        InputFormat::AnthropicJson
-    } else {
-        InputFormat::OpenAiJson
-    })
+/// What a forwarded request body tells us before it is sent: the format the local transforms may
+/// apply (`None` for a body this proxy must not touch), and the requested model name for the
+/// measurement event. One parse for both, since the body is read once.
+struct RequestShape {
+    format: Option<InputFormat>,
+    model: Option<String>,
+}
+
+fn request_shape(bytes: &[u8]) -> RequestShape {
+    let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
+        return RequestShape {
+            format: None,
+            model: None,
+        };
+    };
+    let model = value
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let format = value.as_object().and_then(|obj| {
+        let messages = obj.get("messages")?.as_array()?;
+        if messages.is_empty() {
+            return None;
+        }
+        Some(if obj.contains_key("system") {
+            InputFormat::AnthropicJson
+        } else {
+            InputFormat::OpenAiJson
+        })
+    });
+    RequestShape { format, model }
 }
 
 // ---- provider passthrough ----
@@ -395,32 +468,98 @@ fn handle_passthrough(
     let content_type = header_value(headers, "content-type").unwrap_or("");
     let bypassed =
         header_value(headers, "x-tokenfold-bypass").is_some_and(|v| v.eq_ignore_ascii_case("true"));
+    // The route the client actually asked for, with any query string removed. Adapter selection is
+    // made from this and nothing else: sniffing the body to guess a provider shape means rewriting
+    // a request layout nobody validated.
+    let route = url.split('?').next().unwrap_or("");
 
     let mut forward_body = body;
     let mut report: Option<CompressionReport> = None;
-    if config.compress
-        && !bypassed
-        && content_type.to_ascii_lowercase().contains("json")
-        && let Some(format) = detect_passthrough_format(&forward_body)
-    {
-        let mut builder = CompressionPolicy::builder().preset(config.preset);
-        if let Some(target) = config.target_tokens {
-            builder = builder.target_tokens(target);
-        }
-        builder = apply_retrieval_overrides(builder, config, headers);
-        if let Ok(policy) = builder.build() {
-            let input = CompressionInput {
-                format,
-                bytes: forward_body.clone(),
-            };
-            if let Ok(output) = tokenfold_core::compress(input, &policy) {
-                forward_body = output.bytes;
-                report = Some(output.report);
+    let mut transform_micros: Option<u64> = None;
+    let mut observation: Option<ObservationRun> = None;
+    if config.compress && !bypassed && content_type.to_ascii_lowercase().contains("json") {
+        let started = Instant::now();
+        // The observation path replaces the whole-body path *only* on a route it owns AND only
+        // when switched on. Both conditions matter: dropping the second would silently remove the
+        // pre-existing chat/completions compression, and dropping the first would let a body-sniffing
+        // rewrite of an unvalidated route.
+        let observation_format = if config.observations.enabled {
+            format_for_route(route)
+        } else {
+            None
+        };
+        if let Some(format) = observation_format {
+            // Core's transforms are applied to the eligible tool-result strings only, so the
+            // provider envelope is never folded.
+            let mut builder = CompressionPolicy::builder().preset(config.preset);
+            if let Some(target) = config.target_tokens {
+                builder = builder.target_tokens(target);
+            }
+            if let Ok(policy) = builder.build() {
+                // The session id is caller-supplied and therefore untrusted input, but it is
+                // only ever an opaque key: the ledger hashes content, and the id itself is
+                // never logged. With no id the ledger is neither consulted nor written, so a
+                // caller that does not opt in keeps byte-identical stateless behaviour.
+                let session_id = header_value(headers, "x-tokenfold-session-id");
+                let session = session_id.map(|id| (&config.sessions, Some(id)));
+                match compress_observations_in_session(
+                    format,
+                    &forward_body,
+                    &config.observations,
+                    &policy,
+                    session,
+                ) {
+                    Ok(outcome) if outcome.disposition.is_compressed() => {
+                        transform_micros = Some(started.elapsed().as_micros() as u64);
+                        observation = Some(ObservationRun {
+                            min_content_tokens: config.observations.min_content_tokens,
+                            original_bytes: outcome.original_bytes,
+                            compressed_bytes: outcome.compressed_bytes,
+                        });
+                        forward_body = outcome.bytes;
+                    }
+                    // Every other disposition is a normal, forwarded request. The observation module
+                    // already returned the baseline bytes; the reason is logged so a kept baseline is
+                    // explainable without re-running it.
+                    Ok(outcome) => {
+                        eprintln!("observation kept baseline: {:?}", outcome.disposition);
+                    }
+                    Err(e) => eprintln!("observation error, forwarding baseline: {e}"),
+                }
+            }
+        } else if let Some(format) = request_shape(&forward_body).format {
+            // Unchanged pre-existing whole-body behavior, still selected by the body heuristic.
+            let mut builder = CompressionPolicy::builder().preset(config.preset);
+            if let Some(target) = config.target_tokens {
+                builder = builder.target_tokens(target);
+            }
+            builder = apply_retrieval_overrides(builder, config, headers);
+            if let Ok(policy) = builder.build() {
+                let input = CompressionInput {
+                    format,
+                    bytes: forward_body.clone(),
+                };
+                if let Ok(output) = tokenfold_core::compress(input, &policy) {
+                    // Measured around the local stage only; the upstream call is timed by whichever
+                    // deadline produced the completion state.
+                    transform_micros = Some(started.elapsed().as_micros() as u64);
+                    forward_body = output.bytes;
+                    report = Some(output.report);
+                }
             }
         }
     }
+    let shape = request_shape(&forward_body);
 
     let request_id = request_id_for(header_value(headers, "x-tokenfold-request-id"));
+    let spec = measurement_spec(
+        &request_id,
+        headers,
+        shape.model.as_deref(),
+        report.as_ref(),
+        transform_micros,
+        observation.as_ref(),
+    );
     match send_upstream(
         &config.upstream_agent,
         &target,
@@ -428,16 +567,92 @@ fn handle_passthrough(
         headers,
         &forward_body,
     ) {
-        Ok(response) => build_upstream_response(response, report.as_ref(), request_id),
+        Ok(response) => build_upstream_response(response, report.as_ref(), &request_id, spec),
         Err(e) => {
             eprintln!("upstream request error: {e}");
+            // An attempt that never reached the provider still gets its terminal event, so the
+            // request is visible in accounting instead of silently missing.
             if matches!(e, ureq::Error::Timeout(_)) {
+                log_event(&spec.finish(CompletionState::TimedOut, None, UsageDisposition::Absent));
                 error_response(504, "upstream deadline exceeded")
             } else {
+                log_event(&spec.finish(CompletionState::Failed, None, UsageDisposition::Absent));
                 error_response(502, "upstream request failed")
             }
         }
     }
+}
+
+/// Builds the per-attempt measurement for a forwarded request. `local_transform_micros` times the
+/// local compression stage, and the applied transform versions are the policy identity this
+/// attempt actually ran under — both absent when no local transform ran.
+///
+/// `observation` is `Some` only when the tool-result adapter rewrote this request. The observation
+/// path produces no `CompressionReport` (it compresses inner result strings, not one payload), so
+/// without this the attempt would report no policy revision and no local counts at all — an
+/// observation run would be indistinguishable in accounting from a pure passthrough.
+fn measurement_spec(
+    request_id: &str,
+    headers: &[Header],
+    model: Option<&str>,
+    report: Option<&CompressionReport>,
+    transform_micros: Option<u64>,
+    observation: Option<&ObservationRun>,
+) -> MeasurementSpec {
+    let mut spec = MeasurementSpec::new(request_id);
+    // The session id is caller-supplied and hashed before it is recorded; the raw value never
+    // reaches a log line, and `x-tokenfold-*` headers are never forwarded upstream.
+    spec.session_id = header_value(headers, "x-tokenfold-session-id").map(opaque_id);
+    spec.model = model.map(resolve_model);
+    spec.estimator = report.map(|report| report.estimator.clone());
+    if let Some(run) = observation {
+        // Byte counts, not token counts: the observation path runs Core per inner result string, so
+        // there is no single whole-payload token figure to report. They are counted with the
+        // same byte heuristic the adapter used for its own reduction check, which keeps the two
+        // numbers comparable instead of mixing units.
+        spec.policy_revision = Some(format!(
+            "observation:{OBSERVATION_POLICY_REVISION}:min_content_bytes={}",
+            run.min_content_tokens
+        ));
+        spec.local_before_tokens = Some(run.original_bytes);
+        spec.local_after_tokens = Some(run.compressed_bytes);
+    } else {
+        spec.policy_revision = report
+            .map(applied_versions)
+            .filter(|versions| !versions.is_empty())
+            .map(|versions| versions.join(","));
+        spec.local_before_tokens = report.map(|report| report.original_tokens);
+        spec.local_after_tokens = report.map(|report| report.compressed_tokens);
+    }
+    spec.local_transform_micros = transform_micros;
+    spec
+}
+
+/// What one observation pass did, kept only long enough to label its measurement event.
+///
+/// Separate from [`ObservationPolicy`] on purpose: the policy is the operator's configuration and
+/// is identical for every request, while this is a per-attempt fact.
+struct ObservationRun {
+    min_content_tokens: usize,
+    original_bytes: usize,
+    compressed_bytes: usize,
+}
+
+/// Version tag for the observation path's policy identity in measurement events. Bump when the
+/// eligibility rules or verification steps change, so a recorded run can be attributed to the code
+/// that produced it.
+const OBSERVATION_POLICY_REVISION: &str = "1.0";
+
+/// Writes the one terminal event per attempt as a single JSON line on stderr, beside the access
+/// log. Counters, IDs and revisions only: never payload text, headers, or credentials.
+fn log_event(event: &MeasurementEvent) {
+    if let Ok(line) = format_event_line(event) {
+        eprintln!("{line}");
+    }
+}
+
+fn measurement_sink() -> EventSink {
+    Box::new(|event| log_event(&event))
 }
 
 fn should_forward_header(name: &str) -> bool {
@@ -491,7 +706,8 @@ fn with_headers<B>(
 fn build_upstream_response(
     response: ureq::http::Response<ureq::Body>,
     report: Option<&CompressionReport>,
-    request_id: String,
+    request_id: &str,
+    spec: MeasurementSpec,
 ) -> (u16, Response<BodyReader>) {
     let status = response.status().as_u16();
     let is_success = (200..300).contains(&status);
@@ -521,15 +737,21 @@ fn build_upstream_response(
     }
 
     let body = response.into_body();
+    // Every byte below is forwarded exactly as received: the measuring reader observes the stream
+    // in passing and emits one terminal event when it ends, errors, or is abandoned.
+    let mut measured: BodyReader = Box::new(MeasurementReader::new(
+        body.into_reader(),
+        spec,
+        measurement_sink(),
+    ));
     if is_streaming {
-        let reader: BodyReader = Box::new(body.into_reader());
         (
             status,
-            Response::new(StatusCode(status), out_headers, reader, None, None),
+            Response::new(StatusCode(status), out_headers, measured, None, None),
         )
     } else {
         let mut buf = Vec::new();
-        if let Err(error) = body.into_reader().read_to_end(&mut buf) {
+        if let Err(error) = measured.read_to_end(&mut buf) {
             let status = if error.kind() == std::io::ErrorKind::TimedOut {
                 504
             } else {
@@ -626,6 +848,24 @@ fn retrieve_response(outcome: RetrievalOutcome) -> (u16, Response<BodyReader>) {
         RetrievalOutcome::Expired => {
             json_response(410, &json!({"status": "expired", "source": "proxy_store"}))
         }
+        // `unauthorized` is 403 and deliberately says nothing about whether the hash exists:
+        // a 404 here would turn the status code into an existence oracle for a namespace the
+        // caller may not read.
+        RetrievalOutcome::Unauthorized => json_response(
+            403,
+            &json!({"status": "unauthorized", "source": "proxy_store"}),
+        ),
+        // `over_budget` reports the whole-entry size and the limit, which is the caller's own
+        // budget rather than privileged information, and lets it retry with a larger allowance.
+        RetrievalOutcome::OverBudget { bytes, limit_bytes } => json_response(
+            413,
+            &json!({
+                "status": "over_budget",
+                "source": "proxy_store",
+                "bytes": bytes,
+                "limit_bytes": limit_bytes,
+            }),
+        ),
     }
 }
 
@@ -647,7 +887,12 @@ fn handle_retrieve_post(
         Ok(store) => store,
         Err(message) => return error_response(500, &message),
     };
-    retrieve_response(store.retrieve(&hash, &namespace))
+    retrieve_response(store.retrieve_authorized(
+        &hash,
+        &namespace,
+        &authorized_namespaces_from_env(),
+        max_restore_bytes_from_env(),
+    ))
 }
 
 fn handle_retrieve_get(
@@ -665,7 +910,35 @@ fn handle_retrieve_get(
         Ok(store) => store,
         Err(message) => return error_response(500, &message),
     };
-    retrieve_response(store.retrieve(&hash, &namespace))
+    retrieve_response(store.retrieve_authorized(
+        &hash,
+        &namespace,
+        &authorized_namespaces_from_env(),
+        max_restore_bytes_from_env(),
+    ))
+}
+
+/// The namespaces this proxy may retrieve from, from
+/// `TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES` (comma-separated).
+///
+/// Unset or empty means unrestricted, preserving the pre-EP-05 behavior for every existing
+/// deployment. Same environment channel as the MCP server, so one host configures both.
+fn authorized_namespaces_from_env() -> Vec<String> {
+    std::env::var("TOKENFOLD_RETRIEVAL_AUTHORIZED_NAMESPACES")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The per-retrieval restored-context byte budget, from `TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES`.
+/// Unset or unparseable means unbounded, so a typo cannot take retrieval offline.
+fn max_restore_bytes_from_env() -> Option<usize> {
+    std::env::var("TOKENFOLD_RETRIEVAL_MAX_RESTORE_BYTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
 }
 
 /// `RetrievalStore`'s public API (tokenfold_core::retrieval_store) has no entry-count/byte-total
@@ -789,19 +1062,26 @@ fn request_id_for(client_supplied: Option<&str>) -> String {
         .unwrap_or_else(generate_request_id)
 }
 
-fn report_headers(report: &CompressionReport, request_id: String) -> Vec<Header> {
+/// `id@version` for each transform that actually ran, in report order. Doubles as the attempt's
+/// policy revision in the measurement event and as the `X-TokenFold-Applied-Versions` header, so
+/// the two can never drift apart.
+fn applied_versions(report: &CompressionReport) -> Vec<String> {
+    report
+        .transforms
+        .iter()
+        .filter(|t| t.status == TransformStatus::Applied)
+        .map(|t| format!("{}@{}", t.id, t.version))
+        .collect()
+}
+
+fn report_headers(report: &CompressionReport, request_id: &str) -> Vec<Header> {
     let applied: Vec<&str> = report
         .transforms
         .iter()
         .filter(|t| t.status == TransformStatus::Applied)
         .map(|t| t.id.as_str())
         .collect();
-    let applied_versions: Vec<String> = report
-        .transforms
-        .iter()
-        .filter(|t| t.status == TransformStatus::Applied)
-        .map(|t| format!("{}@{}", t.id, t.version))
-        .collect();
+    let applied_versions = applied_versions(report);
     let estimator = match &report.estimator.model {
         Some(model) => format!("{}:{model}", report.estimator.backend),
         None => report.estimator.backend.clone(),
@@ -827,7 +1107,7 @@ fn report_headers(report: &CompressionReport, request_id: String) -> Vec<Header>
         ("X-TokenFold-Estimator", estimator),
         ("X-TokenFold-Applied", applied.join(",")),
         ("X-TokenFold-Applied-Versions", applied_versions.join(",")),
-        ("X-TokenFold-Request-Id", request_id),
+        ("X-TokenFold-Request-Id", request_id.to_string()),
         ("X-TokenFold-Preset", report.preset.clone()),
         ("X-TokenFold-Format", report.format.clone()),
     ]
