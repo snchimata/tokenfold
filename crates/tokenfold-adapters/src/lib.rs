@@ -23,8 +23,12 @@
 //! framework name, so the framework/agent layers above stay out of this crate's surface until
 //! they emit a shape of their own.
 
+pub mod dedup;
+pub mod manifest;
 pub mod observation;
+pub mod semantic;
 pub mod session;
+pub mod tools;
 
 use tokenfold_core::{CompressionInput, CompressionOutput, CompressionPolicy, TokenFoldError};
 
