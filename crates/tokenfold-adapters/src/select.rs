@@ -604,7 +604,7 @@ mod tests {
         assert!(!rejected.used_scorer);
         assert!(rejected.fallback_reason.unwrap().contains("SHA-256"));
         assert!(std::fs::read_dir(&root).unwrap().next().is_none());
-        std::fs::remove_dir(root).unwrap();
+        std::fs::remove_dir(&root).unwrap();
         #[cfg(unix)]
         {
             std::fs::remove_file(launcher).unwrap();
