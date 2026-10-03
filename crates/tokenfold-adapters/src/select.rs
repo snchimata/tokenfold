@@ -456,6 +456,20 @@ mod tests {
         ));
         std::fs::create_dir(&root).unwrap();
         let executable = std::env::current_exe().unwrap();
+        // Unix debug/coverage executables can exceed the production approval cap.
+        // An explicitly approved exec-only launcher replaces itself with the same
+        // Rust worker, so deadline/cancellation still control the direct child.
+        #[cfg(unix)]
+        let executable = {
+            use std::os::unix::fs::PermissionsExt;
+            let launcher = root.with_extension("sh");
+            let quoted = executable.to_str().unwrap().replace('\'', "'\\''");
+            std::fs::write(&launcher, format!("#!/bin/sh\nexec '{quoted}' \"$@\"\n")).unwrap();
+            std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o700)).unwrap();
+            launcher
+        };
+        #[cfg(unix)]
+        let launcher = executable.clone();
         let runtime = ApprovedScorer {
             executable_sha256: hex_sha256(&std::fs::read(&executable).unwrap()),
             executable,
@@ -583,6 +597,8 @@ mod tests {
         assert!(rejected.fallback_reason.unwrap().contains("SHA-256"));
         assert!(std::fs::read_dir(&root).unwrap().next().is_none());
         std::fs::remove_dir(root).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(launcher).unwrap();
     }
 
     struct BoundaryEstimator;
