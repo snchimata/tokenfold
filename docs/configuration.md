@@ -242,3 +242,282 @@ private scratch permissions and resource limits. No model is installed or downlo
 The receipt is separate version-1 `context_selection` JSON on stderr (or `--receipt-file`),
 with no raw context/query/group IDs; selected text goes to stdout (or `--output`). An
 unreachable budget is visible in `budget_met: false`, never disguised by empty context.
+
+## Experimental generative summarizer
+
+```sh
+tokenfold summarize context.json --experimental --query "What changed?" --target-tokens 512 --model-config approved-model.json --inference-timeout-ms 30000
+```
+
+Input uses the Select document shape without `fallback_score`: prefix, suffix and
+ordered `{id,text,required}` groups. Prefix/suffix and required group text are copied
+verbatim outside generation. This is **not** the existing literal-extract semantic
+API and does not change compression defaults. Generated paraphrases remain
+**unverified**, not production-admissible or proven superior to other compressors.
+
+`approved-model.json` uses the approval fields documented for `--scorer-config` above.
+The approved direct child receives the same request/response environment paths, with
+`kind: "generative_summary"`, schema version 1, pinned model revision, instruction,
+query, target tokens and the full source document. Its response must contain only:
+
+```json
+{"schema_version":1,"model_revision":"<pinned revision>","summary":"...","source_ids":["g1"]}
+```
+
+Only optional group IDs may be cited. Native code deduplicates citations and attaches
+complete literal groups in source order alongside `summary_unverified`. Attribution
+is not entailment or completeness verification. The full wrapper, evidence and
+protected text count toward the target. Empty/malformed/unauthorized/oversized,
+secret-shaped, over-budget or non-shrinking candidates and runtime failures return
+the exact assembled source, with a visible reason and possibly `budget_met: false`.
+Secret-shaped source/query is refused before model invocation or output.
+The separate `generative_summary` receipt goes to stderr or `--receipt-file`.
+Optional `inference_usage: {"input_tokens":123,"output_tokens":45}` in the runtime
+response carries unsigned counters into the receipt, with `usage_provenance` set to
+`approved-runtime-reported`. The local bridge supplies server-reported counters when
+both are valid. These are not local-estimator counts or verified billing. Counts are
+retained on native candidate rejection (including budget failure); malformed responses,
+transport failures and interrupted calls may still have unknown usage (`null`). The local bridge also returns fixed `generation_failure` codes (`incomplete_response`, `model_mismatch`, `malformed_candidate`) with any reported counters; no rejected model reply is included. HTTP 4xx/5xx/other statuses, transport errors, socket timeouts and invalid runtime envelopes are classified as `http_client_error`, `http_server_error`, `http_unexpected_status`, `transport_failed`, `runtime_timeout` and `invalid_runtime_response`, respectively, without exporting server bodies or exception text. Native process/deadline failures still use `runtime_failed`. None is retried; all trigger raw fallback. Cost is
+always unknown (`null`), never assumed zero. One-shot summarization adds an inference
+call and may cost more than it saves.
+
+### Local Qwen without Ollama
+
+The helper now defaults to a **resident local Transformers/PyTorch model**, without
+Ollama. Start the model once explicitly; repeated CLI requests reuse its tokenizer
+and weights. **Qwen3.5-0.8B** is the default; `--size 2b` and
+`--size 4b` are explicit capacity options, not verified quality guarantees.
+A tokenizer alone cannot generate summaries: the worker loads both tokenizer and
+[Qwen's model weights](https://huggingface.co/Qwen/Qwen3.5-0.8B).
+
+This follows [ACON's load-once pattern](https://github.com/microsoft/acon/blob/d63f9ae18959dc7215ff62899c94c5e8c56847ae/src/productive_agents/llm.py#L524-L580):
+its local vLLM constructor creates the engine and tokenizer, and generation reuses
+those objects; its server client delegates to a separately running engine.
+For repeated requests, keep one server per explicitly selected model running.
+The short-lived Tokenfold client does not import PyTorch or reload weights.
+Use the native llama.cpp route below on supported Windows hardware, or resident
+Transformers for direct official-checkpoint loading; one-shot Transformers is a
+diagnostic path, not the repeated-request setup. Model residency avoids loading
+cost, but does not cache generated summaries or establish a fastest runtime.
+
+```sh
+# Optional dependencies in your own environment (not Rust dependencies):
+python -m pip install torch transformers huggingface_hub
+# Explicit one-time download; replace <commit-sha> with a pinned HF revision:
+hf download Qwen/Qwen3.5-0.8B --revision <commit-sha> --local-dir local-qwen-08b
+# Terminal 1: load once and keep running until you stop it (Ctrl+C).
+python scripts/local-summarizer.py --serve --model-dir local-qwen-08b --port 8000 --max-output-tokens 256
+# Add --device cuda after installing compatible CUDA-enabled PyTorch.
+# Terminal 2: approve a bounded, stdlib-only loopback client, not a model reloader.
+mkdir private-summarizer-scratch
+python scripts/local-summarizer.py --write-config approved-model.json --backend resident --port 8000 --max-output-tokens 256 --scratch-root private-summarizer-scratch --approved-by "your name"
+tokenfold summarize context.json --experimental --query "What changed?" --target-tokens 512 --model-config approved-model.json --inference-timeout-ms 30000
+# Optional: download Qwen/Qwen3.5-2B or Qwen/Qwen3.5-4B separately,
+# then configure --size 2b/4b with the corresponding --model-dir.
+```
+
+Use a Transformers release supporting `Qwen3_5ForCausalLM` and its official
+multimodal-to-text checkpoint mapping. The text-only loader skips unused vision
+weights and refuses missing or mismatched language weights. Oversized inputs are
+rejected before generation; one-shot mode rejects them before weights load. The
+worker uses local files only, safetensors, no remote Python code, offline/telemetry-off
+Hub settings, non-thinking generation, SDPA attention, KV caching and inference mode.
+CUDA is selected when your PyTorch supports it; otherwise CPU float32 is used.
+For NVIDIA GPUs, install the matching CUDA-enabled wheel using
+[PyTorch's platform selector](https://pytorch.org/get-started/locally/); an ordinary
+Windows `pip install torch` may install a CPU-only build even when a GPU is present.
+Check `python -c "import torch; print(torch.__version__, torch.cuda.is_available())"`
+before generating approval. Add `--device cuda` to configuration generation to
+require CUDA and refuse silent CPU fallback; `--device cpu` forces CPU, and
+`--device auto` preserves automatic selection. For resident mode set the device on
+`--serve`, not the client approval. No driver or runtime upgrade is implicit.
+In a cleared Windows child, the worker derives `SystemRoot` and the current OS
+username through Windows APIs so GPU libraries can initialize; it does not inherit
+caller credentials, proxy settings or the caller's broader environment.
+CUDA uses bfloat16 when supported, otherwise float16. There is no automatic download,
+server start, retry, model escalation or substitution. Complete input plus output
+allowance is capped at 16,384 model tokens, without source truncation. Output without
+EOS triggers incomplete-response fallback and retains consumed model-token counts.
+Direct decoding has no JSON grammar: malformed or unauthorized output is still
+rejected by native guards. All summaries remain semantically unverified.
+
+Resident mode loads one model/tokenizer once and serializes requests in a single
+explicitly started loopback process. `/health` reports readiness and its model ID.
+Each request performs a fresh generation and reports its consumed token counts;
+this is model reuse, not summary/answer caching or cross-request conversation history.
+The client sends the approved output allowance; exceeding the server's configured
+maximum is rejected rather than silently downgraded. Native input/evidence/secret,
+protected-text and full-budget gates remain unchanged. Server startup is separate
+from warm request latency; include it when reporting deployment economics.
+
+The server keeps weights until you stop it and does not log/save request bodies.
+It is a caller-owned model runner, not an authenticated compression API or OS sandbox:
+only use it on a trusted local machine through Tokenfold's guarded native client.
+Client timeouts/disconnects do not guarantee cancellation of an in-flight server
+kernel. Generation remains bounded by context/output allowances; there is no retry,
+automatic daemon launch, model download, model escalation or history recovery.
+
+Explicit `--backend transformers --model-dir ...` configuration retains the
+one-shot direct-child alternative, which loads weights per generation. Cold loading
+or CPU inference may exceed the native deadline (default 5 s, maximum 30 s), returning
+raw source. Same-input artifact reuse below avoids generation only for identical
+inputs. For higher concurrent/batched throughput, an already warmed engine such as
+[vLLM](https://huggingface.co/Qwen/Qwen3.5-0.8B#quickstart) is optional:
+
+```sh
+vllm serve /absolute/path/to/local-qwen-08b --host 127.0.0.1 --port 8000 --served-model-name Qwen/Qwen3.5-0.8B
+python scripts/local-summarizer.py --write-config approved-server.json --backend openai --scratch-root private-summarizer-scratch --approved-by "your name"
+```
+
+For a native Windows runner without Ollama or Python in the inference server,
+the same bridge also works with **llama.cpp**. A development integration used
+the official `b11399` Vulkan x64 build and converted the pinned official
+Qwen3.5-0.8B snapshot to BF16 GGUF with that build's `convert_hf_to_gguf.py`.
+Download and verify the official runtime separately; keep its companion DLLs.
+Install the converter requirements in your own Python environment once. Do not
+substitute an unverified community checkpoint or treat the served alias as weight
+attestation. Pin the converter, runtime/DLLs, original weights and resulting GGUF.
+
+```sh
+# One-time conversion using the matching, pinned llama.cpp source checkout:
+python llama.cpp/convert_hf_to_gguf.py local-qwen-08b --outtype bf16 --outfile local-qwen-08b-bf16.gguf
+# Terminal 1: keep the model loaded; select a device reported by --list-devices.
+llama-server --model local-qwen-08b-bf16.gguf --alias Qwen/Qwen3.5-0.8B --host 127.0.0.1 --port 8000 --ctx-size 16384 --parallel 1 --device Vulkan0 --n-gpu-layers 99 --flash-attn on --no-context-shift --predict 512 --chat-template-kwargs '{"enable_thinking":false}' --log-disable
+# Terminal 2: reuse the existing bounded client and native guards.
+python scripts/local-summarizer.py --write-config approved-native-server.json --backend openai --port 8000 --max-output-tokens 512 --scratch-root private-summarizer-scratch --approved-by "your name"
+tokenfold summarize context.json --experimental --query "What changed?" --target-tokens 512 --model-config approved-native-server.json --inference-timeout-ms 30000
+```
+
+The example shell must pass the JSON argument literally (PowerShell versions can
+require different native-argument quoting). BF16 conversion is not integer
+quantization and does not guarantee identical outputs across engines. Choose a
+runtime/device supported by your hardware; there is no automatic fallback or
+download. The server may reuse prompt-prefix state, but every request still
+generates a new candidate. Include startup and first-request warmup in measurements.
+The four-call development run completed without runtime failures, but one request
+fell back for budget overflow and another generated a false nationality claim.
+This establishes runner integration, **not quality qualification or universal
+performance superiority**. 2B/4B remain explicit, separately provisioned options.
+
+On the tested NVIDIA RTX 5080, the official `b11399` **CUDA 13.4 x64** build
+completed the optional 4B profile without the Vulkan trial's runtime timeouts.
+Provision and verify both the matching `llama-b11399-bin-win-cuda-13.4-x64.zip`
+and `cudart-llama-bin-win-cuda-13.4-x64.zip`; make the latter's DLL directory
+available on the server process's `PATH`. Confirm `llama-server --list-devices`
+and explicitly choose `--device CUDA0` instead of `Vulkan0`. Use your own
+compatible driver/runtime; Tokenfold does not install or switch them.
+For 4B, separately convert its pinned official snapshot and change both the
+server alias to `Qwen/Qwen3.5-4B` and client approval to `--size 4b`.
+The observed 4B CUDA run took 5.645 seconds to start and 2.620–6.165 seconds per
+native receipt, but still missed evidence and returned one budget fallback.
+This is a useful tested NVIDIA route, not a general hardware ranking or a
+verified higher-quality default.
+
+The same pinned native CUDA runtime also completed a resident **2B** BF16
+development trial on five previously observed training cases, with original and
+short evidence IDs (ten fresh generations in one server process). Startup was
+2.588 seconds; command times were 1.633–1.877 seconds with original IDs and
+1.208–1.370 seconds with short IDs. Original IDs produced one budget fallback;
+short IDs passed structural/budget guards on all five cases, but still missed
+required evidence on one case and generated false company/location relationships
+on another. These are small training measurements, not held-out quality evidence
+or a reason to automatically select 2B or short IDs. Weights stay loaded across
+requests; native acceptance still does not certify summary truth.
+
+For an opt-in short evidence-ID experiment with an already running native 4B
+server (matching alias and port), create a **new** approval:
+
+```sh
+python scripts/local-summarizer.py --write-config ./qwen35-4b-shortids.approval.json --backend openai --size 4b --port 8080 --short-source-ids --max-output-tokens 512 --scratch-root ./private-summarizer-scratch --approved-by local-user
+```
+
+`--short-source-ids` is loopback `openai`-backend-only and off by default. It sends
+source-order `sN` aliases for optional group ID fields, leaving original source
+text and protected context unchanged, and translates selected aliases back before
+native authorization/evidence compilation. Unknown aliases fail closed, including
+IDs outside the optional set; known inference usage survives rejected or oversized
+translated candidates. The option is bound into the approval arguments. It does
+not load another model, retry, cache answers or verify summary semantics. Training
+results are mixed: 4B retained more economical evidence in one retrieval case,
+but another training case still omitted a supporting document; 0.8B regressed on
+one retrieval case. Do not treat this option as a qualified quality default.
+
+The server bridge uses only `127.0.0.1`, port 8000 in generated configurations
+(`--port` overrides it), without credentials, proxies, redirects or retries.
+The resident Transformers server uses length-delimited HTTP/1.1 replies; its
+five-second socket timeout bounds header/body and idle connection reads, not
+model inference. Requests remain serialized: close consumed client connections
+promptly rather than leaving an idle connection ahead of another request.
+It requests non-thinking structured JSON; unsupported settings fail visibly.
+Existing explicit port-only bridge arguments remain usable. The model sees only
+optional group IDs and protected context without its IDs; native output keeps
+protected text exactly. 2B/4B and GPU throughput are not yet live-qualified here.
+
+Configuration generation requires an existing private scratch directory and a local
+model directory for one-shot direct inference, approves the absolute Python executable's
+SHA-256, and refuses overwrite. Pin/protect the snapshot, Python environment, worker
+script and arguments yourself: executable approval alone does not verify weights.
+The configured model ID is a label, not artifact attestation. Keep local weights,
+approvals and generated artifacts out of Git. No hosted private-data export is enabled.
+
+The process timeout bounds the direct child only, not an optional server's ongoing
+inference. Approval is not an OS sandbox; custom runtimes must not launch descendants.
+Default child timeout is 5 seconds, maximum 30 seconds. Source is
+bounded to 1 MiB assembled/2 MiB serialized, query to 4 KiB, groups to 512, model
+response to 64 KiB. Token counts report the local estimator, not provider templates.
+
+Local integration check (build the debug CLI first):
+
+```sh
+cargo build -p tokenfold-cli --locked
+python scripts/test_local_summarizer.py
+```
+
+Checks include synthetic direct-loader tests and native CLI-to-loopback integration,
+not a model-quality or throughput benchmark. Local compute cost is unknown, not zero.
+
+Before invoking the runtime, `summarize` keeps the exact assembled source if it already
+fits the target (`already_within_budget`), contains no optional groups
+(`no_optional_groups`), or protected content alone reaches the target
+(`protected_budget`). These receipts set `runtime_invoked: false`, with unknown/null
+usage, not fabricated zero-cost inference. Input/query safety checks still run.
+
+### Explicit same-input summary reuse
+
+```sh
+# The first successful generation saves an unverified candidate, not the source:
+tokenfold summarize context.json --experimental --query "What changed?" --target-tokens 512 --model-config approved-model.json --save-summary private-summary.json --inference-timeout-ms 30000
+# Later, only with exactly the same source/grouping, query, approval, target and estimator:
+tokenfold summarize context.json --experimental --query "What changed?" --target-tokens 512 --model-config approved-model.json --reuse-summary private-summary.json
+```
+
+Artifact persistence is **opt-in** and may contain private generated facts and source
+IDs: protect its parent directory and file. Saves refuse overwrite and require paths
+separate from output/receipt files. Source/query are represented by hashes, not copied
+into the artifact. This is not anonymous storage (the summary itself contains facts).
+Only candidates passing the native evidence/output/budget/no-growth gates are saved.
+
+Reuse never calls the model or silently regenerates on mismatch. Every reuse reruns
+current decoded-input guards, source-ID authorization, protected-text assembly,
+secret detection and full-payload token accounting. Mismatched/unavailable/malformed
+artifacts return the exact current source with a visible fixed fallback reason.
+Changed queries, required flags, target, estimator or approval are not cache hits.
+It is **not** cross-query or changed-history reuse, nor a semantic proof or signed
+artifact. Tampered factual paraphrases may remain unverifiable; protect the artifact.
+
+Receipts distinguish `artifact_reused` and `runtime_invoked`. `inference_usage` stays
+null for the reuse; original counters appear separately in `reused_inference_usage`
+and must not be billed again. Model revision describes the recorded candidate, not
+verification of current server weights or availability. Count the first generation's
+cost once across genuine repeated requests; do not count repetitions as independent
+quality trials or claim cached latency as cold generation latency.
+## Experimental validation-only Select
+
+`tokenfold --experimental select --query validate-only --target-tokens 1 --validate-only`
+reads the existing context input schema and performs the same bounded raw/decoded
+secret checks, but does not initialize a tokenizer, select groups, invoke a scorer
+or emit source text. It conflicts with scorer configuration, output and receipt
+options. Successful validation is not semantic admission or a compression result.
+Success emits no stdout/stderr; secret refusal preserves exit code 3 and does not
+echo secret text. Missing `--experimental` uses the existing configuration-error
+exit code 5; incompatible output/scorer options are rejected by argument parsing.

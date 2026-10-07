@@ -1,0 +1,85 @@
+{
+  "id": "acon-grouped-numeric",
+  "family": "numeric",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Maximum allowed latency is 120ms. Equal to maximum is allowed; only strictly greater violates the limit.\",\n  \"records\": [\n    {\"service\":\"service-00\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-01\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-02\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-03\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-04\",\"latency_ms\":119,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-05\",\"latency_ms\":120,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-06\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-07\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-08\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-09\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-10\",\"latency_ms\":119,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-11\",\"latency_ms\":121,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-12\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-13\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-14\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n    {\"service\":\"service-15\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"}\n  ]\n}\n",
+  "query": "Which single service violates the latency limit? Return only its name.",
+  "gold_answer": "service-11",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Maximum allowed latency is 120ms. Equal to maximum is allowed; only strictly greater violates the limit.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "g00",
+        "text": "    {\"service\":\"service-00\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g01",
+        "text": "    {\"service\":\"service-01\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g02",
+        "text": "    {\"service\":\"service-02\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g03",
+        "text": "    {\"service\":\"service-03\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g04",
+        "text": "    {\"service\":\"service-04\",\"latency_ms\":119,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g05",
+        "text": "    {\"service\":\"service-05\",\"latency_ms\":120,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g06",
+        "text": "    {\"service\":\"service-06\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g07",
+        "text": "    {\"service\":\"service-07\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g08",
+        "text": "    {\"service\":\"service-08\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g09",
+        "text": "    {\"service\":\"service-09\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g10",
+        "text": "    {\"service\":\"service-10\",\"latency_ms\":119,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g11",
+        "text": "    {\"service\":\"service-11\",\"latency_ms\":121,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g12",
+        "text": "    {\"service\":\"service-12\",\"latency_ms\":115,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g13",
+        "text": "    {\"service\":\"service-13\",\"latency_ms\":116,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g14",
+        "text": "    {\"service\":\"service-14\",\"latency_ms\":117,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"},\n"
+      },
+      {
+        "id": "g15",
+        "text": "    {\"service\":\"service-15\",\"latency_ms\":118,\"samples\":500,\"operator_note\":\"steady load; compare latency with the declared maximum\"}\n"
+      }
+    ]
+  },
+  "notes": "Predeclared synthetic development pilot; not held-out quality qualification. Groups are complete source records. Required rule is not gold-derived."
+}

@@ -1,0 +1,150 @@
+{
+  "id": "acon-holdout-latest-update",
+  "family": "latest-update",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"For each service use the largest timestamp, not row order. Later authorization overrides earlier state.\",\n  \"records\": [\n    {\"service\":\"node-00\",\"time\":\"11:00\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-02\",\"time\":\"11:02\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-09\",\"time\":\"11:09\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-15\",\"time\":\"11:15\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-16\",\"time\":\"11:16\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-12\",\"time\":\"11:12\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-05\",\"time\":\"11:05\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-26\",\"time\":\"11:26\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"fulfilment\",\"time\":\"10:10\",\"deploy_allowed\":true,\"note\":\"old authorization\"},\n    {\"service\":\"node-06\",\"time\":\"11:06\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-21\",\"time\":\"11:21\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-13\",\"time\":\"11:13\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-04\",\"time\":\"11:04\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-24\",\"time\":\"11:24\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-25\",\"time\":\"11:25\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-10\",\"time\":\"11:10\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-20\",\"time\":\"11:20\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"fulfilment\",\"time\":\"13:59\",\"deploy_allowed\":false,\"note\":\"revoked; do not deploy\"},\n    {\"service\":\"node-23\",\"time\":\"11:23\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-17\",\"time\":\"11:17\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-11\",\"time\":\"11:11\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-18\",\"time\":\"11:18\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-08\",\"time\":\"11:08\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-01\",\"time\":\"11:01\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-14\",\"time\":\"11:14\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-19\",\"time\":\"11:19\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-28\",\"time\":\"11:28\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-29\",\"time\":\"11:29\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-27\",\"time\":\"11:27\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-07\",\"time\":\"11:07\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-22\",\"time\":\"11:22\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"node-03\",\"time\":\"11:03\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n  ]\n}\n",
+  "query": "Is deployment of fulfilment currently allowed? Return only true or false.",
+  "gold_answer": "false",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"For each service use the largest timestamp, not row order. Later authorization overrides earlier state.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "s875",
+        "text": "    {\"service\":\"node-00\",\"time\":\"11:00\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s261",
+        "text": "    {\"service\":\"node-02\",\"time\":\"11:02\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s240",
+        "text": "    {\"service\":\"node-09\",\"time\":\"11:09\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s910",
+        "text": "    {\"service\":\"node-15\",\"time\":\"11:15\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s710",
+        "text": "    {\"service\":\"node-16\",\"time\":\"11:16\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s479",
+        "text": "    {\"service\":\"node-12\",\"time\":\"11:12\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s545",
+        "text": "    {\"service\":\"node-05\",\"time\":\"11:05\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s386",
+        "text": "    {\"service\":\"node-26\",\"time\":\"11:26\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s125",
+        "text": "    {\"service\":\"fulfilment\",\"time\":\"10:10\",\"deploy_allowed\":true,\"note\":\"old authorization\"},\n"
+      },
+      {
+        "id": "s686",
+        "text": "    {\"service\":\"node-06\",\"time\":\"11:06\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s795",
+        "text": "    {\"service\":\"node-21\",\"time\":\"11:21\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s455",
+        "text": "    {\"service\":\"node-13\",\"time\":\"11:13\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s282",
+        "text": "    {\"service\":\"node-04\",\"time\":\"11:04\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s169",
+        "text": "    {\"service\":\"node-24\",\"time\":\"11:24\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s353",
+        "text": "    {\"service\":\"node-25\",\"time\":\"11:25\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s387",
+        "text": "    {\"service\":\"node-10\",\"time\":\"11:10\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s541",
+        "text": "    {\"service\":\"node-20\",\"time\":\"11:20\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s619",
+        "text": "    {\"service\":\"fulfilment\",\"time\":\"13:59\",\"deploy_allowed\":false,\"note\":\"revoked; do not deploy\"},\n"
+      },
+      {
+        "id": "s200",
+        "text": "    {\"service\":\"node-23\",\"time\":\"11:23\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s333",
+        "text": "    {\"service\":\"node-17\",\"time\":\"11:17\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s244",
+        "text": "    {\"service\":\"node-11\",\"time\":\"11:11\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s568",
+        "text": "    {\"service\":\"node-18\",\"time\":\"11:18\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s668",
+        "text": "    {\"service\":\"node-08\",\"time\":\"11:08\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s845",
+        "text": "    {\"service\":\"node-01\",\"time\":\"11:01\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s382",
+        "text": "    {\"service\":\"node-14\",\"time\":\"11:14\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s814",
+        "text": "    {\"service\":\"node-19\",\"time\":\"11:19\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s886",
+        "text": "    {\"service\":\"node-28\",\"time\":\"11:28\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s698",
+        "text": "    {\"service\":\"node-29\",\"time\":\"11:29\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s774",
+        "text": "    {\"service\":\"node-27\",\"time\":\"11:27\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s947",
+        "text": "    {\"service\":\"node-07\",\"time\":\"11:07\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s745",
+        "text": "    {\"service\":\"node-22\",\"time\":\"11:22\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s116",
+        "text": "    {\"service\":\"node-03\",\"time\":\"11:03\",\"deploy_allowed\":true,\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n"
+      }
+    ]
+  },
+  "split": "heldout-smoke",
+  "notes": "Frozen before first model call, seed 70413. Fresh synthetic instances in known task families, NOT independent official-task qualification. Do not tune scorer or regenerate tasks after observing this run."
+}

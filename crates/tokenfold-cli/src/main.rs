@@ -7,6 +7,7 @@ mod render;
 mod rtk;
 mod select_cmd;
 mod stats_cmd;
+mod summarize_cmd;
 
 use std::path::{Path, PathBuf};
 
@@ -60,6 +61,8 @@ struct Cli {
 enum Command {
     /// Experimental whole-group context selection with an optional approved local scorer.
     Select(select_cmd::SelectArgs),
+    /// Experimental generative summary with native source evidence and an approved local model.
+    Summarize(summarize_cmd::SummarizeArgs),
     /// Dry-run preview of achievable savings (previews per-transform even with no target).
     Inspect {
         #[arg(default_value = "-")]
@@ -381,8 +384,11 @@ fn main() {
             receipt_file,
             receipt_format,
         ),
+        Command::Summarize(args) => {
+            summarize_cmd::run(args, global.experimental, &*default_estimator()).map(|()| 0)
+        }
         Command::Select(args) => {
-            select_cmd::run(args, global.experimental, &*default_estimator()).map(|()| 0)
+            select_cmd::run(args, global.experimental, default_estimator).map(|()| 0)
         }
         Command::Decode {
             input,

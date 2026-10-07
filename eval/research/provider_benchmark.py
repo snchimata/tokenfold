@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
 from pathlib import Path
 
 import tiktoken
+import headroom.compression.universal as headroom_module
 from headroom.compression.universal import compress as headroom_compress
+from benchmark_provenance import checkout_provenance
 
 ENCODING = tiktoken.get_encoding("o200k_base")
 
@@ -31,6 +34,7 @@ def run(command: list[str], source: str) -> str:
         encoding="utf-8",
         capture_output=True,
         check=False,
+        timeout=30,
     )
     if process.returncode:
         detail = process.stderr.strip() or f"exit code {process.returncode}"
@@ -42,11 +46,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--headroom-revision", required=True)
+    parser.add_argument("--headroom-root", required=True, type=Path)
     parser.add_argument("--tokenfold-revision", required=True)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
+    provenance = checkout_provenance(args.headroom_root, args.headroom_revision,
+                                     Path(headroom_module.__file__))
+    if args.output and args.output.exists():
+        parser.error("output already exists (never overwrite evidence)")
+
     root = Path(__file__).resolve().parents[2]
+    actual_revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True, timeout=30
+    ).strip()
+    if args.tokenfold_revision != actual_revision:
+        parser.error("tokenfold revision must match the current checkout")
+    tokenfold_dirty = bool(subprocess.check_output(
+        ["git", "-C", str(root), "status", "--porcelain"], timeout=30
+    ))
     executable = (
         root
         / "target"
@@ -57,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "build the release CLI first: cargo build --release --locked -p tokenfold-cli"
         )
+    binary_hash = hashlib.sha256(executable.read_bytes()).hexdigest()
 
     args.manifest = args.manifest.resolve()
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -66,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     rows = []
     for case in manifest["cases"]:
         path = (args.manifest.parent / case["path"]).resolve()
-        source = path.read_text(encoding="utf-8")
+        source_bytes = path.read_bytes()
+        source = source_bytes.decode("utf-8")
         value = json.loads(source)
         before = count_tokens(source)
 
@@ -88,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
                 "shape": case["shape"],
                 "input": path.relative_to(root).as_posix(),
                 "original_tokens": before,
+                "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
                 "tokenfold": {
                     "tokens": tokenfold_tokens,
                     "saved_pct": saved_pct(tokenfold_tokens, before),
@@ -112,6 +133,9 @@ def main(argv: list[str] | None = None) -> int:
     tokenfold = sum(row["tokenfold"]["tokens"] for row in rows)
     headroom = sum(row["headroom"]["tokens"] for row in rows)
     report = {
+        "headroom_provenance": provenance,
+        "tokenfold_binary_sha256": binary_hash,
+        "tokenfold_worktree_dirty": tokenfold_dirty,
         "tokenizer": {"backend": "tiktoken", "encoding": "o200k_base", "exact": True},
         "headroom_revision": args.headroom_revision,
         "source_commit": args.tokenfold_revision,
@@ -133,12 +157,19 @@ def main(argv: list[str] | None = None) -> int:
         "limitations": [
             "This compares each project's default local generic-JSON API, not hosted proxy behavior.",
             "Token counts use one external tokenizer so both outputs are measured identically.",
+            "Binary hash identifies the executable, not proof it was built from the declared source revision.",
             "Tokenfold exactness is checked after decode; Headroom is checked as emitted JSON.",
         ],
     }
     rendered = json.dumps(report, indent=2) + "\n"
+    if checkout_provenance(args.headroom_root, args.headroom_revision,
+                           Path(headroom_module.__file__)) != provenance:
+        raise ValueError("comparator implementation changed during benchmark")
+    if hashlib.sha256(executable.read_bytes()).hexdigest() != binary_hash:
+        raise ValueError("Tokenfold binary changed during benchmark")
     if args.output:
-        args.output.write_text(rendered, encoding="utf-8")
+        with args.output.open("x", encoding="utf-8") as output:
+            output.write(rendered)
     else:
         print(rendered, end="")
     return 0

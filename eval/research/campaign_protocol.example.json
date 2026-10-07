@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "scope": "smoke",
+  "arms": ["raw", "tokenfold-lossless", "acon-observation"],
+  "models": {"answering_and_compressor": "REPLACE_WITH_APPROVED_MODEL_AND_REVISION"},
+  "seeds": [0],
+  "runtime": {"acon_revision": "d63f9ae18959dc7215ff62899c94c5e8c56847ae", "transport": "ollama-loopback-killable-subprocess", "answering_roles": ["system", "user"], "assistant_prefill": false, "scorer_guideline": null, "generative_guideline": null, "headroom_revision": null},
+  "budgets": {"context_tokens": 32768, "output_tokens": 512, "max_calls": 24, "timeout_seconds": 30, "ratio": 0.5},
+  "quality": {"max_cfr": 0.01, "max_success_loss": 0.01, "confidence": 0.95, "min_raw_success_clusters": 299},
+  "suites": [{"split": "test", "workload": "json", "path": "eval/research/acon_holdout_corpus"}]
+}

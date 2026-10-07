@@ -24,6 +24,9 @@ pub struct SelectArgs {
     /// Separate selection receipt (not a compression receipt); defaults to stderr.
     #[arg(long)]
     receipt_file: Option<PathBuf>,
+    /// Validate input safety only; no tokenizer, selection, scorer or payload output.
+    #[arg(long, conflicts_with_all = ["scorer_config", "output", "receipt_file"])]
+    validate_only: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -36,7 +39,7 @@ struct Source {
     groups: Vec<ContextGroup>,
 }
 
-fn bounded(input: &Input, max: u64) -> Result<Vec<u8>, TokenFoldError> {
+pub(crate) fn bounded(input: &Input, max: u64) -> Result<Vec<u8>, TokenFoldError> {
     let reader: Box<dyn Read> = match input {
         Input::Stdin => Box::new(std::io::stdin()),
         Input::Path(path) => Box::new(std::fs::File::open(path)?),
@@ -54,7 +57,7 @@ fn bounded(input: &Input, max: u64) -> Result<Vec<u8>, TokenFoldError> {
 pub fn run(
     args: SelectArgs,
     experimental: bool,
-    estimator: &dyn TokenEstimator,
+    estimator: impl FnOnce() -> Box<dyn TokenEstimator>,
 ) -> Result<(), TokenFoldError> {
     if !experimental {
         return Err(TokenFoldError::ConfigError(
@@ -85,6 +88,10 @@ pub fn run(
             "secret-shaped decoded context refused before output".into(),
         ));
     }
+    if args.validate_only {
+        return Ok(());
+    }
+    let estimator = estimator();
     let runtime: Option<ApprovedScorer> = args
         .scorer_config
         .as_ref()
@@ -108,7 +115,7 @@ pub fn run(
         &context,
         &args.query,
         &policy,
-        estimator,
+        &*estimator,
         runtime.as_ref(),
         None,
     );
@@ -127,4 +134,56 @@ pub fn run(
         std::io::stderr().write_all(bytes.as_bytes())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validation_only_keeps_safety_checks_without_initializing_estimator() {
+        let path = std::env::temp_dir().join(format!(
+            "tokenfold-guard-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for (input, accepted) in [
+            (
+                r#"{"groups":[{"id":"g","text":"ordinary text","required":true}]}"#,
+                true,
+            ),
+            (
+                r#"{"groups":[{"id":"g","text":"\u0073\u006b-ABCDEFGHIJ1234567890abcdefgh"}]}"#,
+                false,
+            ),
+            (
+                r#"{"groups":[{"id":"a","text":"sk-ABCDEFGHIJ"},{"id":"b","text":"1234567890abcdefgh"}]}"#,
+                false,
+            ),
+            (r#"{"groups":[],"unknown":true}"#, false),
+        ] {
+            std::fs::write(&path, input).unwrap();
+            let args = SelectArgs {
+                input: Input::Path(path.clone()),
+                query: "validate-only".into(),
+                target_tokens: 1,
+                scorer_config: None,
+                inference_timeout_ms: 5000,
+                output: None,
+                receipt_file: None,
+                validate_only: true,
+            };
+            assert_eq!(
+                run(args, true, || panic!(
+                    "validation must not initialize tokenizer"
+                ))
+                .is_ok(),
+                accepted
+            );
+        }
+        std::fs::remove_file(path).unwrap();
+    }
 }

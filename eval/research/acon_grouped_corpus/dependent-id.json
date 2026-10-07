@@ -1,0 +1,81 @@
+{
+  "id": "acon-grouped-dependent-id",
+  "family": "dependent-id",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Link records using artifact_id, not source order or names.\",\n  \"records\": [\n    {\"record_type\":\"request\",\"request_id\":\"rq-00\",\"artifact_id\":\"obj-00\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-01\",\"artifact_id\":\"obj-01\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-02\",\"artifact_id\":\"obj-02\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-03\",\"artifact_id\":\"obj-03\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-critical\",\"artifact_id\":\"obj-482\",\"status\":\"failed\",\"note\":\"do not retry this failed artifact\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-05\",\"artifact_id\":\"obj-05\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-06\",\"artifact_id\":\"obj-06\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-07\",\"artifact_id\":\"obj-07\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-08\",\"artifact_id\":\"obj-08\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-09\",\"artifact_id\":\"obj-09\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-10\",\"artifact_id\":\"obj-10\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-11\",\"artifact_id\":\"obj-11\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-12\",\"artifact_id\":\"obj-12\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"request\",\"request_id\":\"rq-13\",\"artifact_id\":\"obj-13\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n    {\"record_type\":\"owner\",\"artifact_id\":\"obj-482\",\"owner\":\"team-delta\",\"note\":\"ownership lookup\"}\n  ]\n}\n",
+  "query": "Which team owns the artifact from request rq-critical? Return only the owner.",
+  "gold_answer": "team-delta",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Link records using artifact_id, not source order or names.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "g00",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-00\",\"artifact_id\":\"obj-00\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g01",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-01\",\"artifact_id\":\"obj-01\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g02",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-02\",\"artifact_id\":\"obj-02\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g03",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-03\",\"artifact_id\":\"obj-03\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g04",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-critical\",\"artifact_id\":\"obj-482\",\"status\":\"failed\",\"note\":\"do not retry this failed artifact\"},\n"
+      },
+      {
+        "id": "g05",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-05\",\"artifact_id\":\"obj-05\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g06",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-06\",\"artifact_id\":\"obj-06\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g07",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-07\",\"artifact_id\":\"obj-07\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g08",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-08\",\"artifact_id\":\"obj-08\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g09",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-09\",\"artifact_id\":\"obj-09\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g10",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-10\",\"artifact_id\":\"obj-10\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g11",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-11\",\"artifact_id\":\"obj-11\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g12",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-12\",\"artifact_id\":\"obj-12\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g13",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"rq-13\",\"artifact_id\":\"obj-13\",\"status\":\"completed\",\"note\":\"unrelated build artifacts\"},\n"
+      },
+      {
+        "id": "g14",
+        "text": "    {\"record_type\":\"owner\",\"artifact_id\":\"obj-482\",\"owner\":\"team-delta\",\"note\":\"ownership lookup\"}\n"
+      }
+    ]
+  },
+  "notes": "Predeclared synthetic development pilot; not held-out quality qualification. Groups are complete source records. Required rule is not gold-derived."
+}

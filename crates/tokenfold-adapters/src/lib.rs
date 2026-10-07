@@ -24,6 +24,7 @@
 //! they emit a shape of their own.
 
 pub mod dedup;
+pub mod generative;
 pub mod manifest;
 pub mod observation;
 pub mod select;

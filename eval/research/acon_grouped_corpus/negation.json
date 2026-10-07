@@ -1,0 +1,85 @@
+{
+  "id": "acon-grouped-negation",
+  "family": "negation",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"A degraded service is not necessarily rolled back. This report is final.\",\n  \"records\": [\n    {\"service\":\"service-00\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-01\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-02\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-03\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-04\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-05\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-06\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-07\",\"rolled_back\":false,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-08\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-09\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-10\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-11\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-12\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-13\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-14\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n    {\"service\":\"service-15\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"}\n  ]\n}\n",
+  "query": "Which single service was NOT rolled back? Return only its name.",
+  "gold_answer": "service-07",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"A degraded service is not necessarily rolled back. This report is final.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "g00",
+        "text": "    {\"service\":\"service-00\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g01",
+        "text": "    {\"service\":\"service-01\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g02",
+        "text": "    {\"service\":\"service-02\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g03",
+        "text": "    {\"service\":\"service-03\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g04",
+        "text": "    {\"service\":\"service-04\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g05",
+        "text": "    {\"service\":\"service-05\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g06",
+        "text": "    {\"service\":\"service-06\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g07",
+        "text": "    {\"service\":\"service-07\",\"rolled_back\":false,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g08",
+        "text": "    {\"service\":\"service-08\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g09",
+        "text": "    {\"service\":\"service-09\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g10",
+        "text": "    {\"service\":\"service-10\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g11",
+        "text": "    {\"service\":\"service-11\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g12",
+        "text": "    {\"service\":\"service-12\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g13",
+        "text": "    {\"service\":\"service-13\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g14",
+        "text": "    {\"service\":\"service-14\",\"rolled_back\":true,\"state\":\"healthy\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"},\n"
+      },
+      {
+        "id": "g15",
+        "text": "    {\"service\":\"service-15\",\"rolled_back\":true,\"state\":\"degraded\",\"region\":\"west\",\"operator_note\":\"status reviewed; no further action recorded\"}\n"
+      }
+    ]
+  },
+  "notes": "Predeclared synthetic development pilot; not held-out quality qualification. Groups are complete source records. Required rule is not gold-derived."
+}

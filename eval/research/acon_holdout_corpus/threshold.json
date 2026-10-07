@@ -1,0 +1,150 @@
+{
+  "id": "acon-holdout-threshold",
+  "family": "threshold",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Maximum allowed latency is 275ms. Equality is allowed; strictly greater violates the limit.\",\n  \"records\": [\n    {\"service\":\"edge-22\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-12\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-05\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-09\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-07\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-10\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-02\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-11\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-19\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-06\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-26\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-14\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-03\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-27\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-15\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-29\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-00\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-08\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-21\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-25\",\"latency_ms\":276,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-28\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-04\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-30\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-20\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-24\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-31\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-16\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-18\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-23\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-01\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-17\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"edge-13\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n  ]\n}\n",
+  "query": "Which single service violates the latency limit? Return only its name.",
+  "gold_answer": "edge-25",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Maximum allowed latency is 275ms. Equality is allowed; strictly greater violates the limit.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "s483",
+        "text": "    {\"service\":\"edge-22\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s254",
+        "text": "    {\"service\":\"edge-12\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s604",
+        "text": "    {\"service\":\"edge-05\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s650",
+        "text": "    {\"service\":\"edge-09\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s364",
+        "text": "    {\"service\":\"edge-07\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s527",
+        "text": "    {\"service\":\"edge-10\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s396",
+        "text": "    {\"service\":\"edge-02\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s845",
+        "text": "    {\"service\":\"edge-11\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s740",
+        "text": "    {\"service\":\"edge-19\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s164",
+        "text": "    {\"service\":\"edge-06\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s147",
+        "text": "    {\"service\":\"edge-26\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s344",
+        "text": "    {\"service\":\"edge-14\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s338",
+        "text": "    {\"service\":\"edge-03\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s841",
+        "text": "    {\"service\":\"edge-27\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s730",
+        "text": "    {\"service\":\"edge-15\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s931",
+        "text": "    {\"service\":\"edge-29\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s693",
+        "text": "    {\"service\":\"edge-00\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s328",
+        "text": "    {\"service\":\"edge-08\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s325",
+        "text": "    {\"service\":\"edge-21\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s688",
+        "text": "    {\"service\":\"edge-25\",\"latency_ms\":276,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s144",
+        "text": "    {\"service\":\"edge-28\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s109",
+        "text": "    {\"service\":\"edge-04\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s556",
+        "text": "    {\"service\":\"edge-30\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s389",
+        "text": "    {\"service\":\"edge-20\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s257",
+        "text": "    {\"service\":\"edge-24\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s864",
+        "text": "    {\"service\":\"edge-31\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s565",
+        "text": "    {\"service\":\"edge-16\",\"latency_ms\":275,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s405",
+        "text": "    {\"service\":\"edge-18\",\"latency_ms\":273,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s515",
+        "text": "    {\"service\":\"edge-23\",\"latency_ms\":272,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s990",
+        "text": "    {\"service\":\"edge-01\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s681",
+        "text": "    {\"service\":\"edge-17\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s765",
+        "text": "    {\"service\":\"edge-13\",\"latency_ms\":274,\"samples\":1000,\"region\":\"south\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n"
+      }
+    ]
+  },
+  "split": "heldout-smoke",
+  "notes": "Frozen before first model call, seed 70413. Fresh synthetic instances in known task families, NOT independent official-task qualification. Do not tune scorer or regenerate tasks after observing this run."
+}

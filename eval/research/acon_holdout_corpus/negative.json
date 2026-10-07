@@ -1,0 +1,150 @@
+{
+  "id": "acon-holdout-negative",
+  "family": "negative",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Only the rolled_back boolean determines rollback; degradation does not imply rollback.\",\n  \"records\": [\n    {\"service\":\"worker-01\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-05\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-10\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-29\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-15\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-26\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-11\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-06\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-22\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-27\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-02\",\"rolled_back\":true,\"state\":\"degraded\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-00\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-17\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-30\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-03\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-16\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-20\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-21\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-19\",\"rolled_back\":false,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-25\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-07\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-09\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-13\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-31\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-08\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-18\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-14\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-23\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-04\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-12\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-28\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"service\":\"worker-24\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n  ]\n}\n",
+  "query": "Which single service was not rolled back? Return only its name.",
+  "gold_answer": "worker-19",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Only the rolled_back boolean determines rollback; degradation does not imply rollback.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "s169",
+        "text": "    {\"service\":\"worker-01\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s844",
+        "text": "    {\"service\":\"worker-05\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s648",
+        "text": "    {\"service\":\"worker-10\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s447",
+        "text": "    {\"service\":\"worker-29\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s779",
+        "text": "    {\"service\":\"worker-15\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s500",
+        "text": "    {\"service\":\"worker-26\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s351",
+        "text": "    {\"service\":\"worker-11\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s141",
+        "text": "    {\"service\":\"worker-06\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s769",
+        "text": "    {\"service\":\"worker-22\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s119",
+        "text": "    {\"service\":\"worker-27\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s222",
+        "text": "    {\"service\":\"worker-02\",\"rolled_back\":true,\"state\":\"degraded\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s528",
+        "text": "    {\"service\":\"worker-00\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s400",
+        "text": "    {\"service\":\"worker-17\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s700",
+        "text": "    {\"service\":\"worker-30\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s358",
+        "text": "    {\"service\":\"worker-03\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s710",
+        "text": "    {\"service\":\"worker-16\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s414",
+        "text": "    {\"service\":\"worker-20\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s671",
+        "text": "    {\"service\":\"worker-21\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s156",
+        "text": "    {\"service\":\"worker-19\",\"rolled_back\":false,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s846",
+        "text": "    {\"service\":\"worker-25\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s756",
+        "text": "    {\"service\":\"worker-07\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s123",
+        "text": "    {\"service\":\"worker-09\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s155",
+        "text": "    {\"service\":\"worker-13\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s957",
+        "text": "    {\"service\":\"worker-31\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s184",
+        "text": "    {\"service\":\"worker-08\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s688",
+        "text": "    {\"service\":\"worker-18\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s339",
+        "text": "    {\"service\":\"worker-14\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s525",
+        "text": "    {\"service\":\"worker-23\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s359",
+        "text": "    {\"service\":\"worker-04\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s187",
+        "text": "    {\"service\":\"worker-12\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s623",
+        "text": "    {\"service\":\"worker-28\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s798",
+        "text": "    {\"service\":\"worker-24\",\"rolled_back\":true,\"state\":\"ready\",\"zone\":\"north\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n"
+      }
+    ]
+  },
+  "split": "heldout-smoke",
+  "notes": "Frozen before first model call, seed 70413. Fresh synthetic instances in known task families, NOT independent official-task qualification. Do not tune scorer or regenerate tasks after observing this run."
+}

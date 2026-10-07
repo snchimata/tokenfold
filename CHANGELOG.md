@@ -1,5 +1,456 @@
 # Changelog
 
+## [Unreleased]
+
+- Add explicit guarded Headroom worker-payload capture for future recovery
+  diagnostics, including unhealthy results. Exclusive files retain source/query
+  hashes and provenance without admitting invalid arms or changing defaults.
+
+- Add caller-bound research row restoration with explicit path/marker, duplicate-
+  preserving source checks and unchanged outer-wrapper checks. Full recovery
+  returns exact original bytes; it is not compression or comparator qualification.
+
+- Extend research store diagnostics to explicitly source-bound nested JSON row
+  arrays, without exporting recovered text or claiming outer-wrapper restoration.
+  Default unresolved recovery arms remain invalid.
+
+- Add an explicit frozen research arm permutation, preserving default order,
+  raw/candidate pairing and fail-stop ledgers. Order changes do not retry halted
+  work or establish balanced cache/latency qualification by themselves.
+
+- Add explicit research comparison preselection before generation. Caller-declared
+  numeric contracts restrict optional source groups while retaining every comparison
+  row; generated summaries remain unverified and production defaults are unchanged.
+
+- Verify validation-only Select's public CLI contract: no source/receipt output,
+  escaped/split-secret refusal, existing experimental-gate exit code, and argument
+  conflicts preventing scorer/output/receipt configuration.
+
+- Add experimental Select `--validate-only`: retain bounded byte/schema and
+  decoded-secret checks without initializing a tokenizer, scorer or selection,
+  and emit no payload. Research safety guards use it; normal Select is unchanged.
+
+- Prepare an explicit immutable-image Docker test command for research repair
+  capsules: no pulls/network, read-only mount, non-root, dropped capabilities and
+  resource limits. No runtime is launched; cancellation remains caller-owned.
+
+- Add role-separated local code-capsule freezing for actor/evaluator/dependency
+  hashes and Python identity. Overlapping roles and direct evaluator envelope
+  fields are refused; hashes do not authorize exports or candidate execution.
+
+- Run maintenance edit-boundary regressions in the existing offline research CI
+  job, including source/response/edit-count and expansion limits. No candidate
+  code execution or Docker startup is introduced.
+
+- Retain fixed-code literal-edit application receipts with bounded input hashes
+  and timing, without rejected candidate text or arbitrary parser diagnostics.
+  Application is explicitly separate from an isolated repair verdict.
+
+- Add a bounded in-memory literal edit reader for research maintenance capsules.
+  Strict JSON, exact unique spans and byte limits are enforced; candidate code
+  is not executed and patch parsing is not treated as a repair-quality result.
+
+- Require qualification declarations for meaningful warm end-to-end latency and
+  campaign-total economics advantage, explicit cost assumptions and feature
+  behaviors. Quality-only sample declarations cannot substitute for the full goal.
+
+- Apply declared CFR multiplicity to research report bounds, not only the frozen
+  sample floor. Bonferroni per-claim confidence and family metadata are explicit;
+  legacy smoke profiles without claim counts retain prior descriptive bounds.
+
+- Exercise the frozen comparison profile through the real CLI and pinned official
+  ACON with scripted responses. A mid-run profile change fails final status while
+  retaining all six scripted compression/answer calls and comparison records.
+
+- Share comparison-record validation between research suite preflight and the
+  generated arm, refusing incompatible group bindings before any model setup
+  rather than after raw/comparator calls have consumed work.
+
+- Expose research comparison/selection contracts via an explicit JSON profile.
+  Freeze its SHA256 in campaign runtime, preflight task compatibility, and retain
+  attempts while failing publication status if the profile changes or disappears.
+
+- Bind explicit research selection coverage rows to their literal JSON source
+  groups before inference. Swapped group IDs or mismatching record projections
+  cannot satisfy coverage merely by sharing an authorized ID.
+
+- Add opt-in research evidence coverage for explicitly declared numeric filter/
+  extremum contracts. Source-derived selection binds to optional group IDs and
+  rejects missing selected evidence; it does not verify summary entailment.
+
+- Reject duplicate JSON object keys in research comparison-table inputs and
+  generated candidates, reusing the strict native response parser. Ambiguous
+  source projections fail before inference; invalid candidates fall back unchanged.
+
+- Add an opt-in research source-derived scalar comparison table alongside complete
+  source groups. Explicit bounded caller paths retain every record and null value;
+  no query inference, ranking, gold labels or semantic admission is added.
+
+- Require nonempty task origin declarations in qualification freezes; omitting an
+  explicit unqualified origin no longer bypasses provenance checking. Smoke
+  remains compatible; declarations alone do not establish representative tasks.
+
+- Retain full research-generated candidate frame/source/target token counts for
+  budget diagnostics, including over-budget fallbacks, without rejected summary
+  text. Reuse the candidate count rather than tokenizing the same frame twice.
+
+- Refuse qualification freezes that assign identical source bytes to different
+  independent clusters. Query/task projections must share a cluster; smoke
+  declarations remain compatible and cluster identity still requires provenance.
+
+- Add missing-outcome sensitivity to research cluster CFR reports. Hypothetically
+  count excluded clusters as raw-success regressions without relabelling invalid
+  attempts as observed failures; preserve the common-valid observed bound.
+
+- Retain reported summarizer usage when a CLI receipt contradicts its own
+  no-inference flag. Fail closed and halt the ledger rather than deleting the
+  reserved call; ordinary pre-inference raw fallbacks still create no model call.
+
+- Refuse assistant-final ACON history replay before inference rather than allowing
+  unapproved assistant prefill or rewriting official roles. Record the history
+  transport and exercise pinned official history/combined classes with scripted
+  responses; this does not qualify stateful or optimized comparator quality.
+
+- Separate observed-output budget counts from raw controls, blocked/unavailable
+  outputs and unknown historical execution state. Keep legacy target-miss fields;
+  explicitly count known raw fallback outputs without calling them summarizer wins.
+
+- Distinguish research arms blocked by halted primary/evaluator ledgers from
+  attempted compression/answer methods. Preserve invalid outcomes and all consumed
+  work; do not label unknown historical execution state as an attempted compressor.
+
+- Retain allowlisted safe native inference failure reasons (including incomplete
+  response and model-alias mismatch) with consumed usage. Unknown/custom diagnostics
+  remain suppressed; no retries, historical-result rewriting or rejected text export.
+
+- Expose experimental native-template preflight through an explicit research CLI
+  flag and frozen runtime declaration. Independent research summarizer profiles
+  may opt in separately; refuse the unsupported approved CLI-bridge mode rather
+  than silently ignoring it. Defaults and role transport remain unchanged.
+
+- Add an explicit API-only experimental native-template preflight mode after
+  measured template/generation count agreement. Seal full request bodies, retain
+  failed accounting work separately, enforce remaining deadlines and require
+  generation prompt-usage agreement. Keep default byte preflight and admission unchanged.
+
+- Add an explicit bounded resident template/tokenizer accounting diagnostic on
+  approved native loopback routes. Preserve request roles and existing conservative
+  chat preflight; tokenizer counts alone do not qualify inference or summarization.
+
+- Pin the frozen campaign answering transport and answering roles, including
+  assistant-prefill refusal. The runner declares its actual backend transport
+  and live runs fail exact verification on backend/role drift; this is scope
+  enforcement, not model-weight attestation or quality proof.
+
+- Add an evaluator-only literal-link coverage audit bound to source/query digests
+  and exact native evidence groups, reusing the existing compiled-frame validator.
+  Detect labelled identity/date-link omissions without exporting labels to models;
+  retention remains neither semantic proof nor a production admission gate.
+
+- Recheck campaign task inventory and path confinement after final byte checks,
+  refusing task additions during freezing rather than publishing a partial dataset
+  inventory. Live runs still require before/after verification; no atomic snapshot
+  guarantee is implied.
+
+- Support independently frozen resident summarizer profiles in the shipped
+  `summarize` CLI research comparison. Bind approved OpenAI loopback bridge
+  model/port/output allowance, separate model ledgers and call budgets, and reject
+  reported usage overruns without losing consumed usage or retrying.
+
+- Add explicit independent resident-model profiles for the research generated-summary
+  arm, freezing summarizer identity/config beside the unchanged answering/ACON model.
+  Keep per-model ledgers separate, refuse split ledgers for identical identities, and
+  retain attempts when final profile/alias checks fail. No defaults or promotion change.
+
+- Reject native research responses whose reported generation/context usage exceeds
+  frozen allowances. Retain consumed usage and fixed safe reasons, halt queued calls
+  without retry, and keep unknown cost null; server reports are not tokenizer or
+  weight attestation.
+
+- Refuse explicit synthetic-development/control or not-qualification task origins
+  in research qualification freezes. Preserve smoke/development protocols and do not infer
+  representativeness or freshness from accepted labels.
+
+- Avoid duplicate research-pilot payload tokenization and reuse the already
+  measured source count only for byte-identical payloads. Continue counting answer
+  prompt wrappers independently; retain failed-payload accounting and inference ledgers.
+
+- Add an explicit USGS research task mode for threshold filtering, latest-event
+  selection and deterministic tie breaking, including no-match outcomes. Preserve
+  complete API response grouping, event/split guards and the existing lookup default;
+  exposed snapshots remain development data, not qualification evidence.
+
+- Add research latency p99 and per-stage p50/p95/p99 with timed/untimed attempt
+  counts. Include failed attempts in the all-attempt ledger and never zero-fill
+  missing stage timings; retain existing aggregate percentile fields.
+
+- Record research pilot preflight, compression, payload validation and answering
+  wall times separately, retaining failed-stage duration and null for unstarted
+  work. Keep existing aggregate timing fields and inference ledgers unchanged.
+
+- Extend the research Headroom recovery canary with separate writer/reader
+  processes, source-match and missing-key controls, and separate reader wall/store
+  timings. Export no recovered content and keep default comparator acceptance
+  unchanged; this is persistence wiring evidence, not stateful quality proof.
+
+- Add an opt-in research SmartCrusher JSON-row recovery audit for native CCR,
+  Python-store mirroring and non-destructive store reopening, with separate stage
+  timings and exact duplicate-preserving source checks. Keep unresolved recovery
+  invalid in comparator arms; forced-lossy canaries are not default qualification.
+
+- Require a predeclared CFR claim count for research qualification freezes and
+  apply a Bonferroni zero-event sample floor. Record the rule explicitly; pooled
+  test clusters still do not prove subgroup adequacy or non-inferiority. Historical
+  smoke protocols remain supported without a claim-count declaration.
+
+- Expose research-only external ACON history guidelines as separate frozen
+  history and combined-history CLI arms beside unchanged official bases. Guard
+  source/template/output, pin template bytes and retain attempts when final
+  provenance fails; external guidelines remain unqualified, not optimized proof.
+
+- Refuse comparator checkouts carrying `assume-unchanged` or `skip-worktree`
+  index flags, which can hide tracked mutations from the research provenance
+  clean-checkout check. Ordinary clean checkouts remain supported.
+
+- Add a separate source-only research summary judge for grounding, completeness
+  and preserved relationships, without exporting reference answers or arm identity.
+  Keep existing answer scoring and production admission unchanged.
+
+- Expose resident Qwen research comparisons through explicit `--provider native`
+  and `--native-port`, without changing legacy providers/defaults. Guard source
+  inputs, bind the port in frozen settings, and fail final model-alias changes
+  while preserving attempts; declared profile digests are not weight attestation.
+
+- Add a research-only bounded OpenAI loopback client for resident local Qwen
+  comparator/student calls, without Ollama, model loading or hosted credentials.
+  Retain failed usage, stop after an invalid attempt, and keep local cost unknown.
+
+- Refuse campaign suites that contradict an imported task's `development_split`,
+  preventing phase relabelling from silently bypassing train/validation/test roles.
+  Legacy fixtures without an importer-assigned split remain supported.
+
+- Allow the offline Hotpot development importer to select one task per source
+  component and exclude a bounded, digest-recorded list of exposed components.
+  Keep the default record cap and source-only grouping/split behavior unchanged.
+
+- Expose known cost subtotals, unknown-cost record counts and cost-accounting
+  completeness in research comparator/evaluator reports. Keep total cost unknown
+  when any attempt lacks a valid reported cost; do not treat partial zero charges
+  or valid paired answers as complete economics.
+
+- Use length-delimited HTTP/1.1 replies in the resident local summarizer, avoiding
+  observed Windows immediate-close connection resets. Bound header, body and idle
+  connection reads with the existing five-second timeout; do not retry inference.
+
+- Add an explicit, default-off `--short-source-ids` experiment to the local
+  loopback summarizer bridge. Translate optional aliases to original IDs before
+  native validation; reject unknown aliases and preserve known usage when
+  translated candidates exceed the byte cap. Other backends/defaults are unchanged.
+
+- Bound the local Qwen decoding schema's evidence-ID array by the optional source
+  group count and require at least one ID, matching the native nonempty-evidence
+  contract. This is generation guidance, not semantic verification or a change
+  to native evidence, timeout or raw-fallback contracts.
+
+- Reject USGS development-corpus event alias overlap as well as canonical-ID
+  overlap, preventing the same event from crossing splits under different IDs.
+
+- Allow the research-only external ACON guideline arm to explicitly select its
+  pinned QA prompt family, recording it in campaign provenance without changing
+  the official base comparator or claiming qualified optimization.
+
+- Add a CI-tested offline USGS GeoJSON development importer with exact response
+  reconstruction, source-only event grouping, pinned snapshot checks and overlap
+  refusal. Keep qualification/rights limits explicit; fix evidence-test CI indentation.
+
+- Ask the experimental summarizer to select evidence IDs before writing prose,
+  and order the Qwen JSON schema accordingly. Restrict prose guidance to selected
+  optional groups and protected context; this is not semantic verification.
+
+- Document a tested resident native llama.cpp/Vulkan Qwen 0.8B route through the
+  existing loopback bridge, without Ollama or per-request weight loading. Keep
+  conversion/runtime pinning explicit and retain experimental quality gates.
+
+- Add a CI-checked research-only native evidence-document audit using evaluator-only
+  Hotpot annotations. Validate exact source/ID/text binding without exporting gold
+  to models; document coverage is not semantic verification or quality admission.
+
+- Add research-only byte-identical raw-control disagreement counts, retaining
+  actual outcomes and inference usage instead of attributing student variability
+  to compression. Request minimal sufficient summary/evidence without changing
+  native safety, evidence or budget gates; generation remains unverified.
+
+- Strengthen experimental summarizer instructions to require source-stated facts,
+  complete multi-hop citations and explicit gaps instead of guesses. This is model
+  guidance only, not semantic verification or demonstrated quality admission.
+  Include a concrete required JSON shape with the approved model revision; missing
+  runtime metadata still fails closed rather than being silently supplied.
+
+- Default new local summarizer approvals to a caller-started resident Transformers
+  runtime: load tokenizer/text weights once, then reuse them across bounded loopback
+  requests. Keep one-shot mode explicit, per-request inference usage/native guards,
+  no request logging, no implicit server start/download, and no cross-query text cache.
+
+- Fix direct CUDA Qwen startup in cleared Windows child environments by deriving
+  the OS username via Windows APIs, avoiding GPU-library imports of Unix-only `pwd`.
+  Caller credentials/proxy variables remain uninherited.
+
+- Add explicit direct-summarizer `--device auto|cpu|cuda` approval arguments;
+  requested CUDA fails closed instead of silently falling back to CPU. Document
+  CUDA-enabled PyTorch setup separately from CPU-only wheels.
+
+- Retain independently pinned summarizer and student call ledgers in research
+  comparisons. Report mixed-model token counts separately, keep combined usage
+  and unknown local cost null, and count native raw fallbacks explicitly.
+
+- Load only Qwen's text model for local summarization; skip unused vision weights,
+  reject incomplete checkpoint conversion, and check context limits before weights load.
+
+- Replace the local summarizer helper's Ollama default with direct offline
+  Transformers/PyTorch loading of Qwen3.5-0.8B (explicit 2B/4B alternatives).
+  Load local safetensors and tokenizer without remote code or implicit downloads;
+  use CUDA when available, SDPA and KV caching. Keep warmed loopback compatible
+  servers optional for throughput, with native deadlines and fail-closed gates.
+
+- Classify local summarizer HTTP, transport, socket-timeout and invalid-envelope
+  failures with fixed safe receipt reasons, without server diagnostics or retries.
+  Unknown consumed usage remains null; every failure still returns raw source.
+
+- Add explicit `summarize --save-summary` / `--reuse-summary` artifacts for unchanged
+  source/query/approval/accounting context. Reuse revalidates native safety, evidence
+  and complete-payload budgets without model invocation; original inference usage is
+  separate from current usage. Persistence is opt-in, overwrite is refused, and all
+  generated text remains semantically unverified. No cross-query reuse is implied.
+
+- Add a research adapter for the actual native generative-summary CLI with source-only
+  export, frozen approval checks, same-local-model inference accounting and retained
+  failed attempts. Optional non-thinking local pilots are explicit; existing defaults
+  remain unchanged. Use direct loopback HTTP without proxies/redirects for local calls.
+
+- Default the local summarizer configuration helper to Qwen3.5-0.8B, with explicit
+  2B/4B profiles and no implicit downloads or model escalation. Skip unnecessary
+  generation when source fits or protected content prevents budget attainment.
+  Retain reported usage on fixed incomplete/malformed/model-mismatch failures;
+  rejected model text never enters receipts or downstream context.
+
+- Add `summarize --experimental --model-config`: a user-facing generative summarizer
+  with an approved bounded local runtime, native literal source evidence, protected
+  text, complete-payload token accounting and visible raw fallbacks. Include a
+  dependency-free loopback model-server bridge. Generated text remains unverified;
+  existing semantic admission, compression defaults and hosted-data permissions stay unchanged.
+  Carry optional runtime-reported inference usage into receipts, including native budget
+  fallbacks; unknown usage/cost remain null. Use direct loopback HTTP connections to
+  avoid premature connection-close failures observed in the Windows integration test.
+
+- Add explicit research paired grounded-answer evaluation with separate judge
+  receipts, usage and latency, and a versioned opt-in clarification of abstention
+  scoring. CLI/default short-answer scoring and production admission stay unchanged;
+  repeated synthetic calibration does not qualify representative answer quality.
+
+- Add a standalone blinded research grounded-answer judge with original-context
+  evaluation, native export guards, bounded attempts, strict boolean verdicts and
+  retained failed-call costs. It is not official MTRAG scoring, semantic admission
+  or a qualified evaluator; existing short-answer pilot defaults remain unchanged.
+
+- Add an offline pinned MTRAG full-RAG development importer with exact history/
+  passage framing, annotation isolation and source-overlap component splitting.
+  Short-answer pilots refuse its unmet grounded-answer evaluation requirement;
+  no inference, corpus publication or competitive qualification is implied.
+
+- Add a separate experimental generated-summary source-ID mode: models select
+  authorized IDs while native code attaches complete literal source evidence.
+  Existing quote-validation modes/defaults stay unchanged; summaries remain
+  semantically unverified, bounded, protected and ineligible for production admission.
+
+- Add an opt-in pinned official ACON smolagents QA observation-prompt arm alongside
+  the existing AppWorld base arm, with frozen prompt identity, native input/output
+  guards and compression-plus-answer accounting. This is not optimized ACON or
+  execution of its QA agent environment; defaults and prior studies stay unchanged.
+
+- Add a separate research BM25 heading-aware Select arm that boosts framed source
+  titles literally named in a query. Keep original BM25/defaults unchanged;
+  whole-group native safety/budgets still apply. No live quality promotion.
+
+- Add an opt-in pinned native Headroom SmartCrusher research comparison alongside
+  the universal API, with frozen artifact identity, isolated bounded workers and
+  tool-protocol checks. Missing CCR recovery is invalid evidence, not a comparator
+  loss; snapshot results do not establish full-system or matched-budget superiority.
+
+- Add an opt-in research BM25 caller-scored native Select arm using existing
+  deterministic scoring and whole-group allocation, with zero compression-model
+  calls, protected content checks, bounded execution and explicit fallback receipts.
+  This is not the reviewed model Select runtime or a production quality promotion.
+
+- Research generated-observation v3/structured-v4 retains complete cited source
+  groups alongside an explicitly unverified summary, deduplicated in source order.
+  All evidence/wrapper text is budgeted; literal citations still do not prove
+  paraphrase fidelity or permit production use. Previous studies remain unchanged.
+
+- Add an opt-in research JSON presentation of native logfold with string captures,
+  native-decoder byte checks, bounded expansion, secret guards, explicit fallback
+  receipts and model-quality/economics accounting. Original codec/defaults remain
+  unchanged; model readability and competitive superiority are not assumed.
+
+- Permit explicitly selected frozen research training/validation suites without
+  relabeling them as test data. Test remains the default, and observation/replay
+  runners still refuse qualification scope.
+
+- Add a separate research ACON observation-guideline comparison arm with bounded
+  literal-only template validation, native secret guards, frozen byte fingerprints
+  and compression-plus-answering accounting. Keep the official base arm unchanged;
+  external prompts are not proof of trained/validation-selected optimization.
+
+- Add an offline pinned Loghub snapshot adapter for real-log windows and JSON
+  projections, retaining the upstream research license notice and source hashes.
+  Source families stay together across splits and both projections; windows are
+  not counted as independent samples. No hosted export or default promotion.
+
+- Add offline public HotpotQA snapshot adaptation with source-overlap component
+  partitioning, dataset attribution, and input/implementation/output fingerprints.
+  Research pilots opt into inferred answers and normalized answer-only EM/F1;
+  literal-answer loading and exact-string scoring remain defaults. Preserve hosted
+  stop causes and refuse further compression/inference after a safety stop.
+  Leave skipped-arm receipts null instead of carrying citations or fallback counts
+  over from a previous task.
+  Public validation and training probes are not held-out agent qualification.
+
+- Extend the isolated competitive research runner with enforced frozen smoke protocols,
+  multi-workload synthetic development snapshots, official base ACON history/combined
+  replay, and a cache-only pinned Headroom universal-API worker. Degraded comparator
+  runs are invalid evidence, not wins. Add an opt-in generated-observation arm with
+  native secret guards, immutable caller protection, source attribution, visible
+  baseline fallbacks and explicitly unverified paraphrases. Add cluster-level exact
+  CFR upper bounds and aggregate billed-cost/fallback accounting. No production
+  semantic admission, presets or defaults are changed; agent/optimized-guideline
+  and representative held-out live quality/economics qualification remain pending.
+
+- Add an isolated local-model ACON observation comparison pilot with pinned official
+  source/prompts, model-digest checks, bounded calls and client deadlines, separate
+  paired records and compression-plus-answering usage. No served-path changes;
+  scripted tests are protocol evidence, not live compression-quality qualification.
+- Add opt-in hosted research runs for explicitly approved zero-price OpenRouter
+  endpoints and a model-ranked observation arm reusing experimental `tokenfold select`.
+  The scorer can only rank caller-declared exact-source groups; it cannot rewrite them.
+  Pin endpoint metadata, forbid paid/provider fallback routes, bound calls and output,
+  meter compression plus answering, and retain invalid attempts. No default promotion.
+- Add opt-in compact source-priority scoring for research: common-field JSON packing
+  reduces inference input and a validated priority-ID reply avoids scoring every row.
+  Emit only original source groups through the existing Select contract; leave the
+  legacy scorer available and keep all production defaults unchanged.
+- Extend the hosted research allowlist to Nemotron 3.5 Lightning and Qwen3.8 27B
+  free endpoints, pinning their exact provider/quantization tags without fallbacks.
+- Extend the hosted research allowlist with seven more zero-price endpoints (Nemotron 3
+  Super, Nemotron 3 Nano Omni, Dots3-Note Preview, Poolside Laguna S/XS, Cohere North
+  Mini Code and Liquid LFM2.5-2.6B), each pinned to its exact provider/quantization tag.
+  Held-out smoke reruns show model-ranked Select at CFR 0.00 on every run that produced
+  valid pairs, while ACON's CFR is driven by lossy rewrites. LFM wraps its priority reply
+  in a Markdown fence and fails the strict scorer schema; the Laguna endpoints return a
+  single HTTP 429 that exhausts the call budget for all arms. Descriptive smoke evidence
+  on six synthetic tasks only, not qualification or promotion.
+- Add opt-in research `--select-lossless`: repack model-selected text through the
+  existing native lossless pipeline only when smaller and byte-exactly decodable.
+  Preserve selection receipts and intermediate hashes, with no extra model calls.
+
 ## [0.5.1] - 2026-10-02
 
 - Add opt-in restart-safe proxy observation commitments using an exclusively locked bounded

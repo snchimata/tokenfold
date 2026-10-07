@@ -1,0 +1,150 @@
+{
+  "id": "acon-holdout-request-state",
+  "family": "request-state",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Use recorded request states. A cancelled request is not completed.\",\n  \"records\": [\n    {\"request_id\":\"q-21\",\"state\":\"queued\",\"time\":\"10:21\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-09\",\"state\":\"queued\",\"time\":\"10:09\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-28\",\"state\":\"queued\",\"time\":\"10:28\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-30\",\"state\":\"queued\",\"time\":\"10:30\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-14\",\"state\":\"queued\",\"time\":\"10:14\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-20\",\"state\":\"queued\",\"time\":\"10:20\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-19\",\"state\":\"queued\",\"time\":\"10:19\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-23\",\"state\":\"queued\",\"time\":\"10:23\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-10\",\"state\":\"queued\",\"time\":\"10:10\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-17\",\"state\":\"completed\",\"time\":\"10:17\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-05\",\"state\":\"queued\",\"time\":\"10:05\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-31\",\"state\":\"queued\",\"time\":\"10:31\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-16\",\"state\":\"queued\",\"time\":\"10:16\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-22\",\"state\":\"queued\",\"time\":\"10:22\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-00\",\"state\":\"queued\",\"time\":\"10:00\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-25\",\"state\":\"queued\",\"time\":\"10:25\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-08\",\"state\":\"queued\",\"time\":\"10:08\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-04\",\"state\":\"cancelled\",\"time\":\"10:04\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-27\",\"state\":\"queued\",\"time\":\"10:27\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-26\",\"state\":\"queued\",\"time\":\"10:26\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-07\",\"state\":\"queued\",\"time\":\"10:07\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-13\",\"state\":\"queued\",\"time\":\"10:13\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-18\",\"state\":\"queued\",\"time\":\"10:18\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-29\",\"state\":\"queued\",\"time\":\"10:29\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-15\",\"state\":\"queued\",\"time\":\"10:15\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-12\",\"state\":\"queued\",\"time\":\"10:12\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-02\",\"state\":\"queued\",\"time\":\"10:02\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-24\",\"state\":\"queued\",\"time\":\"10:24\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-01\",\"state\":\"queued\",\"time\":\"10:01\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-11\",\"state\":\"queued\",\"time\":\"10:11\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-03\",\"state\":\"queued\",\"time\":\"10:03\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"request_id\":\"q-06\",\"state\":\"queued\",\"time\":\"10:06\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n  ]\n}\n",
+  "query": "Which single request completed? Return only its request_id.",
+  "gold_answer": "q-17",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Use recorded request states. A cancelled request is not completed.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "s536",
+        "text": "    {\"request_id\":\"q-21\",\"state\":\"queued\",\"time\":\"10:21\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s838",
+        "text": "    {\"request_id\":\"q-09\",\"state\":\"queued\",\"time\":\"10:09\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s484",
+        "text": "    {\"request_id\":\"q-28\",\"state\":\"queued\",\"time\":\"10:28\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s687",
+        "text": "    {\"request_id\":\"q-30\",\"state\":\"queued\",\"time\":\"10:30\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s340",
+        "text": "    {\"request_id\":\"q-14\",\"state\":\"queued\",\"time\":\"10:14\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s555",
+        "text": "    {\"request_id\":\"q-20\",\"state\":\"queued\",\"time\":\"10:20\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s373",
+        "text": "    {\"request_id\":\"q-19\",\"state\":\"queued\",\"time\":\"10:19\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s863",
+        "text": "    {\"request_id\":\"q-23\",\"state\":\"queued\",\"time\":\"10:23\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s358",
+        "text": "    {\"request_id\":\"q-10\",\"state\":\"queued\",\"time\":\"10:10\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s334",
+        "text": "    {\"request_id\":\"q-17\",\"state\":\"completed\",\"time\":\"10:17\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s769",
+        "text": "    {\"request_id\":\"q-05\",\"state\":\"queued\",\"time\":\"10:05\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s953",
+        "text": "    {\"request_id\":\"q-31\",\"state\":\"queued\",\"time\":\"10:31\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s391",
+        "text": "    {\"request_id\":\"q-16\",\"state\":\"queued\",\"time\":\"10:16\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s266",
+        "text": "    {\"request_id\":\"q-22\",\"state\":\"queued\",\"time\":\"10:22\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s244",
+        "text": "    {\"request_id\":\"q-00\",\"state\":\"queued\",\"time\":\"10:00\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s116",
+        "text": "    {\"request_id\":\"q-25\",\"state\":\"queued\",\"time\":\"10:25\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s150",
+        "text": "    {\"request_id\":\"q-08\",\"state\":\"queued\",\"time\":\"10:08\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s282",
+        "text": "    {\"request_id\":\"q-04\",\"state\":\"cancelled\",\"time\":\"10:04\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s869",
+        "text": "    {\"request_id\":\"q-27\",\"state\":\"queued\",\"time\":\"10:27\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s330",
+        "text": "    {\"request_id\":\"q-26\",\"state\":\"queued\",\"time\":\"10:26\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s136",
+        "text": "    {\"request_id\":\"q-07\",\"state\":\"queued\",\"time\":\"10:07\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s686",
+        "text": "    {\"request_id\":\"q-13\",\"state\":\"queued\",\"time\":\"10:13\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s188",
+        "text": "    {\"request_id\":\"q-18\",\"state\":\"queued\",\"time\":\"10:18\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s567",
+        "text": "    {\"request_id\":\"q-29\",\"state\":\"queued\",\"time\":\"10:29\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s986",
+        "text": "    {\"request_id\":\"q-15\",\"state\":\"queued\",\"time\":\"10:15\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s259",
+        "text": "    {\"request_id\":\"q-12\",\"state\":\"queued\",\"time\":\"10:12\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s366",
+        "text": "    {\"request_id\":\"q-02\",\"state\":\"queued\",\"time\":\"10:02\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s602",
+        "text": "    {\"request_id\":\"q-24\",\"state\":\"queued\",\"time\":\"10:24\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s894",
+        "text": "    {\"request_id\":\"q-01\",\"state\":\"queued\",\"time\":\"10:01\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s168",
+        "text": "    {\"request_id\":\"q-11\",\"state\":\"queued\",\"time\":\"10:11\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s298",
+        "text": "    {\"request_id\":\"q-03\",\"state\":\"queued\",\"time\":\"10:03\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s639",
+        "text": "    {\"request_id\":\"q-06\",\"state\":\"queued\",\"time\":\"10:06\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n"
+      }
+    ]
+  },
+  "split": "heldout-smoke",
+  "notes": "Frozen before first model call, seed 70413. Fresh synthetic instances in known task families, NOT independent official-task qualification. Do not tune scorer or regenerate tasks after observing this run."
+}

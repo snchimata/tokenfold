@@ -1,0 +1,85 @@
+{
+  "id": "acon-grouped-contradiction",
+  "family": "contradiction",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"For a service, the latest timestamp overrides earlier authorization.\",\n  \"records\": [\n    {\"time\":\"08:00\",\"service\":\"service-00\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:01\",\"service\":\"service-01\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"07:59\",\"service\":\"billing\",\"deploy_allowed\":true,\"note\":\"initial authorization\"},\n    {\"time\":\"08:02\",\"service\":\"service-02\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:03\",\"service\":\"service-03\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:04\",\"service\":\"service-04\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:05\",\"service\":\"service-05\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:06\",\"service\":\"service-06\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:07\",\"service\":\"service-07\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:08\",\"service\":\"service-08\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:09\",\"service\":\"service-09\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:10\",\"service\":\"service-10\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:11\",\"service\":\"service-11\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:12\",\"service\":\"service-12\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"08:13\",\"service\":\"service-13\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n    {\"time\":\"09:00\",\"service\":\"billing\",\"deploy_allowed\":false,\"note\":\"authorization revoked; do not deploy\"}\n  ]\n}\n",
+  "query": "Is deployment of billing currently allowed? Return only true or false.",
+  "gold_answer": "false",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"For a service, the latest timestamp overrides earlier authorization.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "g00",
+        "text": "    {\"time\":\"08:00\",\"service\":\"service-00\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g01",
+        "text": "    {\"time\":\"08:01\",\"service\":\"service-01\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g02",
+        "text": "    {\"time\":\"07:59\",\"service\":\"billing\",\"deploy_allowed\":true,\"note\":\"initial authorization\"},\n"
+      },
+      {
+        "id": "g03",
+        "text": "    {\"time\":\"08:02\",\"service\":\"service-02\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g04",
+        "text": "    {\"time\":\"08:03\",\"service\":\"service-03\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g05",
+        "text": "    {\"time\":\"08:04\",\"service\":\"service-04\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g06",
+        "text": "    {\"time\":\"08:05\",\"service\":\"service-05\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g07",
+        "text": "    {\"time\":\"08:06\",\"service\":\"service-06\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g08",
+        "text": "    {\"time\":\"08:07\",\"service\":\"service-07\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g09",
+        "text": "    {\"time\":\"08:08\",\"service\":\"service-08\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g10",
+        "text": "    {\"time\":\"08:09\",\"service\":\"service-09\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g11",
+        "text": "    {\"time\":\"08:10\",\"service\":\"service-10\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g12",
+        "text": "    {\"time\":\"08:11\",\"service\":\"service-11\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g13",
+        "text": "    {\"time\":\"08:12\",\"service\":\"service-12\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g14",
+        "text": "    {\"time\":\"08:13\",\"service\":\"service-13\",\"deploy_allowed\":true,\"note\":\"background status update\"},\n"
+      },
+      {
+        "id": "g15",
+        "text": "    {\"time\":\"09:00\",\"service\":\"billing\",\"deploy_allowed\":false,\"note\":\"authorization revoked; do not deploy\"}\n"
+      }
+    ]
+  },
+  "notes": "Predeclared synthetic development pilot; not held-out quality qualification. Groups are complete source records. Required rule is not gold-derived."
+}

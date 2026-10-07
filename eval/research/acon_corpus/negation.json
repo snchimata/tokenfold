@@ -1,0 +1,10 @@
+{
+  "id": "acon-pilot-negation",
+  "family": "negation",
+  "tier": "A",
+  "source": "{\"release\":\"r17\",\"services\":[{\"name\":\"checkout\",\"rolled_back\":true},{\"name\":\"ledger\",\"rolled_back\":true},{\"name\":\"search\",\"rolled_back\":true},{\"name\":\"billing\",\"rolled_back\":false}],\"note\":\"A degraded service is not necessarily rolled back.\"}",
+  "query": "Which single service was NOT rolled back? Return only its name.",
+  "gold_answer": "billing",
+  "critical_atoms": [],
+  "notes": "Synthetic smoke pilot, not a held-out promotion dataset."
+}

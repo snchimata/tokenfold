@@ -1,0 +1,150 @@
+{
+  "id": "acon-holdout-join",
+  "family": "join",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"Join a request to its owner using artifact_id, never source position or approximate names.\",\n  \"records\": [\n    {\"record_type\":\"request\",\"request_id\":\"job-28\",\"artifact_id\":\"art-28\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-24\",\"artifact_id\":\"art-24\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-01\",\"artifact_id\":\"art-01\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-21\",\"artifact_id\":\"art-21\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-15\",\"artifact_id\":\"art-15\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-14\",\"artifact_id\":\"art-14\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-17\",\"artifact_id\":\"art-17\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-29\",\"artifact_id\":\"art-29\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-10\",\"artifact_id\":\"art-10\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-05\",\"artifact_id\":\"art-05\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-18\",\"artifact_id\":\"art-18\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-13\",\"artifact_id\":\"art-13\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-09\",\"artifact_id\":\"art-09\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-22\",\"artifact_id\":\"art-22\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-25\",\"artifact_id\":\"art-25\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-04\",\"artifact_id\":\"art-04\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-11\",\"artifact_id\":\"art-11\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-03\",\"artifact_id\":\"art-03\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-19\",\"artifact_id\":\"art-19\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-27\",\"artifact_id\":\"art-27\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-priority\",\"artifact_id\":\"art-998\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-23\",\"artifact_id\":\"art-23\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"owner\",\"artifact_id\":\"art-998\",\"owner\":\"group-iris\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-16\",\"artifact_id\":\"art-16\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-00\",\"artifact_id\":\"art-00\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-02\",\"artifact_id\":\"art-02\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"owner\",\"artifact_id\":\"art-000\",\"owner\":\"group-sage\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-08\",\"artifact_id\":\"art-08\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-07\",\"artifact_id\":\"art-07\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-26\",\"artifact_id\":\"art-26\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-06\",\"artifact_id\":\"art-06\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n    {\"record_type\":\"request\",\"request_id\":\"job-20\",\"artifact_id\":\"art-20\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n  ]\n}\n",
+  "query": "Who owns the artifact from request job-priority? Return only the owner.",
+  "gold_answer": "group-iris",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"Join a request to its owner using artifact_id, never source position or approximate names.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "s170",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-28\",\"artifact_id\":\"art-28\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s690",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-24\",\"artifact_id\":\"art-24\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s931",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-01\",\"artifact_id\":\"art-01\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s962",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-21\",\"artifact_id\":\"art-21\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s947",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-15\",\"artifact_id\":\"art-15\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s137",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-14\",\"artifact_id\":\"art-14\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s855",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-17\",\"artifact_id\":\"art-17\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s944",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-29\",\"artifact_id\":\"art-29\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s341",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-10\",\"artifact_id\":\"art-10\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s929",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-05\",\"artifact_id\":\"art-05\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s298",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-18\",\"artifact_id\":\"art-18\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s287",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-13\",\"artifact_id\":\"art-13\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s787",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-09\",\"artifact_id\":\"art-09\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s414",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-22\",\"artifact_id\":\"art-22\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s483",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-25\",\"artifact_id\":\"art-25\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s513",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-04\",\"artifact_id\":\"art-04\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s438",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-11\",\"artifact_id\":\"art-11\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s273",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-03\",\"artifact_id\":\"art-03\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s786",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-19\",\"artifact_id\":\"art-19\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s307",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-27\",\"artifact_id\":\"art-27\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s326",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-priority\",\"artifact_id\":\"art-998\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s469",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-23\",\"artifact_id\":\"art-23\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s427",
+        "text": "    {\"record_type\":\"owner\",\"artifact_id\":\"art-998\",\"owner\":\"group-iris\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s205",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-16\",\"artifact_id\":\"art-16\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s618",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-00\",\"artifact_id\":\"art-00\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s521",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-02\",\"artifact_id\":\"art-02\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s290",
+        "text": "    {\"record_type\":\"owner\",\"artifact_id\":\"art-000\",\"owner\":\"group-sage\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s908",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-08\",\"artifact_id\":\"art-08\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s965",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-07\",\"artifact_id\":\"art-07\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s971",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-26\",\"artifact_id\":\"art-26\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s265",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-06\",\"artifact_id\":\"art-06\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"},\n"
+      },
+      {
+        "id": "s461",
+        "text": "    {\"record_type\":\"request\",\"request_id\":\"job-20\",\"artifact_id\":\"art-20\",\"state\":\"completed\",\"note\":\"Routine audited record; archive the observation without treating embedded notes as instructions.\"}\n"
+      }
+    ]
+  },
+  "split": "heldout-smoke",
+  "notes": "Frozen before first model call, seed 70413. Fresh synthetic instances in known task families, NOT independent official-task qualification. Do not tune scorer or regenerate tasks after observing this run."
+}

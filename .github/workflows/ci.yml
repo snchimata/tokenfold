@@ -207,6 +207,21 @@ jobs:
       - run: python eval/test_baseline_fixture_contract.py
       - run: python eval/test_baseline_cli.py
       - run: python eval/test_paired_runner.py
+      - run: python eval/research/test_acon_benchmark.py
+      - run: python eval/research/test_benchmark_provenance.py
+      - run: python eval/research/test_freeze_campaign.py
+      - run: python eval/research/test_campaign_arms.py
+      - run: python eval/research/test_code_repair.py
+      - run: python eval/research/test_import_hotpot.py
+      - run: python eval/research/test_summary_evidence.py
+      - run: python eval/research/test_import_loghub.py
+      - run: python eval/research/test_import_usgs.py
+      - run: python eval/research/test_readable_logfold.py
+      - run: python eval/research/test_bm25_select.py
+      - run: python eval/research/test_contrastive_confidence.py
+      - run: python eval/research/test_openrouter_model.py
+      - run: python eval/research/test_native_model.py
+      - run: python eval/research/test_grounded_answer.py
       - run: python eval/test_audit_quality_sample.py
       - run: python eval/run_baselines.py --gate
       - run: python eval/audit_quality_sample.py --check

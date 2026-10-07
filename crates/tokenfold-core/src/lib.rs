@@ -3,6 +3,7 @@ pub mod budget;
 pub mod codec;
 pub mod errors;
 pub mod filters;
+pub mod generative;
 pub mod holdout;
 pub mod input;
 pub mod measurement;

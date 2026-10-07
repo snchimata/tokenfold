@@ -1213,7 +1213,7 @@ def dummy_model_answer(observation: str, gold_answer: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def load_tasks(tasks_dir: Path) -> list[dict]:
+def load_tasks(tasks_dir: Path, *, require_literal_answer: bool = True) -> list[dict]:
     """Load paired-task fixtures, failing closed on anything non-discriminating."""
     tasks = []
     seen = set()
@@ -1228,7 +1228,7 @@ def load_tasks(tasks_dir: Path) -> list[dict]:
         for atom in task["critical_atoms"]:
             if atom not in task["source"]:
                 raise ValueError(f"{path}: critical atom {atom!r} is not grounded in source")
-        if task["gold_answer"] not in task["source"]:
+        if require_literal_answer and task["gold_answer"] not in task["source"]:
             raise ValueError(f"{path}: gold_answer must occur in source")
         tasks.append(task)
     if not tasks:

@@ -1,0 +1,10 @@
+{
+  "id": "acon-pilot-updated-state",
+  "family": "updated-state",
+  "tier": "A",
+  "source": "{\"events\":[{\"time\":\"08:00\",\"request_id\":\"rq-old\",\"state\":\"queued\"},{\"time\":\"08:01\",\"request_id\":\"rq-old\",\"state\":\"cancelled\"},{\"time\":\"08:02\",\"request_id\":\"rq-new\",\"state\":\"queued\"},{\"time\":\"08:03\",\"request_id\":\"rq-new\",\"state\":\"completed\"}],\"note\":\"The cancelled request must not be retried.\"}",
+  "query": "Which request completed, rather than being cancelled? Return only its request_id.",
+  "gold_answer": "rq-new",
+  "critical_atoms": [],
+  "notes": "Synthetic smoke pilot, not a held-out promotion dataset."
+}

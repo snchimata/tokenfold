@@ -1,0 +1,10 @@
+{
+  "id": "acon-pilot-numeric",
+  "family": "numeric-threshold",
+  "tier": "A",
+  "source": "{\"maximum_allowed_latency_ms\":120,\"measurements\":[{\"service\":\"alpha\",\"latency_ms\":119},{\"service\":\"bravo\",\"latency_ms\":120},{\"service\":\"charlie\",\"latency_ms\":121}],\"rule\":\"Equal to the maximum is allowed. Only strictly greater values violate the limit.\"}",
+  "query": "Which single service violates the latency limit? Return only its name.",
+  "gold_answer": "charlie",
+  "critical_atoms": [],
+  "notes": "Synthetic smoke pilot, not a held-out promotion dataset."
+}

@@ -1,0 +1,85 @@
+{
+  "id": "acon-grouped-updated-state",
+  "family": "updated-state",
+  "tier": "A",
+  "source": "{\n  \"rule\": \"A cancelled request must not be retried. Use the recorded final states.\",\n  \"records\": [\n    {\"time\":\"08:00\",\"request_id\":\"rq-00\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:01\",\"request_id\":\"rq-01\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:02\",\"request_id\":\"rq-02\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:03\",\"request_id\":\"rq-old\",\"state\":\"cancelled\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:04\",\"request_id\":\"rq-04\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:05\",\"request_id\":\"rq-05\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:06\",\"request_id\":\"rq-06\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:07\",\"request_id\":\"rq-07\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:08\",\"request_id\":\"rq-08\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:09\",\"request_id\":\"rq-09\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:10\",\"request_id\":\"rq-10\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:11\",\"request_id\":\"rq-11\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:12\",\"request_id\":\"rq-12\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:13\",\"request_id\":\"rq-13\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:14\",\"request_id\":\"rq-14\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n    {\"time\":\"08:15\",\"request_id\":\"rq-new\",\"state\":\"completed\",\"note\":\"requests are listed in time order\"}\n  ]\n}\n",
+  "query": "Which request completed, rather than being cancelled? Return only its request_id.",
+  "gold_answer": "rq-new",
+  "critical_atoms": [],
+  "select_context": {
+    "prefix": "{\n",
+    "suffix": "  ]\n}\n",
+    "groups": [
+      {
+        "id": "rule",
+        "text": "  \"rule\": \"A cancelled request must not be retried. Use the recorded final states.\",\n  \"records\": [\n",
+        "required": true
+      },
+      {
+        "id": "g00",
+        "text": "    {\"time\":\"08:00\",\"request_id\":\"rq-00\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g01",
+        "text": "    {\"time\":\"08:01\",\"request_id\":\"rq-01\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g02",
+        "text": "    {\"time\":\"08:02\",\"request_id\":\"rq-02\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g03",
+        "text": "    {\"time\":\"08:03\",\"request_id\":\"rq-old\",\"state\":\"cancelled\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g04",
+        "text": "    {\"time\":\"08:04\",\"request_id\":\"rq-04\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g05",
+        "text": "    {\"time\":\"08:05\",\"request_id\":\"rq-05\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g06",
+        "text": "    {\"time\":\"08:06\",\"request_id\":\"rq-06\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g07",
+        "text": "    {\"time\":\"08:07\",\"request_id\":\"rq-07\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g08",
+        "text": "    {\"time\":\"08:08\",\"request_id\":\"rq-08\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g09",
+        "text": "    {\"time\":\"08:09\",\"request_id\":\"rq-09\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g10",
+        "text": "    {\"time\":\"08:10\",\"request_id\":\"rq-10\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g11",
+        "text": "    {\"time\":\"08:11\",\"request_id\":\"rq-11\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g12",
+        "text": "    {\"time\":\"08:12\",\"request_id\":\"rq-12\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g13",
+        "text": "    {\"time\":\"08:13\",\"request_id\":\"rq-13\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g14",
+        "text": "    {\"time\":\"08:14\",\"request_id\":\"rq-14\",\"state\":\"queued\",\"note\":\"requests are listed in time order\"},\n"
+      },
+      {
+        "id": "g15",
+        "text": "    {\"time\":\"08:15\",\"request_id\":\"rq-new\",\"state\":\"completed\",\"note\":\"requests are listed in time order\"}\n"
+      }
+    ]
+  },
+  "notes": "Predeclared synthetic development pilot; not held-out quality qualification. Groups are complete source records. Required rule is not gold-derived."
+}

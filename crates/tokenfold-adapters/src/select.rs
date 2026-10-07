@@ -246,6 +246,59 @@ impl ApprovedScorer {
         timeout: Duration,
         cancelled: Option<&AtomicBool>,
     ) -> Result<std::collections::BTreeMap<String, f64>, String> {
+        let request = RuntimeRequest {
+            schema_version: allocation::SELECT_SCHEMA_VERSION,
+            model_revision: &self.model_revision,
+            query,
+            groups: context
+                .groups
+                .iter()
+                .map(|g| RuntimeGroup {
+                    id: &g.id,
+                    text: &g.text,
+                })
+                .collect(),
+        };
+        let bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        let bytes = self.invoke(&bytes, timeout, cancelled)?;
+        let response: RuntimeResponse = serde_json::from_slice(&bytes)
+            .map_err(|_| "scorer response is malformed".to_string())?;
+        let request = SelectRequest::new(
+            query,
+            &self.model_revision,
+            context.groups.iter().map(|g| g.id.clone()).collect(),
+        )
+        .map_err(|e| format!("{e:?}"))?;
+        allocation::validate_response(
+            &request,
+            &SelectResponse {
+                schema_version: response.schema_version,
+                model_revision: response.model_revision,
+                scores: response.scores,
+            },
+        )
+        .map_err(|e| {
+            use allocation::SelectRejection::*;
+            let kind = match e {
+                ModelRevision { .. } => "ModelRevision",
+                SchemaVersion { .. } => "SchemaVersion",
+                IdMismatch => "IdMismatch",
+                NonFiniteScore { .. } => "NonFiniteScore",
+                BatchTooLarge { .. } => "BatchTooLarge",
+                Unavailable => "Unavailable",
+            };
+            format!("scorer response rejected: {kind}")
+        })
+    }
+
+    /// Execute one approved direct child using the existing file protocol.
+    /// Approval is not an OS sandbox; the child must not spawn descendants.
+    pub(crate) fn invoke(
+        &self,
+        bytes: &[u8],
+        timeout: Duration,
+        cancelled: Option<&AtomicBool>,
+    ) -> Result<Vec<u8>, String> {
         use std::io::Read;
         if self.approved_by.trim().is_empty()
             || self.model_revision.trim().is_empty()
@@ -266,22 +319,8 @@ impl ApprovedScorer {
         {
             return Err("scorer executable does not match its approved SHA-256".into());
         }
-        let request = RuntimeRequest {
-            schema_version: allocation::SELECT_SCHEMA_VERSION,
-            model_revision: &self.model_revision,
-            query,
-            groups: context
-                .groups
-                .iter()
-                .map(|g| RuntimeGroup {
-                    id: &g.id,
-                    text: &g.text,
-                })
-                .collect(),
-        };
-        let bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
-        if tokenfold_core::transforms::redaction::contains_secret(&bytes) {
-            return Err("secret-shaped scorer input refused".into());
+        if tokenfold_core::transforms::redaction::contains_secret(bytes) {
+            return Err("secret-shaped runtime input refused".into());
         }
         let root = self
             .scratch_root
@@ -358,34 +397,7 @@ impl ApprovedScorer {
         if bytes.len() > 65536 {
             return Err("scorer response exceeds 64 KiB".into());
         }
-        let response: RuntimeResponse = serde_json::from_slice(&bytes)
-            .map_err(|_| "scorer response is malformed".to_string())?;
-        let request = SelectRequest::new(
-            query,
-            &self.model_revision,
-            context.groups.iter().map(|g| g.id.clone()).collect(),
-        )
-        .map_err(|e| format!("{e:?}"))?;
-        allocation::validate_response(
-            &request,
-            &SelectResponse {
-                schema_version: response.schema_version,
-                model_revision: response.model_revision,
-                scores: response.scores,
-            },
-        )
-        .map_err(|e| {
-            use allocation::SelectRejection::*;
-            let kind = match e {
-                ModelRevision { .. } => "ModelRevision",
-                SchemaVersion { .. } => "SchemaVersion",
-                IdMismatch => "IdMismatch",
-                NonFiniteScore { .. } => "NonFiniteScore",
-                BatchTooLarge { .. } => "BatchTooLarge",
-                Unavailable => "Unavailable",
-            };
-            format!("scorer response rejected: {kind}")
-        })
+        Ok(bytes)
     }
 }
 

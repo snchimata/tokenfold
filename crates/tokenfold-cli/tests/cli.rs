@@ -976,3 +976,111 @@ fn select_refuses_json_escaped_secrets_without_echoing_them() {
     assert!(output.stdout.is_empty());
     assert!(!String::from_utf8_lossy(&output.stderr).contains("ABCDEFGHIJ"));
 }
+
+#[test]
+fn select_validation_only_has_no_payload_and_preserves_refusals() {
+    let safe = br#"{"groups":[{"id":"g","text":"ordinary literal input","required":true}]}"#;
+    let escaped = br#"{"groups":[{"id":"g","text":"\u0073\u006b-ABCDEFGHIJ1234567890abcdefgh"}]}"#;
+    let split =
+        br#"{"groups":[{"id":"a","text":"sk-ABCDEFGHIJ"},{"id":"b","text":"1234567890abcdefgh"}]}"#;
+    for (input, extra, expected) in [
+        (safe.as_slice(), vec!["--experimental"], 0),
+        (escaped.as_slice(), vec!["--experimental"], 3),
+        (split.as_slice(), vec!["--experimental"], 3),
+        (safe.as_slice(), vec![], 5),
+        (
+            safe.as_slice(),
+            vec!["--experimental", "--scorer-config", "not-read.json"],
+            2,
+        ),
+        (
+            safe.as_slice(),
+            vec!["--experimental", "--output", "not-written.txt"],
+            2,
+        ),
+        (
+            safe.as_slice(),
+            vec!["--experimental", "--receipt-file", "not-written.json"],
+            2,
+        ),
+    ] {
+        let mut child = Command::new(bin())
+            .args([
+                "select",
+                "--query",
+                "validate-only",
+                "--target-tokens",
+                "1",
+                "--validate-only",
+            ])
+            .args(extra)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert_eq!(output.status.code(), Some(expected));
+        assert!(output.stdout.is_empty());
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("ABCDEFGHIJ"));
+        if expected == 0 {
+            assert!(output.stderr.is_empty());
+        }
+    }
+}
+
+#[test]
+fn summarizer_is_explicit_and_missing_runtime_falls_back_with_receipt() {
+    let root = std::env::temp_dir().join(format!("tf-gen-cli-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let source = root.join("source.json");
+    let config = root.join("approval.json");
+    std::fs::write(
+        &source,
+        r#"{"prefix":"P","groups":[{"id":"a","text":"A = 007"}],"suffix":"S"}"#,
+    )
+    .unwrap();
+    std::fs::write(&config,serde_json::json!({"executable":root.join("missing.exe"),"executable_sha256":"0".repeat(64),"arguments":[],"model_revision":"test","approved_by":"regression","scratch_root":root}).to_string()).unwrap();
+    let run = |experimental: bool, target: &str| {
+        let mut cmd = Command::new(bin());
+        if experimental {
+            cmd.arg("--experimental");
+        }
+        cmd.arg("summarize")
+            .arg(&source)
+            .args(["--query", "A?", "--target-tokens", target, "--model-config"])
+            .arg(&config)
+            .output()
+            .unwrap()
+    };
+    assert!(!run(false, "1").status.success());
+    let result = run(true, "1");
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"PA = 007S");
+    let receipt: serde_json::Value = serde_json::from_slice(&result.stderr).unwrap();
+    assert_eq!(receipt["disposition"], "raw_fallback");
+    assert_eq!(receipt["fallback_reason"], "protected_budget");
+    assert_eq!(receipt["runtime_invoked"], false);
+    let missing = run(true, "4");
+    let missing_receipt: serde_json::Value = serde_json::from_slice(&missing.stderr).unwrap();
+    assert_eq!(missing_receipt["fallback_reason"], "runtime_failed");
+    let fits = run(true, "100");
+    let fits_receipt: serde_json::Value = serde_json::from_slice(&fits.stderr).unwrap();
+    assert_eq!(fits_receipt["fallback_reason"], "already_within_budget");
+    assert_eq!(fits_receipt["runtime_invoked"], false);
+    assert_eq!(receipt["budget_met"], false);
+    assert!(receipt["billed_cost"].is_null());
+    let secret_revision = format!("sk-{}", "x".repeat(25));
+    let mut approval: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&config).unwrap()).unwrap();
+    approval["model_revision"] = serde_json::json!(secret_revision);
+    std::fs::write(&config, approval.to_string()).unwrap();
+    let refused = run(true, "1");
+    assert!(!refused.status.success());
+    assert!(refused.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&refused.stderr).contains(&secret_revision));
+    std::fs::remove_file(source).unwrap();
+    std::fs::remove_file(config).unwrap();
+    std::fs::remove_dir(root).unwrap();
+}
