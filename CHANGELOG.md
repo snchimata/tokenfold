@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Explicitly release the persistent observation ledger's exclusive lock when its
+  owner drops, so a briefly inherited Unix descriptor cannot delay restart.
+  Keep live-owner refusal and snapshot safety unchanged; add a Unix regression.
+
 - Restore complete npm lockfile metadata for the five existing 0.5.1 platform
   packages so clean installs validate without changing dependency versions.
 

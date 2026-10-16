@@ -229,6 +229,14 @@ struct Persistence {
     _lock: File,
 }
 
+impl Drop for Persistence {
+    fn drop(&mut self) {
+        // A concurrent fork can retain the open-file description until exec.
+        // Ownership ends with this ledger, not the last inherited descriptor.
+        let _ = self._lock.unlock();
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Snapshot {
@@ -394,6 +402,34 @@ impl Persistence {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn dropping_ledger_releases_lock_with_an_inherited_descriptor() {
+        let root = std::env::temp_dir().join(format!(
+            "tf-ledger-inherited-{}-{}",
+            std::process::id(),
+            unix_ms().unwrap()
+        ));
+        let path = root.join("session.json");
+        let ttl = Duration::from_secs(60);
+        let ledger = SessionLedger::open_persistent(&path, ttl, 8).unwrap();
+        // Model the shared open-file description inherited between fork and exec.
+        let inherited = ledger
+            .persistence
+            .as_ref()
+            .unwrap()
+            ._lock
+            .try_clone()
+            .unwrap();
+        assert!(SessionLedger::open_persistent(&path, ttl, 8).is_err());
+        drop(ledger);
+        let reopened = SessionLedger::open_persistent(&path, ttl, 8).unwrap();
+        drop(inherited);
+        assert!(SessionLedger::open_persistent(&path, ttl, 8).is_err());
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn persistent_commitments_survive_restart_without_storing_raw_values() {
