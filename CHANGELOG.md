@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Update the locked rustls dependency from 0.23.45 to 0.23.46 to address
+  RUSTSEC-2026-0346, RUSTSEC-2026-0347, RUSTSEC-2026-0348 and RUSTSEC-2026-0349.
+
 - Add an optional, source-only `tokenfold-select` development scorer prototype
   using the existing experimental Select file protocol. Require caller-provisioned
   pinned artifacts/environment, explicit opt-in and single-complete-window
