@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Restore complete npm lockfile metadata for the five existing 0.5.1 platform
+  packages so clean installs validate without changing dependency versions.
+
 - Update the locked rustls dependency from 0.23.45 to 0.23.46 to address
   RUSTSEC-2026-0346, RUSTSEC-2026-0347, RUSTSEC-2026-0348 and RUSTSEC-2026-0349.
 
