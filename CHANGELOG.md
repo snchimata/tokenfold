@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+- Add an optional, source-only `tokenfold-select` development scorer prototype
+  using the existing experimental Select file protocol. Require caller-provisioned
+  pinned artifacts/environment, explicit opt-in and single-complete-window
+  admission; include CPU-only install/contract CI. No weights or ML dependencies
+  are bundled, production defaults are unchanged, and quality/latency,
+  redistribution and release qualification remain pending.
+
 ## [0.5.1] - 2026-10-02
 
 - Add opt-in restart-safe proxy observation commitments using an exclusively locked bounded

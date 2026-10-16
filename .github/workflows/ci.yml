@@ -73,6 +73,23 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
+  select-runtime-contracts:
+    name: select-runtime-contracts (${{ matrix.os }}, Python 3.12)
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # CPU-only development package: no ML dependencies or model files.
+      - run: python -m pip install setuptools==78.1.0
+      - run: python -m pip install --no-deps --no-build-isolation ./packages/tokenfold-select
+      - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select/tests" -v
+        working-directory: ${{ runner.temp }}
+
   python-abi3-smoke:
     name: python-abi3-smoke (Python ${{ matrix.python }})
     needs: python-wheel
