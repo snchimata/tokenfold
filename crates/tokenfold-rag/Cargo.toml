@@ -9,4 +9,4 @@ description = "Bounded BM25 search over authorized Tokenfold evidence."
 readme = "README.md"
 
 [dependencies]
-tokenfold-core = { version = "0.5.1", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.5.2", path = "../tokenfold-core" }

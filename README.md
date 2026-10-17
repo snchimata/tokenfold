@@ -339,7 +339,20 @@ Tokenfold solves a different problem first: repeated keys, values, schemas, rows
 
 **When structure ends, rank what matters.**
 
-Tokenfold Select is an Apache-2.0 LoRA adapter on
+**Select v2 is the default scorer backend in the optional `tokenfold-select`
+0.5.2 package: local FP32 ONNX inference, original text, whole-group ranking.**
+Provision the separate pinned model artifact, generate explicit runtime approval,
+and invoke `tokenfold --experimental select`. Core remains model-free and
+deterministic; installing or upgrading Tokenfold does not silently load a model
+or enable lossy selection. See the [Select v2 setup and limits](packages/tokenfold-select/README.md).
+The separate model bundle also carries Safetensors weights and a custom reference
+loader; ONNX remains the CLI worker default. V2 is an experimental preview:
+synthetic ONNX parity is verified, but task-quality
+and cold/warm performance qualification are still open.
+
+### Tokenfold Select v1 (legacy model)
+
+The separately published Select v1 is an Apache-2.0 LoRA adapter on
 `ibm-granite/granite-embedding-reranker-english-r2`. It scores candidate spans
 against a query; your allocator applies the token budget and force-keeps
 required content. It is a separately distributed offering. Core remains
@@ -393,7 +406,7 @@ def score(query: str, spans: list[str]) -> list[float]:
 
 </details>
 
-### Tokenfold Select benchmarks
+### Tokenfold Select v1 benchmarks (not v2 evidence)
 
 [Tokenfold Select][tokenfold-select] is Tokenfold's query-aware model for choosing
 what fills a tight context window after structural compression ends.

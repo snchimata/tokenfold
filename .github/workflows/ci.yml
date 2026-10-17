@@ -19,6 +19,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
+      - run: python3 scripts/check-release-versions.py
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo doc --workspace --no-deps --locked
         env:
@@ -84,8 +85,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      # CPU-only development package: no ML dependencies or model files.
-      - run: python -m pip install setuptools==78.1.0
+      # Installed CPU/mock contracts only; no weights, PyTorch or inference.
+      - run: python -m pip install setuptools==78.1.0 numpy==2.5.3
       - run: python -m pip install --no-deps --no-build-isolation ./packages/tokenfold-select
       - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select/tests" -v
         working-directory: ${{ runner.temp }}

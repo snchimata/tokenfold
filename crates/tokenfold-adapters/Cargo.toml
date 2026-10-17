@@ -9,6 +9,6 @@ description = "Explicit, model-free provider observation adapters for Tokenfold.
 readme = "README.md"
 
 [dependencies]
-tokenfold-core = { version = "0.5.1", path = "../tokenfold-core" }
+tokenfold-core = { version = "0.5.2", path = "../tokenfold-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

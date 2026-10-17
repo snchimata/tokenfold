@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenfold-select"
-version = "0.0.0.dev0"
-description = "Unqualified local development scorer for Tokenfold Select"
+version = "0.5.2"
+description = "Opt-in ONNX Select v2 scorer for Tokenfold"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = []
+
+[project.optional-dependencies]
+onnx = ["onnxruntime==1.30.0", "numpy==2.5.3", "tokenizers==0.23.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
