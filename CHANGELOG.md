@@ -12,6 +12,8 @@
   No weights or automatic downloads are bundled. Core defaults and experimental
   Select/approval/fallback boundaries remain unchanged. ONNX task quality and
   cold/warm performance are not yet qualified.
+- Prepare the separate Select v2 model distribution in both ONNX and Safetensors
+  formats, with custom-loader instructions; retain ONNX as the worker default.
 - Check registry-version consistency in CI and before publication.
 
 - Explicitly release the persistent observation ledger's exclusive lock when its

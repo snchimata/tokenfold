@@ -345,7 +345,9 @@ Provision the separate pinned model artifact, generate explicit runtime approval
 and invoke `tokenfold --experimental select`. Core remains model-free and
 deterministic; installing or upgrading Tokenfold does not silently load a model
 or enable lossy selection. See the [Select v2 setup and limits](packages/tokenfold-select/README.md).
-V2 is an experimental preview: synthetic ONNX parity is verified, but task-quality
+The separate model bundle also carries Safetensors weights and a custom reference
+loader; ONNX remains the CLI worker default. V2 is an experimental preview:
+synthetic ONNX parity is verified, but task-quality
 and cold/warm performance qualification are still open.
 
 ### Tokenfold Select v1 (legacy model)

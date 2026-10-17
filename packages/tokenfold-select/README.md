@@ -106,3 +106,12 @@ Use `worker --backend pytorch` explicitly for that FP32 direct-child prototype;
 it still requires its original pinned environment and artifact. The resident API
 also retains its explicit development-only FP16 option. Select v1's separately
 published LoRA model and historical benchmark results are not v2 evidence.
+
+## Safetensors model distribution
+
+The separate model release bundle also includes `model.safetensors` plus its
+custom joint-group architecture and pinned CPU reference loader. Safetensors is
+an alternative weight format, not a stock Transformers classification checkpoint
+or an automatic backend in this package. ONNX remains this worker's default.
+Use the model card's `SafetensorsScorer` instructions and manifest; representative
+quality/performance qualification is separate from format/parity validation.
