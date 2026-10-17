@@ -51,6 +51,11 @@ same ones.
 
 Release commits go through a PR like everything else.
 
+Also align `packages/tokenfold-select/pyproject.toml` and its package version;
+`python scripts/check-release-versions.py` checks the registry version set. The
+optional Select wheel/sdist is published alongside the `tokenfold` binding.
+Model weights remain a separate, explicitly approved Hugging Face release.
+
 ```sh
 git switch main && git pull
 git switch -c release/v0.4.1

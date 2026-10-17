@@ -339,7 +339,53 @@ Tokenfold solves a different problem first: repeated keys, values, schemas, rows
 
 **When structure ends, rank what matters.**
 
-Tokenfold Select is an Apache-2.0 LoRA adapter on
+**Select v2 is the default scorer backend in the optional `tokenfold-select`
+0.5.2 package: local FP32 ONNX inference, original text, whole-group ranking.**
+Provision the separate pinned model artifact, generate explicit runtime approval,
+and invoke `tokenfold --experimental select`. Core remains model-free and
+deterministic; installing or upgrading Tokenfold does not silently load a model
+or enable lossy selection. See the [Select v2 setup and limits](packages/tokenfold-select/README.md).
+The separate model bundle also carries Safetensors weights and a custom reference
+loader; ONNX remains the CLI worker default. V2 is an experimental preview:
+[Both formats are published under Apache-2.0](https://huggingface.co/snchimata/tokenfold-select-v2).
+Synthetic CPU parity is verified, but task-quality and cold/warm performance
+qualification are still open. The [example notebook](examples/quickstart.ipynb#10-tokenfold-select-v2-optional-local-ranking)
+keeps model execution off until you explicitly enable it.
+
+<details>
+<summary><strong>Python: try Tokenfold Select v2 (ONNX)</strong></summary>
+
+Install `tokenfold-select[onnx]==0.5.2` and `huggingface_hub==1.33.0`, then download
+only the ONNX profile at the pinned release commit:
+
+```python
+from pathlib import Path
+from huggingface_hub import snapshot_download
+from tokenfold_select import OnnxScorer
+
+root = Path(snapshot_download(
+    "snchimata/tokenfold-select-v2",
+    revision="78736d9afea819322f212d6d53eedcf68ac7a39b",
+    allow_patterns=["model.onnx", "model.onnx.data", "onnx-manifest.json",
+                    "tokenizer/*", "runtime/*", "LICENSE", "NOTICE.md"],
+)).resolve()
+scorer = OnnxScorer(root, development=True)
+response = scorer.score({
+    "schema_version": 1, "model_revision": scorer.revision,
+    "query": "Which delivery city?",
+    "groups": [{"id": "delivery", "text": "Delivery city: Paris"}],
+})
+print(response)  # scores only; your controller owns protection and allocation
+```
+
+For Safetensors, use the model card's custom loader rather than a stock
+Transformers classification class. Neither format silently changes Core behavior.
+
+</details>
+
+### Tokenfold Select v1 (legacy model)
+
+The separately published Select v1 is an Apache-2.0 LoRA adapter on
 `ibm-granite/granite-embedding-reranker-english-r2`. It scores candidate spans
 against a query; your allocator applies the token budget and force-keeps
 required content. It is a separately distributed offering. Core remains
@@ -352,7 +398,7 @@ model-free and deterministic and neither loads nor invokes Select.
 | Output | Compressed payload + exact receipt | Ranking logits |
 
 <details>
-<summary><strong>Python: load the model and score spans</strong></summary>
+<summary><strong>Legacy v1 Python: load the LoRA adapter and score spans</strong></summary>
 
 ```python
 from pathlib import Path
@@ -393,7 +439,7 @@ def score(query: str, spans: list[str]) -> list[float]:
 
 </details>
 
-### Tokenfold Select benchmarks
+### Tokenfold Select v1 benchmarks (not v2 evidence)
 
 [Tokenfold Select][tokenfold-select] is Tokenfold's query-aware model for choosing
 what fills a tight context window after structural compression ends.

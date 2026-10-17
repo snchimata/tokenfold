@@ -6,7 +6,7 @@ on:
       version:
         description: Existing GitHub release version to publish
         required: true
-        default: 0.5.1
+        default: 0.5.2
 
 permissions:
   contents: read
@@ -35,6 +35,7 @@ jobs:
           npm_version=$(node -p "require('./packages/tokenfold/package.json').version")
           test "$VERSION" = "$cargo_version"
           test "$VERSION" = "$npm_version"
+          python3 scripts/check-release-versions.py
           test "v$VERSION" = "$(git describe --tags --exact-match)"
       - run: cargo publish -p tokenfold-core --dry-run --locked
       - name: Validate registry packages from the locked source tree
@@ -143,8 +144,29 @@ jobs:
           name: python-sdist
           path: dist/*
 
+  select-python:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine numpy==2.5.3
+      - run: python -m build --outdir dist-select packages/tokenfold-select
+      - run: python -m twine check dist-select/*
+      - run: python -m pip install --no-deps dist-select/*.whl
+      - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select/tests" -v
+        working-directory: ${{ runner.temp }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-select
+          path: dist-select/*
+
   publish-python:
-    needs: [publish-crates, python-wheels, python-sdist]
+    needs: [publish-crates, python-wheels, python-sdist, select-python]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -245,7 +267,7 @@ jobs:
           ! readelf -l "$binary" | grep -q INTERP
 
   release-ready:
-    needs: [validate, python-wheels, python-sdist, npm-smoke]
+    needs: [validate, python-wheels, python-sdist, select-python, npm-smoke]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All registry artifacts passed their pre-publication checks."
