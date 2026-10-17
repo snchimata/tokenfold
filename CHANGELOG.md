@@ -14,6 +14,9 @@
   cold/warm performance are not yet qualified.
 - Prepare the separate Select v2 model distribution in both ONNX and Safetensors
   formats, with custom-loader instructions; retain ONNX as the worker default.
+- Update the offline quickstart notebook for 0.5.2, with a disabled-by-default
+  Select v2 ONNX example pinned to the published model commit and Safetensors
+  guidance; keep legacy v1 results explicitly separate from v2 evidence.
 - Check registry-version consistency in CI and before publication.
 
 - Explicitly release the persistent observation ledger's exclusive lock when its
