@@ -170,7 +170,7 @@ class Contracts(unittest.TestCase):
             self.assertFalse(json.loads(child.stdout)['checkpoint_tensors_loaded'])
             paths=Path(directory)/'request.json',Path(directory)/'response.json'
             write(paths[0],request(revision))
-            child=subprocess.run(command+['worker','--artifact',str(root),'--revision','0'*64,'--development'],
+            child=subprocess.run(command+['worker','--backend','pytorch','--artifact',str(root),'--revision','0'*64,'--development'],
                 env=dict(TOKENFOLD_SELECT_REQUEST_PATH=str(paths[0]),TOKENFOLD_SELECT_RESPONSE_PATH=str(paths[1])),
                 capture_output=True,cwd=directory,timeout=10)
             self.assertEqual(child.returncode,1)

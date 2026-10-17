@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-17
+
+- Align Cargo, Python binding, npm and five platform packages at 0.5.2; add the
+  optional `tokenfold-select` wheel/sdist to the existing publication gate.
+- Default the optional Select runtime worker to the pinned Select v2 FP32 ONNX
+  CPU backend. Add integrity-only inspection and explicit approval-config setup;
+  preserve the legacy PyTorch development backend as an explicit option.
+  No weights or automatic downloads are bundled. Core defaults and experimental
+  Select/approval/fallback boundaries remain unchanged. ONNX task quality and
+  cold/warm performance are not yet qualified.
+- Check registry-version consistency in CI and before publication.
+
 - Explicitly release the persistent observation ledger's exclusive lock when its
   owner drops, so a briefly inherited Unix descriptor cannot delay restart.
   Keep live-owner refusal and snapshot safety unchanged; add a Unix regression.
