@@ -6,18 +6,28 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel superseded ordinary PR checks, never main pushes or other workflows.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   lint:
     name: lint
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all --check
       - run: python3 scripts/check-release-versions.py
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -40,22 +50,33 @@ jobs:
 
   test:
     name: test
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --locked
 
   windows-smoke:
     name: windows-smoke
+    timeout-minutes: 10
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo test -p tokenfold-cli -p tokenfold-proxy --locked
 
   python-wheel:
     name: python-wheel (Python 3.12)
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -73,9 +94,11 @@ jobs:
           name: python-abi3-wheel
           path: dist/*.whl
           if-no-files-found: error
+          retention-days: 1
 
   select-runtime-contracts:
     name: select-runtime-contracts (${{ matrix.os }}, Python 3.12)
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -93,6 +116,7 @@ jobs:
 
   python-abi3-smoke:
     name: python-abi3-smoke (Python ${{ matrix.python }})
+    timeout-minutes: 10
     needs: python-wheel
     strategy:
       matrix:
@@ -109,21 +133,52 @@ jobs:
       - run: python -m pip install dist/*.whl
       - run: python -c "import tokenfold; assert tokenfold.Preset.BALANCED"
 
+  linux-binaries:
+    name: linux-binaries
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - run: cargo build --release --locked -p tokenfold-cli -p tokenfold-proxy
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-binaries
+          path: |
+            target/release/tokenfold
+            target/release/tokenfold-proxy
+          if-no-files-found: error
+          retention-days: 1
+
   node-api:
     name: node-api (Node ${{ matrix.node }})
+    timeout-minutes: 10
+    needs: linux-binaries
+    if: ${{ !cancelled() }}
     strategy:
       matrix:
         node: [22, 24]
     runs-on: ubuntu-latest
     steps:
+      - name: Require successful Linux build
+        env:
+          LINUX_BUILD_RESULT: ${{ needs.linux-binaries.result }}
+        run: test "$LINUX_BUILD_RESULT" = success
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: packages/tokenfold/package-lock.json
-      - run: cargo build --release --locked -p tokenfold-cli
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-binaries
+          path: target/release
+      - run: chmod +x target/release/tokenfold target/release/tokenfold-proxy
       - run: npm ci
         working-directory: packages/tokenfold
       - run: npm test
@@ -133,12 +188,17 @@ jobs:
 
   coverage:
     name: coverage
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
       - run: cargo llvm-cov report --summary-only
@@ -147,9 +207,11 @@ jobs:
           name: coverage-lcov
           path: lcov.info
           if-no-files-found: error
+          retention-days: 1
 
   golden-cross-platform:
     name: golden-cross-platform
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [macos-15, macos-15-intel, ubuntu-latest]
@@ -157,11 +219,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --locked -- golden
 
   # CI gate policy: blocking on pull requests and on push to main.
   security:
     name: security
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -188,18 +255,24 @@ jobs:
   # dedicated runner is the release-blocking gate — see release.yml).
   bench-smoke:
     name: bench-smoke
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo bench --workspace --locked
 
   # CI gate policy: advisory on merge; deterministic-bootstrap scorer (no live LLM judge
   # / API key needed yet — see eval/tasks/FIXTURES.md), so this can safely run on every PR too.
   fidelity-smoke:
     name: fidelity-smoke
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
@@ -211,17 +284,27 @@ jobs:
   # human quality audit must be complete and non-stale (--check) before merging.
   eval-harness:
     name: eval-harness
+    timeout-minutes: 10
+    needs: linux-binaries
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     env:
       TOKENFOLD_LEARNED_MODULE: json
       TOKENFOLD_BIN: ${{ github.workspace }}/target/release/tokenfold
       TOKENFOLD_PROXY_BIN: ${{ github.workspace }}/target/release/tokenfold-proxy
     steps:
+      - name: Require successful Linux build
+        env:
+          LINUX_BUILD_RESULT: ${{ needs.linux-binaries.result }}
+        run: test "$LINUX_BUILD_RESULT" = success
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --locked -p tokenfold-cli -p tokenfold-proxy
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-binaries
+          path: target/release
+      - run: chmod +x target/release/tokenfold target/release/tokenfold-proxy
       - run: python eval/test_baseline_fixture_contract.py
       - run: python eval/test_baseline_cli.py
       - run: python eval/test_paired_runner.py
