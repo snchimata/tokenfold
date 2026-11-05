@@ -25,20 +25,7 @@ Tokenfold Select ranks the context that matters most when token budgets get tigh
 
 </div>
 
-## Table of contents
-
-- [Installation](#installation)
-- [How it works](#how-it-works)
-- [Quick start](#quick-start)
-- [MCP & agents](#coding-agents-and-mcp-integration)
-- [Core](#tokenfold-core)
-- [Select](#tokenfold-select)
-- [Benchmarks](#measured-results)
-- [Extended tooling](#extended-tooling)
-- [Safety and auditability](#safety-and-auditability)
-- [Reproduce the results](#reproduce-the-results)
-- [Contributing](#contributing)
-- [License](#license)
+[Install](#installation) | [Quick start](#quick-start) | [How it works](#how-it-works) | [MCP & agents](#coding-agents-and-mcp-integration) | [Core](#tokenfold-core) | [Select](#tokenfold-select) | [Benchmarks](#measured-results) | [Safety](#safety-and-auditability)
 
 <br />
 
@@ -50,6 +37,9 @@ npm install tokenfold        # Node.js / TypeScript library
 cargo install tokenfold-cli  # Standalone CLI
 cargo add tokenfold-core     # Rust library
 ```
+
+These installs provide Core. For optional query-aware model scoring, see
+[Select setup](#tokenfold-select); its models and runtime setup are separate.
 
 <table>
   <tr>
@@ -84,9 +74,18 @@ cargo add tokenfold-core     # Rust library
 
 ## How it works
 
+- **Core (default):** folds repeated structure without removing data. The
+  compact payload decodes to the original JSON value.
+- **[Recoverable pruning](#recoverable-lossy-pruning) (opt-in):** model-free
+  rules rank eligible JSON rows; omissions are stored locally before replacement
+  with `$tf_ref` handles. This is the path behind the **96.3% showcase**, not Select.
+- **[Select](#tokenfold-select) (separate):** a model scores groups against your
+  query; your allocator keeps selected original text under a token budget.
+  Select does not automatically store omissions or create recovery handles.
+
 ### What the model sees
 
-```json
+```jsonc
 // Input (conceptual illustration - 2 rows shown; small inputs like this
 // pass through unchanged under the never-larger guard)
 [{"id":1,"role":"admin"},{"id":2,"role":"member"}]
@@ -120,10 +119,6 @@ object shape again.
 - **Verified by exact decode.** Every lossless transform is verified by an
   in-memory round trip before emitting; lossy pruning is strictly opt-in and
   recoverable.
-
-For tabular arrays, Tokenfold folds repeated keys into
-header columns (`__tf_cols__`). No model runs in the Core engine, and every
-lossless transform is verified by exact decode.
 
 #### How Tokenfold decides what to fold
 
@@ -173,6 +168,35 @@ inputs and provenance live in [`tests/fixtures/readme_metrics.json`](tests/fixtu
 <br />
 
 ## Quick start
+
+### Python: compress JSON directly
+
+After `pip install tokenfold`, try this self-contained example. Thirty uniform
+records provide enough repeated structure to demonstrate lossless folding:
+
+```python
+import json
+from tokenfold import InputFormat, compress
+
+records = [{"id": i, "role": "member", "status": "active"} for i in range(30)]
+result = compress(json.dumps(records), format=InputFormat.JSON)
+print(f"{result.report.original_tokens} -> {result.report.compressed_tokens} tokens "
+      f"({result.saved_pct():.1f}% saved)")
+```
+
+Send `result.payload` (bytes) to the model. Use `tokenfold.decode` when your
+application needs the original JSON shape again. Small or irregular inputs may
+pass through unchanged under the never-larger guard.
+
+### CLI: inspect and compress a file
+
+Install the CLI with `cargo install tokenfold-cli` or use a
+[checksummed GitHub Release](https://github.com/snchimata/tokenfold/releases/latest), then:
+
+```bash
+tokenfold inspect payload.json --format json
+tokenfold compress payload.json --format json --output payload.compact.json
+```
 
 ### Drop-in proxy for OpenAI-compatible clients
 
@@ -254,28 +278,6 @@ sequenceDiagram
 | TypeScript | `npm install tokenfold` | Node.js applications and automation |
 | Rust | `cargo add tokenfold-core` | Native embedding |
 | MCP | `tokenfold mcp serve` | Agents and editors |
-
-For files and stdin, install the CLI with `cargo install tokenfold-cli` or use a
-[checksummed GitHub Release](https://github.com/snchimata/tokenfold/releases/latest), then:
-
-```bash
-tokenfold inspect payload.json --format json
-tokenfold compress payload.json --format json --output payload.compact.json
-```
-
-For direct Python calls, use the same Core engine and typed receipt:
-
-```python
-from tokenfold import InputFormat, compress
-
-# Accepts raw JSON bytes or str (messages, tools, or schemas)
-request_json_bytes = b'{"messages": [{"role": "user", "content": "hello"}]}'
-result = compress(request_json_bytes, format=InputFormat.OPENAI_JSON)
-
-# For standalone JSON records, use: format=InputFormat.JSON
-compressed_payload = result.payload  # bytes
-print(f"Saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
-```
 
 ### Presets
 
