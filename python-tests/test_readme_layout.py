@@ -1,4 +1,6 @@
-"""Model-free README layout and saved Select v3 claim contracts."""
+"""README layout, Python quickstart and saved Select v3 claim contracts."""
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import re
@@ -38,9 +40,9 @@ class ReadmeLayout(unittest.TestCase):
         targets = re.findall(r'\]\(([^)]+)\)|src="([^"]+)"', self.text)
         for markdown, image in targets:
             target = urlsplit(markdown or image)
-            if target.scheme or not target.path:
+            if target.scheme:
                 continue
-            path = ROOT / unquote(target.path)
+            path = ROOT / unquote(target.path) if target.path else ROOT / 'README.md'
             with self.subTest(target=markdown or image):
                 self.assertTrue(path.exists(), str(path))
                 if target.fragment and path.suffix == '.md':
@@ -48,6 +50,31 @@ class ReadmeLayout(unittest.TestCase):
                     headings = re.findall(r'^#{1,6} +(.+)$', content, re.M)
                     slugs = {re.sub(r'[^\w -]', '', h.lower()).replace(' ', '-') for h in headings}
                     self.assertTrue(target.fragment in slugs or f'id="{target.fragment}"' in content)
+
+    def test_onboarding_distinguishes_paths(self):
+        intro = self.text.split('## Quick start\n', 1)[0]
+        self.assertIn('These installs provide Core.', intro)
+        self.assertIn('**96.3% showcase**, not Select.', intro)
+        self.assertIn('Select does not automatically store omissions or create recovery handles.', intro)
+        navigation = self.text.split('</div>', 1)[1].split('## Installation', 1)[0]
+        self.assertNotIn('\n- [', navigation)
+        self.assertIn('[Select](#tokenfold-select)', navigation)
+
+    def test_python_quickstart_saves_tokens(self):
+        from tokenfold import decode
+
+        quick = self.text.split('## Quick start\n', 1)[1]
+        quick = quick.split('### Drop-in proxy for OpenAI-compatible clients\n', 1)[0]
+        code = re.search(r'```python\n(.*?)```', quick, re.S).group(1)
+        namespace = {}
+        with redirect_stdout(StringIO()) as output:
+            exec(compile(code, 'README.md:quickstart', 'exec'), namespace)
+        result = namespace['result']
+        self.assertGreater(result.report.saved_tokens, 0)
+        self.assertIn(b'__tf_cols__', result.payload)
+        self.assertEqual(json.loads(decode(result.payload)), namespace['records'])
+        self.assertIn(f'{result.report.original_tokens} -> {result.report.compressed_tokens} tokens',
+                      output.getvalue())
 
     def test_select_v3_claims_match_versioned_provenance(self):
         manifest = json.loads((ROOT / 'tests/fixtures/readme_metrics.json').read_text(encoding='utf-8'))
