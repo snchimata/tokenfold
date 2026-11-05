@@ -48,5 +48,77 @@
       "0.10": { "task_success": 39.9, "kompress_native": 30.4, "kompress_relevance": 37.7, "bm25": 37.7, "lift": 5.8, "lift_vs_best_pp": 2.2 }
     },
     "reproduction_gap": "The external model card does not publish dataset hashes, seeds, dependency revisions, command, or environment; these figures are not reproduced by Core CI."
+  },
+  "select_v3": {
+    "status": "published_descriptive_development",
+    "model_revision": "317d3424d3de78c1a708c42a47a7812ab877f1a8",
+    "source": "https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md",
+    "evidence": "https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/COMPARISON.json",
+    "evidence_sha256": "2e224621f836a76f2f31c450dd0233c35322fe774bd718ee171d157c30300902",
+    "qualification": false,
+    "retention_budget": 0.5,
+    "historical_cells": 10,
+    "historical_refusals": 6,
+    "token_rows": [
+      {
+        "workload": "Code",
+        "original_tokens": 4411,
+        "v3_output_tokens": 2205,
+        "kompress_output_tokens": 2149,
+        "kompress_budget_eligible": true
+      },
+      {
+        "workload": "JSON",
+        "original_tokens": 1303,
+        "v3_output_tokens": 651,
+        "kompress_output_tokens": 1303,
+        "kompress_budget_eligible": false
+      },
+      {
+        "workload": "Logs",
+        "original_tokens": 1103,
+        "v3_output_tokens": 503,
+        "kompress_output_tokens": 1103,
+        "kompress_budget_eligible": false
+      },
+      {
+        "workload": "Multi-turn",
+        "original_tokens": 587,
+        "v3_output_tokens": 235,
+        "kompress_output_tokens": 284,
+        "kompress_budget_eligible": true
+      },
+      {
+        "workload": "Retrieval",
+        "original_tokens": 4498,
+        "v3_output_tokens": 2217,
+        "kompress_output_tokens": 2219,
+        "kompress_budget_eligible": true
+      }
+    ],
+    "latency_rows": [
+      {
+        "workload": "Code",
+        "v3_ms": 146.0882,
+        "kompress_ms": 200.3043,
+        "basis": "One historical request per model"
+      },
+      {
+        "workload": "Retrieval",
+        "v3_ms": 139.291,
+        "kompress_ms": 201.564,
+        "basis": "One historical request per model"
+      },
+      {
+        "workload": "Multi-turn",
+        "v3_ms": 66.5719,
+        "kompress_ms": 77.7508,
+        "basis": "Median of 5 requests per model"
+      }
+    ],
+    "historical_multiturn_ms": {
+      "v3": 69.3616,
+      "kompress": 64.4106
+    }
   }
 }
