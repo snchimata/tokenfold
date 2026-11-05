@@ -16,6 +16,7 @@ permissions:
 jobs:
   codeql:
     name: CodeQL (${{ matrix.language }})
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: read
