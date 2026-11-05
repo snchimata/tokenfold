@@ -97,7 +97,8 @@ jobs:
     strategy:
       matrix:
         python: ["3.9", "3.13"]
-    runs-on: ubuntu-latest
+    # Python 3.9 builds are unavailable on Ubuntu 26.04.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-python@v6
         with:
