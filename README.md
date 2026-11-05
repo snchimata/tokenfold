@@ -373,13 +373,13 @@ not the v3 architecture or loader.
 | Output | Compressed payload + exact receipt | Group relevance scores; caller-owned allocation |
 
 <details>
-<summary><strong>Released tokenfold-select 0.5.2 package: Select v2 setup</strong></summary>
+<summary><strong>Released tokenfold-select 0.5.3 package: Select v2 setup</strong></summary>
 
-V3 is provisioned separately through its model card. The released 0.5.2 package
+V3 is provisioned separately through its model card. The released 0.5.3 package
 continues to use the v2 backend below; this README update does not change it.
 
 **Select v2 is the default scorer backend in the optional `tokenfold-select`
-0.5.2 package: local FP32 ONNX inference, original text, whole-group ranking.**
+0.5.3 package: local FP32 ONNX inference, original text, whole-group ranking.**
 Provision the separate pinned model artifact, generate explicit runtime approval,
 and invoke `tokenfold --experimental select`. Core remains model-free and
 deterministic; installing or upgrading Tokenfold does not silently load a model
@@ -394,7 +394,7 @@ keeps model execution off until you explicitly enable it.
 <details>
 <summary><strong>Python: try Tokenfold Select v2 (ONNX)</strong></summary>
 
-Install `tokenfold-select[onnx]==0.5.2` and `huggingface_hub==1.33.0`, then download
+Install `tokenfold-select[onnx]==0.5.3` and `huggingface_hub==1.33.0`, then download
 only the ONNX profile at the pinned release commit:
 
 ```python

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-05
+
+- Update locked `rustls-webpki` to 0.103.16 and `webpki-roots` to 1.0.10,
+  addressing RUSTSEC-2026-0382 and RUSTSEC-2026-0381.
+- Preserve Python 3.9/3.13 ABI3 consumer coverage by running its smoke job on
+  Ubuntu 22.04, where Python 3.9 remains available.
+- Improve README architecture diagrams, proxy setup and benchmark presentation;
+  add layout, link and saved-metric regression checks. Select v3 evidence remains
+  development-only and non-qualifying; this release retains the optional Select
+  v2 ONNX runtime, with no bundled weights or production-default changes.
+- Align Cargo, both Python packages, npm and its five platform packages at
+  0.5.3, and refresh pinned quickstart installation commands.
+
 ## [0.5.2] - 2026-10-17
 
 - Align Cargo, Python binding, npm and five platform packages at 0.5.2; add the
