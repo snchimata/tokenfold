@@ -23,6 +23,19 @@ def sources():
 
 
 class SelectV3Notebook(unittest.TestCase):
+    def test_contextdoctor_examples_run_offline_in_this_notebook(self):
+        notebook = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+        cells = ["".join(c["source"]) for c in notebook["cells"]
+                 if c["cell_type"] == "code" and "contextdoctor_report.py" in "".join(c["source"])]
+        self.assertEqual(len(cells), 1, "the local notebook must include ContextDoctor")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exec(cells[0], {"EXAMPLES": NOTEBOOK.parent})
+        rows = {r["control"]: r for r in json.loads(output.getvalue())}
+        self.assertEqual(rows["identity"]["verdict"], "no_effect")
+        self.assertEqual(rows["cheaper_worse"]["verdict"], "regressed")
+        self.assertTrue(all(r["p4_status"] == "blocked" and not r["expansion_allowed"] for r in rows.values()))
+
     def test_v3_is_enabled_and_uses_the_reference_pins(self):
         _, code = sources()
         self.assertIn('"fd8231d3cdc1efc46f7a6d7d83ca88b336a953591d63ea431407c8b13b990309"', code)

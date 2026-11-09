@@ -15,7 +15,7 @@ or change the `tokenfold` Python/TypeScript compression APIs.
 ## Install and inspect
 
 ```sh
-python -m pip install 'tokenfold-select[onnx]==0.5.3'
+python -m pip install 'tokenfold-select[onnx]==0.5.4'
 python -m tokenfold_select inspect-onnx --artifact /absolute/select-v2-model
 ```
 

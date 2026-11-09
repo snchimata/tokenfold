@@ -306,11 +306,15 @@ python examples/quickstart.py      # Python: compress messages, request bodies, 
 node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read the receipt
 cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
 python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
+python examples/contextdoctor_report.py   # source checkout: offline outcome/regression controls
 ```
 
 [`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the guided tour of the whole
 Python surface: everything `quickstart.py` shows, plus previews, budgets and presets,
-provider payloads, recoverable pruning with retrieval, and where Tokenfold Select fits.
+provider payloads, recoverable pruning previews, and the offline ContextDoctor controls.
+Its separately provisioned Select v3 CUDA example is explicitly enabled; set
+`RUN_SELECT_V3 = False` for a core-only tour. See the [evaluation guide](eval/README.md)
+for ContextDoctor's source-only interface and evidence limits.
 
 ### Coding agents and MCP integration
 
@@ -375,13 +379,13 @@ not the v3 architecture or loader.
 | Output | Compressed payload + exact receipt | Group relevance scores; caller-owned allocation |
 
 <details>
-<summary><strong>Released tokenfold-select 0.5.3 package: Select v2 setup</strong></summary>
+<summary><strong>Optional tokenfold-select 0.5.4 SDK: Select v2 setup</strong></summary>
 
-V3 is provisioned separately through its model card. The released 0.5.3 package
+V3 is provisioned separately through its model card. The version-aligned 0.5.4 SDK
 continues to use the v2 backend below; this README update does not change it.
 
 **Select v2 is the default scorer backend in the optional `tokenfold-select`
-0.5.3 package: local FP32 ONNX inference, original text, whole-group ranking.**
+0.5.4 package: local FP32 ONNX inference, original text, whole-group ranking.**
 Provision the separate pinned model artifact, generate explicit runtime approval,
 and invoke `tokenfold --experimental select`. Core remains model-free and
 deterministic; installing or upgrading Tokenfold does not silently load a model
@@ -390,13 +394,13 @@ The separate model bundle also carries Safetensors weights and a custom referenc
 loader; ONNX remains the CLI worker default. V2 is an experimental preview:
 [Both formats are published under Apache-2.0](https://huggingface.co/snchimata/tokenfold-select-v2).
 Synthetic CPU parity is verified, but task-quality and cold/warm performance
-qualification are still open. The [example notebook](examples/quickstart.ipynb#10-tokenfold-select-v2-optional-local-ranking)
-keeps model execution off until you explicitly enable it.
+qualification are still open. The notebook's [separate v3 CUDA example](examples/quickstart.ipynb#10-tokenfold-select-v3-local-cuda-ranking)
+is explicitly enabled and needs a provisioned v3 bundle; it does not change this SDK's defaults.
 
 <details>
 <summary><strong>Python: try Tokenfold Select v2 (ONNX)</strong></summary>
 
-Install `tokenfold-select[onnx]==0.5.3` and `huggingface_hub==1.33.0`, then download
+Install `tokenfold-select[onnx]==0.5.4` and `huggingface_hub==1.33.0`, then download
 only the ONNX profile at the pinned release commit:
 
 ```python
