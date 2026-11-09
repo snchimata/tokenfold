@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-09
+
+- Add experimental ContextDoctor source-checkout validation, all-attempt accounting,
+  independent verifier receipts, paired regressions, uncertainty reports and explicit
+  claim-readiness blockers. Keep incomplete usage/cost evidence unknown, not zero.
+- Add bounded opt-in Docker and exact free-endpoint execution without paid fallback
+  or automatic retries. Retain safe HTTP failure statuses and reject truncated or
+  filtered text as a final answer without discarding valid usage receipts.
+- Add shared offline ContextDoctor examples to the quickstart notebook; retain the
+  no-effect and cheaper-but-worse controls. Document the partial synthetic live pilot
+  without claiming general token savings, latency improvement or quality preservation.
+- Use the separately provisioned, integrity-pinned Select v3 loader in the notebook's
+  explicit CUDA example, with unchanged payments fixture and all-group retention.
+  Provide private Windows cache identity/temp paths and surface child diagnostics.
+  No weights are bundled; the optional registry SDK/CLI defaults remain Select v2.
+- Test offline contracts on Windows/Linux with Python 3.9/3.12, preserve byte-hashed
+  fixture line endings, and keep core-only notebook CI free of model execution.
+- Align Cargo, both registry Python packages, npm and its five platform packages at
+  0.5.4. ContextDoctor remains a source-checkout harness, not a new installed CLI/API.
+  Held-out qualification, the repeated live pilot and repeat-use value remain unproven.
+
 ## [0.5.3] - 2026-11-05
 
 - Update locked `rustls-webpki` to 0.103.16 and `webpki-roots` to 1.0.10,

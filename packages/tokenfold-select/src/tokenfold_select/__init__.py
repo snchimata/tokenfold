@@ -4,4 +4,4 @@ from .runtime import DevelopmentScorer
 from .onnx import OnnxScorer, inspect_onnx
 
 __all__ = ["OnnxScorer", "inspect_onnx", "DevelopmentScorer", "inspect_artifact"]
-__version__ = "0.5.3"
+__version__ = "0.5.4"

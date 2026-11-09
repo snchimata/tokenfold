@@ -6,7 +6,7 @@ on:
       version:
         description: Existing GitHub release version to publish
         required: true
-        default: 0.5.3
+        default: 0.5.4
 
 permissions:
   contents: read
