@@ -15,7 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Keep the oldest supported Python available when latest runner images advance.
+        os: [ubuntu-24.04, windows-2022]
         python: ["3.9", "3.12"]
     steps:
       - uses: actions/checkout@v6
