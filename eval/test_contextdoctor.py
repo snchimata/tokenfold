@@ -475,6 +475,31 @@ class GoldenFixtures(unittest.TestCase):
             self.assertEqual((folder / "expected-report.md").read_text(encoding="utf-8"), cd.render_markdown(report))
 
 
+class Examples(unittest.TestCase):
+    def test_contextdoctor_example_and_notebook_cell_run_offline(self):
+        examples = Path(__file__).resolve().parents[1] / "examples"
+        notebook = json.loads((examples / "quickstart.ipynb").read_text(encoding="utf-8"))
+        cells = ["".join(c["source"]) for c in notebook["cells"]
+                 if c["cell_type"] == "code" and "contextdoctor_report.py" in "".join(c["source"])]
+        self.assertEqual(len(cells), 1, "quickstart must run the shared offline example")
+        code = "from pathlib import Path\nEXAMPLES = Path(" + repr(str(examples)) + ")\n" + cells[0]
+        commands = ([sys.executable, str(examples / "contextdoctor_report.py")],
+                    [sys.executable, "-c", code])
+        with tempfile.TemporaryDirectory() as work:
+            for command in commands:
+                with self.subTest(entrypoint=command[1]):
+                    process = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=30)
+                    self.assertEqual(process.returncode, 0, process.stderr)
+                    rows = {row["control"]: row for row in json.loads(process.stdout)}
+                    self.assertEqual(rows["identity"]["verdict"], "no_effect")
+                    self.assertEqual(rows["cheaper_worse"]["verdict"], "regressed")
+                    self.assertEqual(rows["cheaper_worse"]["regressions"], 1)
+                    self.assertEqual(rows["cheaper_worse"]["cost_per_verified_success"],
+                                     {"baseline": "1.25", "candidate": "2"})
+                    self.assertTrue(all(row["p4_status"] == "blocked" and not row["expansion_allowed"]
+                                        for row in rows.values()))
+
+
 class Legacy(Contracts):
     def test_legacy_scientific_numeric_cost_is_retained_exactly(self):
         m, _, _ = save_case(self.root)

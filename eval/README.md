@@ -11,6 +11,7 @@ credentials, model, network, Docker, or optional tokenizer.
 From the repository root:
 
 ```sh
+python examples/contextdoctor_report.py
 python eval/contextdoctor.py --help
 python eval/contextdoctor.py validate --manifest eval/tasks/contextdoctor/cheaper_worse/experiment.json --records eval/tasks/contextdoctor/cheaper_worse/episodes.jsonl
 python eval/contextdoctor.py report --manifest eval/tasks/contextdoctor/cheaper_worse/experiment.json --records eval/tasks/contextdoctor/cheaper_worse/episodes.jsonl --out NEW_REPORT_DIRECTORY
@@ -19,6 +20,15 @@ python eval/contextdoctor.py plan --manifest eval/tasks/contextdoctor/identity/e
 python eval/test_contextdoctor.py
 python eval/test_contextdoctor_run.py
 ```
+
+The [standalone walkthrough](../examples/contextdoctor_report.py) compares the
+identity and cheaper-but-worse synthetic controls without writing files or making
+model calls. The [quickstart notebook](../examples/quickstart.ipynb), section 11,
+runs the same example. It shows why cheaper input is not a win when verified
+success falls: the fixture's model-only cost per success rises from 1.25 to 2,
+and the regression stays visible. These are invented fixture charges, not live
+provider measurements; both controls remain blocked for P4/expansion. ContextDoctor
+currently runs from a source checkout, not the installed `tokenfold` Python API.
 
 Output directories must not exist. `validate`, `report`, `plan`, `readiness`, and
 `import-legacy` never execute manifests, load models, import the execution harness,
