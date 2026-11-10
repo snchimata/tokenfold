@@ -18,6 +18,25 @@ pub struct ScorerInfo {
     pub precision: String,
     pub qualification: String,
 }
+impl ScorerInfo {
+    pub fn validate(&self) -> Result<(), FitError> {
+        for s in [
+            &self.revision,
+            &self.manifest_hash,
+            &self.runtime_id,
+            &self.device,
+            &self.precision,
+        ] {
+            bounded_metadata(s, 256)?;
+        }
+        if self.qualification != "unqualified" {
+            return Err(FitError::InvalidInput(
+                "invalid scorer qualification".into(),
+            ));
+        }
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FitWarning {
@@ -228,18 +247,7 @@ impl Receipt {
             _ => {}
         }
         if let Some(scorer) = &self.scorer {
-            for s in [
-                &scorer.revision,
-                &scorer.manifest_hash,
-                &scorer.runtime_id,
-                &scorer.device,
-                &scorer.precision,
-            ] {
-                bounded_metadata(s, 256)?;
-            }
-            if scorer.qualification != "unqualified" {
-                return Err(invalid());
-            }
+            scorer.validate()?;
         }
         if self.groups_kept.len() + self.groups_dropped.len() > 512 {
             return Err(invalid());

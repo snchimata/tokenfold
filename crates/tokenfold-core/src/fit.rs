@@ -162,6 +162,9 @@ pub trait FitRequest: Send {
     fn source_groups(&self) -> &[SourceGroup];
     fn scoring_query(&self) -> Option<&str>;
     fn fixed_guide_bytes(&self) -> Vec<u8>;
+    fn selection_supported(&self) -> bool {
+        true
+    }
     fn render(&self, kept_ids: &[GroupId], pass: RenderPass) -> Result<RenderedRequest, FitError>;
     fn validate(&self, candidate: &RenderedRequest, kept_ids: &[GroupId]) -> Result<(), FitError>;
 }
@@ -171,6 +174,8 @@ pub struct FitOptions {
     pub budget_mode: BudgetMode,
     pub allow_selection: bool,
     pub counter_id: String,
+    /// Explicit, approved runtime pin. None never authorizes inference.
+    pub select: Option<ScorerInfo>,
 }
 impl Default for FitOptions {
     fn default() -> Self {
@@ -179,6 +184,7 @@ impl Default for FitOptions {
             budget_mode: BudgetMode::Strict,
             allow_selection: false,
             counter_id: "encoding:o200k_base:v1".into(),
+            select: None,
         }
     }
 }
@@ -202,6 +208,7 @@ pub enum FitAction {
         action_id: u64,
         query: String,
         groups: Vec<SourceGroup>,
+        scorer: ScorerInfo,
     },
     Done(FitOutput),
 }
@@ -209,6 +216,15 @@ pub enum FitAction {
 pub struct GroupScore {
     pub id: GroupId,
     pub score: f64,
+}
+/// Sanitized outcomes only; arbitrary runtime errors never enter receipts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoreFailure {
+    Failure,
+    Timeout,
+    ResponseInvalid,
+    QueueTimeout,
+    SelectionLimit,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum FitReply {
@@ -222,6 +238,10 @@ pub enum FitReply {
         action_id: u64,
         scores: Vec<GroupScore>,
         scorer: ScorerInfo,
+    },
+    ScoreFailed {
+        action_id: u64,
+        failure: ScoreFailure,
     },
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -333,6 +353,9 @@ enum SessionState {
         index: usize,
         purpose: CountPurpose,
     },
+    Scoring {
+        action_id: u64,
+    },
     Done,
 }
 pub struct FitSession {
@@ -342,6 +365,13 @@ pub struct FitSession {
     cache: Vec<CachedCandidate>,
     next_id: u64,
     original: Option<usize>,
+    baseline: Option<usize>,
+    required: Option<usize>,
+    pass: RenderPass,
+    kept: Vec<GroupId>,
+    scores: Vec<GroupScore>,
+    scorer_attempted: bool,
+    scorer_succeeded: bool,
     cancellation: CancellationToken,
 }
 impl FitSession {
@@ -356,6 +386,10 @@ impl FitSession {
             return Err(FitError::Config("invalid counter ID".into()));
         }
         validate_text(&options.counter_id)?;
+        if let Some(pin) = &options.select {
+            pin.validate()
+                .map_err(|_| FitError::Config("invalid scorer pin".into()))?;
+        }
         let groups = input.source_groups();
         if groups.len() > 512 {
             return Err(FitError::InvalidInput("too many groups".into()));
@@ -383,6 +417,13 @@ impl FitSession {
             cache: vec![],
             next_id: 1,
             original: None,
+            baseline: None,
+            required: None,
+            pass: RenderPass::Original,
+            kept: vec![],
+            scores: vec![],
+            scorer_attempted: false,
+            scorer_succeeded: false,
             cancellation: CancellationToken::default(),
         })
     }
@@ -393,7 +434,8 @@ impl FitSession {
         self.cancellation.check()?;
         match (self.state, reply) {
             (SessionState::New, None) => {
-                let index = self.prepare(RenderPass::Original)?;
+                let ids = self.all_ids();
+                let index = self.prepare(&ids, RenderPass::Original)?;
                 self.original = Some(index);
                 self.count_action(index, CountPurpose::Original)
             }
@@ -421,7 +463,8 @@ impl FitSession {
                 self.cache[index].count = Some(count);
                 match purpose {
                     CountPurpose::Original => {
-                        let proposal = self.prepare(RenderPass::CoreCompatible)?;
+                        let ids = self.all_ids();
+                        let proposal = self.prepare(&ids, RenderPass::CoreCompatible)?;
                         if self.cache[proposal].count.is_some() {
                             self.finish_core(proposal)
                         } else {
@@ -429,8 +472,80 @@ impl FitSession {
                         }
                     }
                     CountPurpose::Baseline => self.finish_core(index),
-                    _ => Err(FitError::Protocol),
+                    CountPurpose::Required => self.finish_required(index),
+                    CountPurpose::Selected => self.finish_selected(index),
                 }
+            }
+            (
+                SessionState::Scoring { action_id },
+                Some(FitReply::Scored {
+                    action_id: reply_id,
+                    scores,
+                    scorer,
+                }),
+            ) => {
+                if action_id != reply_id {
+                    return Err(FitError::Protocol);
+                }
+                self.scorer_attempted = true;
+                let valid = self.options.select.as_ref() == Some(&scorer)
+                    && scores.len() == self.input.source_groups().len()
+                    && scores
+                        .iter()
+                        .zip(self.input.source_groups())
+                        .all(|(s, g)| s.id == g.id && s.score.is_finite());
+                if !valid {
+                    return self.finish_baseline(FitReason::ScorerResponseInvalid);
+                }
+                self.scorer_succeeded = true;
+                self.scores = scores;
+                let guide = guide_estimator()?;
+                let groups = self
+                    .input
+                    .source_groups()
+                    .iter()
+                    .zip(&self.scores)
+                    .map(|(g, s)| crate::allocation::Group {
+                        id: g.id.clone(),
+                        required: g.required,
+                        members: vec![crate::allocation::Candidate {
+                            id: g.id.clone(),
+                            cost: guide.count_bytes(g.scoring_text.as_bytes()),
+                            score: s.score,
+                        }],
+                    })
+                    .collect::<Vec<_>>();
+                let fixed = guide.count_bytes(&self.input.fixed_guide_bytes()) as u64;
+                let budget = self
+                    .options
+                    .target_tokens
+                    .saturating_sub(fixed)
+                    .min(usize::MAX as u64) as usize;
+                self.kept = crate::allocation::allocate(&groups, budget).0;
+                self.selected_action()
+            }
+            (
+                SessionState::Scoring { action_id },
+                Some(FitReply::ScoreFailed {
+                    action_id: reply_id,
+                    failure,
+                }),
+            ) => {
+                if action_id != reply_id {
+                    return Err(FitError::Protocol);
+                }
+                self.scorer_attempted = !matches!(
+                    failure,
+                    ScoreFailure::QueueTimeout | ScoreFailure::SelectionLimit
+                );
+                let reason = match failure {
+                    ScoreFailure::Failure => FitReason::ScorerFailure,
+                    ScoreFailure::Timeout => FitReason::ScorerTimeout,
+                    ScoreFailure::ResponseInvalid => FitReason::ScorerResponseInvalid,
+                    ScoreFailure::QueueTimeout => FitReason::ScorerQueueTimeout,
+                    ScoreFailure::SelectionLimit => FitReason::SelectionLimit,
+                };
+                self.finish_baseline(reason)
             }
             _ => Err(FitError::Protocol),
         }
@@ -468,18 +583,17 @@ impl FitSession {
             }))?;
         }
     }
-    fn prepare(&mut self, pass: RenderPass) -> Result<usize, FitError> {
-        self.cancellation.check()?;
-        let ids = self
-            .input
+    fn all_ids(&self) -> Vec<GroupId> {
+        self.input
             .source_groups()
             .iter()
             .map(|g| g.id.clone())
-            .collect::<Vec<_>>();
-        let request = self.input.render(&ids, pass)?;
+            .collect()
+    }
+    fn prepare(&mut self, ids: &[GroupId], pass: RenderPass) -> Result<usize, FitError> {
         self.cancellation.check()?;
-        self.input.validate(&request, &ids)?;
-        scan_rendered(&request)?;
+        let request = self.input.render(ids, pass)?;
+        self.cancellation.check()?;
         let bytes = request.payload.bytes()?;
         if let Some(original) = self.original {
             let original = &self.cache[original].request;
@@ -494,16 +608,27 @@ impl FitSession {
             .iter()
             .position(|c| c.bytes == bytes && c.request == request)
         {
+            // Structure/scan/count are reusable only for the same complete immutable candidate.
+            validate_survivors(self.input.source_groups(), ids)?;
+            return Ok(index);
+        }
+        self.input.validate(&request, ids)?;
+        scan_rendered(&request)?;
+        let candidate = CachedCandidate {
+            request,
+            bytes,
+            count: None,
+        };
+        if let Some(index) = (0..self.cache.len()).find(|i| {
+            Some(*i) != self.original && Some(*i) != self.baseline && Some(*i) != self.required
+        }) {
+            self.cache[index] = candidate;
             return Ok(index);
         }
         if self.cache.len() == 4 {
             return Err(FitError::Internal);
         }
-        self.cache.push(CachedCandidate {
-            request,
-            bytes,
-            count: None,
-        });
+        self.cache.push(candidate);
         Ok(self.cache.len() - 1)
     }
     fn count_action(&mut self, index: usize, purpose: CountPurpose) -> Result<FitAction, FitError> {
@@ -528,19 +653,18 @@ impl FitSession {
         let comparable = raw.basis != CountBasis::Unavailable && raw.basis == proposal.basis;
         let accepted = comparable && proposal.tokens <= raw.tokens;
         let baseline = if accepted { proposed } else { original };
-        let current = &self.cache[baseline];
-        let count = current.count.ok_or(FitError::Internal)?;
-        let status = budget_status(count, self.options.target_tokens);
-        let reason = if status == BudgetStatus::Met {
-            None
-        } else if self.options.budget_mode == BudgetMode::BestEffort
-            && count.basis == CountBasis::Estimated
-            && count
-                .tokens
-                .is_some_and(|n| n <= self.options.target_tokens)
-        {
-            Some(FitReason::EstimatedFit)
-        } else if !comparable
+        self.baseline = Some(baseline);
+        self.pass = if accepted {
+            RenderPass::CoreCompatible
+        } else {
+            RenderPass::Original
+        };
+        self.kept = self.all_ids();
+        let count = self.cache[baseline].count.ok_or(FitError::Internal)?;
+        if self.fits(count) {
+            return self.finish(baseline, None, false);
+        }
+        let reason = if !comparable
             || count.basis == CountBasis::Unavailable
             || (count.basis == CountBasis::Estimated
                 && self.options.budget_mode == BudgetMode::Strict)
@@ -550,9 +674,143 @@ impl FitSession {
             Some(FitReason::SelectionDisabled)
         } else if !self.input.source_groups().iter().any(|g| !g.required) {
             Some(FitReason::NoOptionalGroups)
+        } else if !self.input.selection_supported() {
+            Some(FitReason::UnsupportedSelection)
         } else {
-            Some(FitReason::RuntimeUnavailable)
+            None
         };
+        if let Some(reason) = reason {
+            return self.finish_baseline(reason);
+        }
+        if self.input.scoring_query().is_none() {
+            return Err(FitError::InvalidInput(
+                "selection requires an explicit query".into(),
+            ));
+        }
+        let ids = self
+            .input
+            .source_groups()
+            .iter()
+            .filter(|g| g.required)
+            .map(|g| g.id.clone())
+            .collect::<Vec<_>>();
+        let required = self.prepare(&ids, self.pass)?;
+        self.required = Some(required);
+        if self.cache[required].count.is_some() {
+            self.finish_required(required)
+        } else {
+            self.count_action(required, CountPurpose::Required)
+        }
+    }
+    fn fits(&self, count: TokenCount) -> bool {
+        (count.basis == CountBasis::Exact
+            || (count.basis == CountBasis::Estimated
+                && self.options.budget_mode == BudgetMode::BestEffort))
+            && count
+                .tokens
+                .is_some_and(|n| n <= self.options.target_tokens)
+    }
+    fn comparable_to_baseline(&self, count: TokenCount) -> Result<bool, FitError> {
+        let baseline = self.cache[self.baseline.ok_or(FitError::Internal)?]
+            .count
+            .ok_or(FitError::Internal)?;
+        Ok(count.basis != CountBasis::Unavailable && count.basis == baseline.basis)
+    }
+    fn finish_required(&mut self, index: usize) -> Result<FitAction, FitError> {
+        let count = self.cache[index].count.ok_or(FitError::Internal)?;
+        if !self.comparable_to_baseline(count)? {
+            return self.finish_baseline(FitReason::UnknownAccounting);
+        }
+        // Conservative preflight only: a non-monotone counter may have a fitting superset.
+        if !self.fits(count) {
+            return self.finish_baseline(FitReason::RequiredOverBudget);
+        }
+        let Some(scorer) = self.options.select.clone() else {
+            return self.finish_baseline(FitReason::RuntimeUnavailable);
+        };
+        let action_id = self.next_id;
+        self.next_id += 1;
+        self.state = SessionState::Scoring { action_id };
+        Ok(FitAction::Score {
+            action_id,
+            query: self.input.scoring_query().ok_or(FitError::Internal)?.into(),
+            groups: self.input.source_groups().to_vec(),
+            scorer,
+        })
+    }
+    fn selected_action(&mut self) -> Result<FitAction, FitError> {
+        let kept = self.kept.clone();
+        let index = self.prepare(&kept, self.pass)?;
+        if self.cache[index].count.is_some() {
+            self.finish_selected(index)
+        } else {
+            self.count_action(index, CountPurpose::Selected)
+        }
+    }
+    fn finish_selected(&mut self, index: usize) -> Result<FitAction, FitError> {
+        self.cancellation.check()?;
+        let count = self.cache[index].count.ok_or(FitError::Internal)?;
+        if !self.comparable_to_baseline(count)? {
+            return self.finish_baseline(FitReason::UnknownAccounting);
+        }
+        let baseline = self.baseline.ok_or(FitError::Internal)?;
+        let before = self.cache[baseline].count.ok_or(FitError::Internal)?;
+        let omitted = self.kept.len() < self.input.source_groups().len();
+        let nonempty = match &self.cache[index].request.payload {
+            RenderedPayload::Text(s) => !s.is_empty(),
+            RenderedPayload::Json(v) => !v.as_object().is_none_or(|o| o.is_empty()),
+        };
+        if self.fits(count) && omitted && nonempty && count.tokens < before.tokens {
+            return self.finish(index, None, true);
+        }
+        let lowest = self
+            .input
+            .source_groups()
+            .iter()
+            .zip(&self.scores)
+            .enumerate()
+            .filter(|(_, (g, _))| !g.required && self.kept.contains(&g.id))
+            .min_by(|(ia, (_, a)), (ib, (_, b))| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(ib.cmp(ia))
+            })
+            .map(|(_, (g, _))| g.id.clone());
+        if let Some(id) = lowest {
+            self.kept.retain(|g| g != &id);
+            self.selected_action()
+        } else {
+            self.finish_baseline(if count.tokens >= before.tokens {
+                FitReason::NoGain
+            } else {
+                FitReason::NoValidFit
+            })
+        }
+    }
+    fn finish_baseline(&mut self, reason: FitReason) -> Result<FitAction, FitError> {
+        self.kept = self.all_ids();
+        self.finish(
+            self.baseline.ok_or(FitError::Internal)?,
+            Some(reason),
+            false,
+        )
+    }
+    fn finish(
+        &mut self,
+        index: usize,
+        reason: Option<FitReason>,
+        selection_applied: bool,
+    ) -> Result<FitAction, FitError> {
+        self.cancellation.check()?;
+        let raw = self.cache[self.original.ok_or(FitError::Internal)?]
+            .count
+            .ok_or(FitError::Internal)?;
+        let baseline = self.cache[self.baseline.ok_or(FitError::Internal)?]
+            .count
+            .ok_or(FitError::Internal)?;
+        let current = &self.cache[index];
+        let count = current.count.ok_or(FitError::Internal)?;
         let mut warnings = vec![];
         if count.basis == CountBasis::Estimated {
             warnings.push(FitWarning {
@@ -566,35 +824,45 @@ impl FitSession {
             schema_version: "1.0".into(),
             format: current.request.format,
             budget_mode: self.options.budget_mode,
-            budget_status: status,
-            reason,
+            budget_status: budget_status(count, self.options.target_tokens),
+            reason: if self.fits(count) && count.basis == CountBasis::Estimated {
+                Some(FitReason::EstimatedFit)
+            } else {
+                reason
+            },
             target_tokens: self.options.target_tokens,
             original_tokens: raw.tokens,
-            baseline_tokens: count.tokens,
+            baseline_tokens: baseline.tokens,
             final_tokens: count.tokens,
             accounting: Accounting {
                 counter_id: self.options.counter_id.clone(),
                 scope: current.request.scope,
                 original_basis: raw.basis,
-                baseline_basis: count.basis,
+                baseline_basis: baseline.basis,
                 final_basis: count.basis,
             },
-            core_transforms: if accepted {
-                current.request.core_transforms.clone()
-            } else {
+            core_transforms: if index == self.original.unwrap() && self.pass == RenderPass::Original
+            {
                 vec![]
+            } else {
+                current.request.core_transforms.clone()
             },
-            scorer_attempted: false,
-            scorer_succeeded: false,
-            selection_applied: false,
-            scorer: None,
-            groups_kept: self
+            scorer_attempted: self.scorer_attempted,
+            scorer_succeeded: self.scorer_succeeded,
+            selection_applied,
+            scorer: if self.scorer_attempted {
+                self.options.select.clone()
+            } else {
+                None
+            },
+            groups_kept: self.kept.clone(),
+            groups_dropped: self
                 .input
                 .source_groups()
                 .iter()
+                .filter(|g| !self.kept.contains(&g.id))
                 .map(|g| g.id.clone())
                 .collect(),
-            groups_dropped: vec![],
             warnings,
             timings_ms: TimingsMs::default(),
         };
@@ -629,5 +897,100 @@ pub fn guide_estimator() -> Result<&'static dyn TokenEstimator, FitError> {
     #[cfg(not(feature = "tiktoken"))]
     {
         Err(FitError::Accounting("bundled guide unavailable".into()))
+    }
+}
+
+#[cfg(all(test, feature = "tiktoken"))]
+mod selection_cache_tests {
+    use super::*;
+    #[test]
+    fn trimming_keeps_only_one_current_candidate_slot() {
+        let input = ContextRequest::new(
+            "q".into(),
+            (0..12)
+                .map(|i| ContextGroup {
+                    id: format!("g{i}"),
+                    content: GroupContent::Text("x".into()),
+                    required: false,
+                })
+                .collect(),
+        )
+        .unwrap();
+        let pin = ScorerInfo {
+            revision: "rev".into(),
+            manifest_hash: "manifest".into(),
+            runtime_id: "runtime".into(),
+            device: "cpu".into(),
+            precision: "fp32".into(),
+            qualification: "unqualified".into(),
+        };
+        let mut session = FitSession::new(
+            Box::new(input),
+            FitOptions {
+                target_tokens: 100,
+                counter_id: "test".into(),
+                allow_selection: true,
+                select: Some(pin),
+                ..FitOptions::default()
+            },
+        )
+        .unwrap();
+        let mut action = session.advance(None).unwrap();
+        let mut counts = 0;
+        loop {
+            assert!(
+                session.cache.len() <= 3,
+                "original/baseline alias plus required plus one current"
+            );
+            action = match action {
+                FitAction::Count {
+                    candidate_id,
+                    request,
+                    ..
+                } => {
+                    counts += 1;
+                    let count = if request.payload == RenderedPayload::Text("q".into()) {
+                        1
+                    } else {
+                        200
+                    };
+                    session
+                        .advance(Some(FitReply::Counted {
+                            candidate_id,
+                            counter_id: "test".into(),
+                            scope: request.scope,
+                            count: TokenCount::exact(count),
+                        }))
+                        .unwrap()
+                }
+                FitAction::Score {
+                    action_id,
+                    groups,
+                    scorer,
+                    ..
+                } => {
+                    let scores = groups
+                        .into_iter()
+                        .map(|g| GroupScore {
+                            id: g.id,
+                            score: 1.,
+                        })
+                        .collect();
+                    session
+                        .advance(Some(FitReply::Scored {
+                            action_id,
+                            scores,
+                            scorer,
+                        }))
+                        .unwrap()
+                }
+                FitAction::Done(output) => {
+                    assert!(output.receipt.selection_applied);
+                    assert_eq!(output.receipt.groups_kept.len(), 0);
+                    assert_eq!(counts, 13);
+                    break;
+                }
+            };
+        }
     }
 }

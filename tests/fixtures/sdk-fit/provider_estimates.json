@@ -1,0 +1,146 @@
+{
+  "source": "https://developers.openai.com/cookbook/examples/how_to_count_tokens_with_tiktoken",
+  "model": "gpt-4o-2024-08-06",
+  "availability_claim": false,
+  "counter_id": "openai_chat:gpt-4o-2024-08-06:local-text-v1",
+  "supported_request_fields": [
+    "model",
+    "messages",
+    "temperature",
+    "top_p",
+    "n",
+    "stream",
+    "stream_options",
+    "max_tokens",
+    "max_completion_tokens",
+    "presence_penalty",
+    "frequency_penalty",
+    "logit_bias",
+    "logprobs",
+    "top_logprobs",
+    "seed",
+    "stop",
+    "user"
+  ],
+  "supported_message_fields": [
+    "role",
+    "content",
+    "name"
+  ],
+  "tokens_per_message": 3,
+  "tokens_per_name": 1,
+  "reply_priming": 3,
+  "cases": [
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ]
+      },
+      "count": {
+        "tokens": 8,
+        "basis": "estimated"
+      }
+    },
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello",
+            "name": "Alice"
+          }
+        ]
+      },
+      "count": {
+        "tokens": 10,
+        "basis": "estimated"
+      }
+    },
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "tools": []
+      },
+      "count": {
+        "tokens": null,
+        "basis": "unavailable"
+      }
+    },
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "count": {
+        "tokens": null,
+        "basis": "unavailable"
+      }
+    },
+    {
+      "payload": {
+        "model": "other",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ]
+      },
+      "count": {
+        "tokens": null,
+        "basis": "unavailable"
+      }
+    },
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": []
+          }
+        ]
+      },
+      "count": {
+        "tokens": null,
+        "basis": "unavailable"
+      }
+    },
+    {
+      "payload": {
+        "model": "gpt-4o-2024-08-06",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "extra_prompt": "no"
+      },
+      "count": {
+        "tokens": null,
+        "basis": "unavailable"
+      }
+    }
+  ]
+}
