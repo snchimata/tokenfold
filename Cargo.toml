@@ -5,6 +5,7 @@ members = [
     "crates/tokenfold-cli",
     "crates/tokenfold-proxy",
     "crates/tokenfold-py",
+    "crates/tokenfold-node",
     "crates/tokenfold-image",
     "crates/tokenfold-adapters",
     "crates/tokenfold-rag",

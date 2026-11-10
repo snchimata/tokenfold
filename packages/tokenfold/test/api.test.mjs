@@ -14,7 +14,7 @@ import {
   parseReport,
   retrieve,
   run,
-} from "../dist/index.js";
+} from "../dist/cli.js";
 
 const testBinary = process.env.TOKENFOLD_TEST_BINARY;
 if (!testBinary) throw new Error("TOKENFOLD_TEST_BINARY must point to a tokenfold binary");

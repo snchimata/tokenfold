@@ -1,0 +1,23 @@
+{
+  "name": "@tokenfold/native-win32-x64",
+  "version": "0.5.4",
+  "description": "Tokenfold native addon for win32-x64",
+  "license": "Apache-2.0",
+  "main": "tokenfold.node",
+  "files": [
+    "tokenfold.node"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,21 @@
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const platform = `${process.platform}-${process.arch}`;
+if (!['linux-x64','linux-arm64','darwin-x64','darwin-arm64','win32-x64'].includes(platform)) throw Error(`Unsupported native target ${platform}`);
+const build = spawnSync('cargo', ['build','--locked','--release','-p','tokenfold-node'], {cwd:root,stdio:'inherit',shell:false});
+if (build.error) throw build.error;
+if (build.status !== 0) process.exit(build.status ?? 1);
+const target = process.env.CARGO_TARGET_DIR ? path.resolve(root,process.env.CARGO_TARGET_DIR) : path.join(root,'target');
+const filename = process.platform === 'win32' ? 'tokenfold_node.dll' : process.platform === 'darwin' ? 'libtokenfold_node.dylib' : 'libtokenfold_node.so';
+const destination = path.join(root,'packages/tokenfold/native/tokenfold.node');
+mkdirSync(path.dirname(destination),{recursive:true});
+copyFileSync(path.join(target,'release',filename),destination);
+const require = createRequire(import.meta.url);
+const expected = JSON.parse(readFileSync(path.join(root,'packages/tokenfold/package.json'),'utf8')).version;
+if (require(destination).version() !== expected) throw Error('Native/facade version mismatch');
+console.log(`Built ${platform} native addon ${expected}`);
