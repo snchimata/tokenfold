@@ -533,17 +533,19 @@ impl FitSession {
         let status = budget_status(count, self.options.target_tokens);
         let reason = if status == BudgetStatus::Met {
             None
+        } else if self.options.budget_mode == BudgetMode::BestEffort
+            && count.basis == CountBasis::Estimated
+            && count
+                .tokens
+                .is_some_and(|n| n <= self.options.target_tokens)
+        {
+            Some(FitReason::EstimatedFit)
         } else if !comparable
             || count.basis == CountBasis::Unavailable
             || (count.basis == CountBasis::Estimated
                 && self.options.budget_mode == BudgetMode::Strict)
         {
             Some(FitReason::UnknownAccounting)
-        } else if count
-            .tokens
-            .is_some_and(|n| n <= self.options.target_tokens)
-        {
-            Some(FitReason::EstimatedFit)
         } else if !self.options.allow_selection {
             Some(FitReason::SelectionDisabled)
         } else if !self.input.source_groups().iter().any(|g| !g.required) {

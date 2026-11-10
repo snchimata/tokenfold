@@ -453,6 +453,183 @@ fn receipt_timing_numbers_are_not_token_counts() {
     );
 }
 
+fn assert_invalid_receipt(receipt: &Receipt) {
+    assert!(receipt.to_json().is_err(), "writer accepted {receipt:?}");
+    let wire = serde_json::to_string(receipt).unwrap();
+    assert!(
+        Receipt::from_json(&wire).is_err(),
+        "reader accepted {receipt:?}"
+    );
+}
+
+fn attempted_scorer() -> ScorerInfo {
+    ScorerInfo {
+        revision: "pinned-test-revision".into(),
+        manifest_hash: "test-manifest-hash".into(),
+        runtime_id: "test-runtime".into(),
+        device: "cpu".into(),
+        precision: "fp32".into(),
+        qualification: "unqualified".into(),
+    }
+}
+
+#[test]
+fn receipt_policy_reason_invariants() {
+    for (mode, count, expected) in [
+        (
+            BudgetMode::Strict,
+            TokenCount::estimated(10),
+            FitReason::UnknownAccounting,
+        ),
+        (
+            BudgetMode::Strict,
+            TokenCount::estimated(20),
+            FitReason::UnknownAccounting,
+        ),
+        (
+            BudgetMode::Strict,
+            TokenCount::unavailable(),
+            FitReason::UnknownAccounting,
+        ),
+        (
+            BudgetMode::BestEffort,
+            TokenCount::unavailable(),
+            FitReason::UnknownAccounting,
+        ),
+        (
+            BudgetMode::BestEffort,
+            TokenCount::estimated(10),
+            FitReason::EstimatedFit,
+        ),
+    ] {
+        let receipt = complete(count, count, mode).receipt;
+        assert_eq!(receipt.reason, Some(expected));
+        assert_eq!(
+            Receipt::from_json(&receipt.to_json().unwrap()).unwrap(),
+            receipt
+        );
+        if expected == FitReason::UnknownAccounting {
+            let mut bad = receipt.clone();
+            bad.scorer_attempted = true;
+            bad.scorer_succeeded = true;
+            bad.scorer = Some(attempted_scorer());
+            assert_invalid_receipt(&bad);
+        }
+        for reason in [
+            FitReason::SelectionDisabled,
+            FitReason::NoGain,
+            FitReason::ScorerFailure,
+        ] {
+            let mut bad = receipt.clone();
+            bad.reason = Some(reason);
+            assert_invalid_receipt(&bad);
+        }
+        let mut bad = receipt;
+        bad.reason = Some(if expected == FitReason::EstimatedFit {
+            FitReason::UnknownAccounting
+        } else {
+            FitReason::EstimatedFit
+        });
+        assert_invalid_receipt(&bad);
+    }
+}
+
+#[test]
+fn receipt_scorer_outcome_invariants() {
+    let baseline = complete(
+        TokenCount::exact(20),
+        TokenCount::exact(15),
+        BudgetMode::Strict,
+    )
+    .receipt;
+    for reason in [
+        FitReason::ScorerFailure,
+        FitReason::ScorerTimeout,
+        FitReason::ScorerResponseInvalid,
+    ] {
+        let mut receipt = baseline.clone();
+        receipt.reason = Some(reason);
+        assert_invalid_receipt(&receipt);
+        receipt.scorer_attempted = true;
+        receipt.scorer = Some(attempted_scorer());
+        assert_eq!(
+            Receipt::from_json(&receipt.to_json().unwrap()).unwrap(),
+            receipt
+        );
+        receipt.scorer_succeeded = true;
+        assert_invalid_receipt(&receipt);
+    }
+    for reason in [
+        FitReason::SelectionDisabled,
+        FitReason::RuntimeUnavailable,
+        FitReason::NoOptionalGroups,
+        FitReason::RequiredOverBudget,
+        FitReason::UnsupportedSelection,
+        FitReason::SelectionLimit,
+        FitReason::ScorerQueueTimeout,
+    ] {
+        let mut receipt = baseline.clone();
+        receipt.reason = Some(reason);
+        assert_eq!(
+            Receipt::from_json(&receipt.to_json().unwrap()).unwrap(),
+            receipt
+        );
+        receipt.scorer_attempted = true;
+        receipt.scorer = Some(attempted_scorer());
+        assert_invalid_receipt(&receipt);
+        receipt.scorer_succeeded = true;
+        assert_invalid_receipt(&receipt);
+    }
+    for reason in [FitReason::NoGain, FitReason::NoValidFit] {
+        let mut receipt = baseline.clone();
+        receipt.reason = Some(reason);
+        assert_invalid_receipt(&receipt);
+        receipt.scorer_attempted = true;
+        receipt.scorer_succeeded = true;
+        receipt.scorer = Some(attempted_scorer());
+        assert_eq!(
+            Receipt::from_json(&receipt.to_json().unwrap()).unwrap(),
+            receipt
+        );
+    }
+    let mut unknown_after_scoring = baseline;
+    unknown_after_scoring.reason = Some(FitReason::UnknownAccounting);
+    unknown_after_scoring.scorer_attempted = true;
+    unknown_after_scoring.scorer_succeeded = true;
+    unknown_after_scoring.scorer = Some(attempted_scorer());
+    assert_eq!(
+        Receipt::from_json(&unknown_after_scoring.to_json().unwrap()).unwrap(),
+        unknown_after_scoring
+    );
+    unknown_after_scoring.scorer_succeeded = false;
+    assert_invalid_receipt(&unknown_after_scoring);
+    for (mode, original, final_count) in [
+        (
+            BudgetMode::Strict,
+            TokenCount::exact(20),
+            TokenCount::exact(10),
+        ),
+        (
+            BudgetMode::BestEffort,
+            TokenCount::estimated(20),
+            TokenCount::estimated(10),
+        ),
+    ] {
+        let mut selected = complete(original, final_count, mode).receipt;
+        selected.baseline_tokens = Some(20);
+        selected.selection_applied = true;
+        selected.groups_kept = vec!["required".into()];
+        selected.groups_dropped = vec!["optional".into()];
+        selected.scorer_attempted = true;
+        selected.scorer_succeeded = true;
+        selected.scorer = Some(attempted_scorer());
+        assert_eq!(
+            Receipt::from_json(&selected.to_json().unwrap()).unwrap(),
+            selected
+        );
+    }
+}
+
 #[test]
 fn a_discarded_unavailable_proposal_does_not_invalidate_an_exact_original_fit() {
     let output = complete(
@@ -464,6 +641,42 @@ fn a_discarded_unavailable_proposal_does_not_invalidate_an_exact_original_fit() 
     assert_eq!(output.receipt.budget_status, BudgetStatus::Met);
     assert_eq!(output.receipt.reason, None);
     assert!(output.require_met().is_ok());
+}
+
+#[test]
+fn rolled_back_best_effort_estimate_reports_the_returned_fit() {
+    for proposed in [TokenCount::unavailable(), TokenCount::exact(8)] {
+        let output = complete(TokenCount::estimated(10), proposed, BudgetMode::BestEffort);
+        assert_eq!(output.receipt.reason, Some(FitReason::EstimatedFit));
+        assert_eq!(output.receipt.budget_status, BudgetStatus::Indeterminate);
+        assert_eq!(output.receipt.original_tokens, Some(10));
+        assert_eq!(output.receipt.baseline_tokens, Some(10));
+        assert_eq!(output.receipt.final_tokens, Some(10));
+        assert_eq!(output.receipt.accounting.final_basis, CountBasis::Estimated);
+        assert_eq!(
+            output.payload,
+            Proposal.render(&[], RenderPass::Original).unwrap().payload
+        );
+        assert!(output.receipt.core_transforms.is_empty());
+        assert!(
+            output
+                .receipt
+                .warnings
+                .iter()
+                .any(|w| w.code == "estimated_accounting")
+        );
+        assert!(output.require_fit().is_ok());
+        assert!(matches!(
+            output.require_met(),
+            Err(FitError::BudgetIndeterminate(_))
+        ));
+        let strict = complete(TokenCount::estimated(10), proposed, BudgetMode::Strict);
+        assert_eq!(strict.receipt.reason, Some(FitReason::UnknownAccounting));
+        assert!(strict.require_fit().is_err());
+        let overflow = complete(TokenCount::estimated(20), proposed, BudgetMode::BestEffort);
+        assert_eq!(overflow.receipt.reason, Some(FitReason::UnknownAccounting));
+        assert!(overflow.require_fit().is_err());
+    }
 }
 
 #[test]

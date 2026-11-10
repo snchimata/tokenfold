@@ -176,8 +176,15 @@ impl Receipt {
         if (self.budget_status == BudgetStatus::Met) != self.reason.is_none() {
             return Err(invalid());
         }
-        if self.reason == Some(FitReason::EstimatedFit)
-            && (self.budget_mode != BudgetMode::BestEffort || self.estimated_fit() != Some(true))
+        let accepted_estimate =
+            self.budget_mode == BudgetMode::BestEffort && self.estimated_fit() == Some(true);
+        if (self.reason == Some(FitReason::EstimatedFit)) != accepted_estimate {
+            return Err(invalid());
+        }
+        if (self.accounting.final_basis == CountBasis::Unavailable
+            || (self.budget_mode == BudgetMode::Strict
+                && self.budget_status == BudgetStatus::Indeterminate))
+            && (self.reason != Some(FitReason::UnknownAccounting) || self.scorer_attempted)
         {
             return Err(invalid());
         }
@@ -193,6 +200,32 @@ impl Receipt {
             || (self.scorer_succeeded && !self.scorer_attempted)
         {
             return Err(invalid());
+        }
+        let scorer_failed = matches!(
+            self.reason,
+            Some(
+                FitReason::ScorerFailure
+                    | FitReason::ScorerTimeout
+                    | FitReason::ScorerResponseInvalid
+            )
+        );
+        if scorer_failed != (self.scorer_attempted && !self.scorer_succeeded) {
+            return Err(invalid());
+        }
+        match self.reason {
+            Some(
+                FitReason::SelectionDisabled
+                | FitReason::RuntimeUnavailable
+                | FitReason::NoOptionalGroups
+                | FitReason::RequiredOverBudget
+                | FitReason::UnsupportedSelection
+                | FitReason::SelectionLimit
+                | FitReason::ScorerQueueTimeout,
+            ) if self.scorer_attempted => return Err(invalid()),
+            Some(FitReason::NoGain | FitReason::NoValidFit) if !self.scorer_succeeded => {
+                return Err(invalid());
+            }
+            _ => {}
         }
         if let Some(scorer) = &self.scorer {
             for s in [

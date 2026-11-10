@@ -16,18 +16,13 @@ pub struct DataRequest {
 impl DataRequest {
     pub fn new(value: Value, representation: DataRepresentation) -> Result<Self, FitError> {
         validate_json(&value)?;
-        scan_json(&value)?;
-        if representation == DataRepresentation::Folded {
-            let bytes = serde_json::to_vec(&value).map_err(|_| FitError::Internal)?;
-            let decoded = crate::decode(&bytes, crate::DecodeFormat::Json).map_err(|_| {
-                FitError::InvalidInput("data collides with folded codec syntax".into())
-            })?;
-            if serde_json::from_slice::<Value>(&decoded).map_err(|_| FitError::Internal)? != value {
-                return Err(FitError::InvalidInput(
-                    "data collides with folded codec syntax".into(),
-                ));
-            }
+        // Inspect framing without decoding: a small dictionary can expand beyond the input bound.
+        if representation == DataRepresentation::Folded && contains_folded_frame(&value) {
+            return Err(FitError::InvalidInput(
+                "data collides with folded codec syntax".into(),
+            ));
         }
+        scan_json(&value)?;
         Ok(Self {
             value,
             representation,
@@ -72,6 +67,28 @@ impl DataRequest {
             let _ = guide;
             Err(FitError::Accounting("bundled encoding unavailable".into()))
         }
+    }
+}
+
+fn contains_folded_frame(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            let dictionary = map.len() == 2
+                && map.get("__tf_dict__").is_some_and(Value::is_array)
+                && map.contains_key("__tf_data__");
+            // Legacy unfolding can expand early rows before discovering a malformed later row.
+            let columns = map.len() == 2
+                && map
+                    .get("__tf_cols__")
+                    .and_then(Value::as_array)
+                    .is_some_and(|cols| {
+                        cols.iter().all(Value::is_string)
+                            && map.get("__tf_rows__").is_some_and(Value::is_array)
+                    });
+            dictionary || columns || map.values().any(contains_folded_frame)
+        }
+        Value::Array(items) => items.iter().any(contains_folded_frame),
+        _ => false,
     }
 }
 
