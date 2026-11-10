@@ -598,3 +598,30 @@ fn required_message_audio_disables_selection_of_other_optional_text() {
 fn nullable_message_audio_survives_complete_object_accounting() {
     assert_audio_baseline(Value::Null);
 }
+
+#[test]
+fn binding_neutral_input_factory_defaults_and_numbers() {
+    use tokenfold_adapters::fit_request::FitInputSpec;
+    let input: FitInputSpec = serde_json::from_str(r#"{"kind":"context","query":"query","groups":[{"id":"a","content":{"kind":"json_data","value":{"z":[1.0,-0.0,1.25],"a":true}}}]}"#).unwrap();
+    let request = input.prepare().unwrap();
+    assert_eq!(
+        request.source_groups()[0].scoring_text,
+        "{\"z\":[1,0,1.25],\"a\":true}"
+    );
+    assert!(!request.source_groups()[0].required);
+    let request: FitInputSpec = serde_json::from_str(r#"{"kind":"openai_chat","payload":{"model":"model","messages":[{"role":"user","content":"1.0"}],"temperature":1.0,"seed":-0.0}}"#).unwrap();
+    let request = request.prepare().unwrap();
+    let ids = request
+        .source_groups()
+        .iter()
+        .map(|g| g.id.clone())
+        .collect::<Vec<_>>();
+    let rendered = request.render(&ids, RenderPass::Original).unwrap();
+    let RenderedPayload::Json(payload) = rendered.payload else {
+        panic!("provider object");
+    };
+    assert_eq!(
+        serde_json::to_string(&payload).unwrap(),
+        r#"{"model":"model","messages":[{"role":"user","content":"1.0"}],"temperature":1,"seed":0}"#
+    );
+}

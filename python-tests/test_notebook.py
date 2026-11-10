@@ -21,16 +21,24 @@ def select_cell():
                 if c["cell_type"] == "code" and "RUN_SELECT_V3 =" in "".join(c["source"]))
 
 
-def test_notebook_sources_compile_and_have_no_saved_outputs():
+def test_notebook_sources_compile_and_saved_evidence_stays_qualified():
     for i, cell in enumerate(cells()):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"notebook-cell-{i}")
-            assert cell["outputs"] == [] and cell["execution_count"] is None
+            assert all(output["output_type"] != "error" for output in cell["outputs"])
     source = select_cell()
     assert "RUN_SELECT_V3 = True" in source
     assert re.search(r'SELECT_V3_MODEL_REVISION = "[0-9a-f]{64}"', source)
     assert re.search(r'SELECT_V3_MANIFEST_SHA256 = "[0-9a-f]{64}"', source)
     assert "truncation=True" not in source and "peft" not in source
+    saved = next(c for c in cells() if c["cell_type"] == "code" and "RUN_SELECT_V3 =" in "".join(c["source"]))
+    text = "".join(line for output in saved["outputs"] for line in output.get("text", []))
+    if text:
+        revision = re.search(r'SELECT_V3_MODEL_REVISION = "([0-9a-f]{64})"', source).group(1)
+        assert f"revision: {revision}" in text
+        assert "qualification=False" in text
+        assert "retained all 3 original groups in source order; no pruning" in text
+        assert "No token-budget or production-quality acceptance is implied." in text
 
 
 def test_core_only_notebook_executes_without_model_imports_downloads_or_dispatch(monkeypatch):

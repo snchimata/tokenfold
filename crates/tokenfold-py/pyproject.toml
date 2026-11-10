@@ -5,9 +5,10 @@ build-backend = "maturin"
 [project]
 name = "tokenfold"
 description = "Token-compression toolkit for LLM payloads (Python binding over the tokenfold-core Rust crate)"
-readme = "../../README.md"
-requires-python = ">=3.9"
-license = { file = "../../LICENSE" }
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 keywords = ["llm", "tokens", "compression", "tokenizer", "openai", "json", "prompt-engineering", "cli", "token-optimization"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -16,9 +17,6 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -29,9 +27,10 @@ dynamic = ["version"]
 [tool.maturin]
 # The compiled Cargo artifact is named "tokenfold_py" (see ../Cargo.toml's [lib] comment,
 # it can't be "tokenfold" -- that collides with tokenfold-cli's binary); this maps it to
-# the "tokenfold" Python import name regardless.
-module-name = "tokenfold"
-# abi3-py39 is enabled on the pyo3 dependency itself (see ../Cargo.toml); this feature just
+# the private "tokenfold._native" Python import name regardless.
+module-name = "tokenfold._native"
+python-source = "python"
+# abi3-py312 is enabled on the pyo3 dependency itself (see ../Cargo.toml); this feature just
 # turns on pyo3's "extension-module" (never active for plain `cargo build`/`cargo test
 # --workspace` -- see that Cargo.toml's comment).
 features = ["extension-module"]

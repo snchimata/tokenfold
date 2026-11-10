@@ -3,6 +3,111 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokenfold_core::fit::*;
 
+/// Binding-neutral owned input. Limits apply to source values, not this private envelope.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum FitInputSpec {
+    Text {
+        text: String,
+    },
+    JsonData {
+        value: Value,
+        #[serde(default = "json_representation")]
+        representation: String,
+    },
+    Context {
+        query: String,
+        groups: Vec<FitGroupSpec>,
+    },
+    OpenaiChat {
+        payload: Value,
+        query: Option<String>,
+        #[serde(default)]
+        groups: Vec<MessageGroup>,
+    },
+    AnthropicMessages {
+        payload: Value,
+        query: Option<String>,
+        #[serde(default)]
+        groups: Vec<MessageGroup>,
+    },
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FitGroupSpec {
+    pub id: String,
+    pub content: FitGroupContent,
+    #[serde(default)]
+    pub required: bool,
+}
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum FitGroupContent {
+    Text {
+        text: String,
+    },
+    JsonData {
+        value: Value,
+        #[serde(default = "json_representation")]
+        representation: String,
+    },
+}
+fn json_representation() -> String {
+    "json".into()
+}
+fn data(value: Value, representation: &str) -> Result<DataRequest, FitError> {
+    let representation = match representation {
+        "json" => DataRepresentation::Json,
+        "folded" => DataRepresentation::Folded,
+        _ => {
+            return Err(FitError::InvalidInput(
+                "unsupported data representation".into(),
+            ));
+        }
+    };
+    DataRequest::new(value, representation)
+}
+impl FitInputSpec {
+    pub fn prepare(self) -> Result<FitInput, FitError> {
+        Ok(match self {
+            Self::Text { text } => Box::new(TextRequest::new(text)?),
+            Self::JsonData {
+                value,
+                representation,
+            } => Box::new(data(value, &representation)?),
+            Self::Context { query, groups } => Box::new(ContextRequest::new(
+                query,
+                groups
+                    .into_iter()
+                    .map(|g| {
+                        Ok(ContextGroup {
+                            id: g.id,
+                            required: g.required,
+                            content: match g.content {
+                                FitGroupContent::Text { text } => GroupContent::Text(text),
+                                FitGroupContent::JsonData {
+                                    value,
+                                    representation,
+                                } => GroupContent::Data(data(value, &representation)?),
+                            },
+                        })
+                    })
+                    .collect::<Result<Vec<_>, FitError>>()?,
+            )?),
+            Self::OpenaiChat {
+                payload,
+                query,
+                groups,
+            } => Box::new(PreparedRequest::openai(payload, query, groups)?),
+            Self::AnthropicMessages {
+                payload,
+                query,
+                groups,
+            } => Box::new(PreparedRequest::anthropic(payload, query, groups)?),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MessageGroup {
@@ -41,7 +146,7 @@ impl PreparedRequest {
         declarations: Vec<MessageGroup>,
         format: FitFormat,
     ) -> Result<Self, FitError> {
-        validate_json(&payload)?;
+        let payload = canonical_json_snapshot(payload)?;
         scan_json(&payload)?;
         if let Some(q) = &query {
             validate_text(q)?;

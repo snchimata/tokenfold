@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-import tokenfold
+from tokenfold import lowlevel as tokenfold
 
 HERE = Path(__file__).parent
 

@@ -15,7 +15,7 @@ pub struct DataRequest {
 }
 impl DataRequest {
     pub fn new(value: Value, representation: DataRepresentation) -> Result<Self, FitError> {
-        validate_json(&value)?;
+        let value = canonical_json_snapshot(value)?;
         // Inspect framing without decoding: a small dictionary can expand beyond the input bound.
         if representation == DataRepresentation::Folded && contains_folded_frame(&value) {
             return Err(FitError::InvalidInput(
@@ -44,11 +44,9 @@ impl DataRequest {
         #[cfg(feature = "tiktoken")]
         {
             let policy = core_policy()?;
-            let output = crate::compress_with_estimator(
-                crate::CompressionInput::json(bytes),
-                &policy,
-                guide,
-            )
+            let output = tokenizer_operation(|| {
+                crate::compress_with_estimator(crate::CompressionInput::json(bytes), &policy, guide)
+            })?
             .map_err(|_| FitError::Internal)?;
             let transforms = output
                 .report
@@ -363,7 +361,7 @@ pub fn validate_text(text: &str) -> Result<(), FitError> {
     }
     Ok(())
 }
-pub fn validate_json(value: &Value) -> Result<(), FitError> {
+fn validate_json_structure(value: &Value) -> Result<(), FitError> {
     fn walk(value: &Value, depth: usize) -> Result<(), FitError> {
         if depth > 64 {
             return Err(FitError::InvalidInput("JSON depth exceeds 64".into()));
@@ -394,7 +392,30 @@ pub fn validate_json(value: &Value) -> Result<(), FitError> {
         }
         Ok(())
     }
-    walk(value, 0)?;
+    walk(value, 0)
+}
+/// Typed JSON values share one semantic spelling across native language bindings.
+pub fn canonical_json_snapshot(mut value: Value) -> Result<Value, FitError> {
+    validate_json_structure(&value)?;
+    fn normalize(value: &mut Value) {
+        match value {
+            Value::Number(n) if n.is_f64() => {
+                let number = n.as_f64().expect("finite JSON number");
+                if number.fract() == 0.0 {
+                    *n = (number as i64).into();
+                }
+            }
+            Value::Array(items) => items.iter_mut().for_each(normalize),
+            Value::Object(fields) => fields.values_mut().for_each(normalize),
+            _ => {}
+        }
+    }
+    normalize(&mut value);
+    validate_json(&value)?;
+    Ok(value)
+}
+pub fn validate_json(value: &Value) -> Result<(), FitError> {
+    validate_json_structure(value)?;
     if serde_json::to_vec(value)
         .map_err(|_| FitError::InvalidInput("invalid JSON".into()))?
         .len()

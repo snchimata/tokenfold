@@ -22,7 +22,7 @@ repository = "https://github.com/snchimata/tokenfold"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 thiserror = "1"
 regex = "1"
 clap = { version = "4", features = ["derive"] }

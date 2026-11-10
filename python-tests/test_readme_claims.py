@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-import tokenfold
+from tokenfold import lowlevel as tokenfold
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"

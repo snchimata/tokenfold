@@ -176,7 +176,7 @@ records provide enough repeated structure to demonstrate lossless folding:
 
 ```python
 import json
-from tokenfold import InputFormat, compress
+from tokenfold.lowlevel import InputFormat, compress
 
 records = [{"id": i, "role": "member", "status": "active"} for i in range(30)]
 result = compress(json.dumps(records), format=InputFormat.JSON)
@@ -769,7 +769,7 @@ Use a throwaway store directory while experimenting and reuse it for retrieval:
 ```python
 import json
 from pathlib import Path
-from tokenfold import InputFormat, PruningPolicy, compress, retrieve
+from tokenfold.lowlevel import InputFormat, PruningPolicy, compress, retrieve
 
 store = Path(".tokenfold-readme-store")
 feed_bytes = Path("examples/incident_feed.json").read_bytes()

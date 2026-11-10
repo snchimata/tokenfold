@@ -336,9 +336,9 @@ impl TokenCounter for EncodingCounter {
         };
         #[cfg(feature = "tiktoken")]
         {
-            Ok(TokenCount::exact(
-                self.estimator.count_bytes(text.as_bytes()) as u64,
-            ))
+            Ok(TokenCount::exact(tokenizer_operation(|| {
+                self.estimator.count_bytes(text.as_bytes())
+            })? as u64))
         }
         #[cfg(not(feature = "tiktoken"))]
         {
@@ -553,23 +553,24 @@ impl FitSession {
                 }
                 self.scorer_succeeded = true;
                 self.scores = scores;
-                let guide = guide_estimator()?;
                 let groups = self
                     .input
                     .source_groups()
                     .iter()
                     .zip(&self.scores)
-                    .map(|(g, s)| crate::allocation::Group {
-                        id: g.id.clone(),
-                        required: g.required,
-                        members: vec![crate::allocation::Candidate {
+                    .map(|(g, s)| {
+                        Ok(crate::allocation::Group {
                             id: g.id.clone(),
-                            cost: guide.count_bytes(g.scoring_text.as_bytes()),
-                            score: s.score,
-                        }],
+                            required: g.required,
+                            members: vec![crate::allocation::Candidate {
+                                id: g.id.clone(),
+                                cost: guide_count(g.scoring_text.as_bytes())?,
+                                score: s.score,
+                            }],
+                        })
                     })
-                    .collect::<Vec<_>>();
-                let fixed = guide.count_bytes(&self.input.fixed_guide_bytes()) as u64;
+                    .collect::<Result<Vec<_>, FitError>>()?;
+                let fixed = guide_count(&self.input.fixed_guide_bytes())? as u64;
                 let budget = self
                     .options
                     .target_tokens
@@ -962,6 +963,15 @@ pub fn budget_status(count: TokenCount, target: u64) -> BudgetStatus {
         (CountBasis::Exact, Some(_)) => BudgetStatus::Unmet,
         _ => BudgetStatus::Indeterminate,
     }
+}
+// The legacy estimator is infallible; contain pinned tokenizer panics at the new SDK boundary.
+pub(crate) fn tokenizer_operation<T>(operation: impl FnOnce() -> T) -> Result<T, FitError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation))
+        .map_err(|_| FitError::Accounting("bundled tokenizer failed".into()))
+}
+pub fn guide_count(bytes: &[u8]) -> Result<usize, FitError> {
+    let guide = guide_estimator()?;
+    tokenizer_operation(|| guide.count_bytes(bytes))
 }
 pub fn guide_estimator() -> Result<&'static dyn TokenEstimator, FitError> {
     #[cfg(feature = "tiktoken")]
