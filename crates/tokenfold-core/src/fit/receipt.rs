@@ -228,6 +228,8 @@ impl Receipt {
                     | FitReason::ScorerResponseInvalid
             )
         );
+        let scorer_failed = scorer_failed
+            || (self.reason == Some(FitReason::SelectionLimit) && self.scorer_attempted);
         if scorer_failed != (self.scorer_attempted && !self.scorer_succeeded) {
             return Err(invalid());
         }
@@ -238,7 +240,6 @@ impl Receipt {
                 | FitReason::NoOptionalGroups
                 | FitReason::RequiredOverBudget
                 | FitReason::UnsupportedSelection
-                | FitReason::SelectionLimit
                 | FitReason::ScorerQueueTimeout,
             ) if self.scorer_attempted => return Err(invalid()),
             Some(FitReason::NoGain | FitReason::NoValidFit) if !self.scorer_succeeded => {

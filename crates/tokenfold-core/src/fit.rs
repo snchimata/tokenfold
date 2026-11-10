@@ -225,9 +225,31 @@ pub enum ScoreFailure {
     ResponseInvalid,
     QueueTimeout,
     SelectionLimit,
+    SelectionLimitAttempted,
+}
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ScoreMetadata {
+    pub outside_training_group_counts: bool,
+    pub cross_window_context_unqualified: bool,
+    pub score_queue_ms: Option<f64>,
+    pub startup_ms: Option<f64>,
+    pub scoring_ms: Option<f64>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScoreOutcome {
+    Scored {
+        scores: Vec<GroupScore>,
+        scorer: ScorerInfo,
+    },
+    Failed(ScoreFailure),
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum FitReply {
+    ScoreCompleted {
+        action_id: u64,
+        outcome: ScoreOutcome,
+        metadata: ScoreMetadata,
+    },
     Counted {
         candidate_id: u64,
         counter_id: String,
@@ -372,6 +394,7 @@ pub struct FitSession {
     scores: Vec<GroupScore>,
     scorer_attempted: bool,
     scorer_succeeded: bool,
+    score_metadata: ScoreMetadata,
     cancellation: CancellationToken,
 }
 impl FitSession {
@@ -424,6 +447,7 @@ impl FitSession {
             scores: vec![],
             scorer_attempted: false,
             scorer_succeeded: false,
+            score_metadata: ScoreMetadata::default(),
             cancellation: CancellationToken::default(),
         })
     }
@@ -432,6 +456,36 @@ impl FitSession {
     }
     pub fn advance(&mut self, reply: Option<FitReply>) -> Result<FitAction, FitError> {
         self.cancellation.check()?;
+        let reply = if let Some(FitReply::ScoreCompleted {
+            action_id,
+            outcome,
+            metadata,
+        }) = reply
+        {
+            if !matches!(self.state, SessionState::Scoring {action_id: expected} if expected == action_id)
+                || [
+                    metadata.score_queue_ms,
+                    metadata.startup_ms,
+                    metadata.scoring_ms,
+                ]
+                .into_iter()
+                .flatten()
+                .any(|n| !n.is_finite() || n < 0.0)
+            {
+                return Err(FitError::Protocol);
+            }
+            self.score_metadata = metadata;
+            Some(match outcome {
+                ScoreOutcome::Scored { scores, scorer } => FitReply::Scored {
+                    action_id,
+                    scores,
+                    scorer,
+                },
+                ScoreOutcome::Failed(failure) => FitReply::ScoreFailed { action_id, failure },
+            })
+        } else {
+            reply
+        };
         match (self.state, reply) {
             (SessionState::New, None) => {
                 let ids = self.all_ids();
@@ -543,7 +597,9 @@ impl FitSession {
                     ScoreFailure::Timeout => FitReason::ScorerTimeout,
                     ScoreFailure::ResponseInvalid => FitReason::ScorerResponseInvalid,
                     ScoreFailure::QueueTimeout => FitReason::ScorerQueueTimeout,
-                    ScoreFailure::SelectionLimit => FitReason::SelectionLimit,
+                    ScoreFailure::SelectionLimit | ScoreFailure::SelectionLimitAttempted => {
+                        FitReason::SelectionLimit
+                    }
                 };
                 self.finish_baseline(reason)
             }
@@ -819,6 +875,25 @@ impl FitSession {
                     .into(),
             });
         }
+        for (enabled, code, message) in [
+            (
+                self.score_metadata.outside_training_group_counts,
+                "outside_training_group_counts",
+                "Scorer group counts are outside the training profile; quality is unqualified.",
+            ),
+            (
+                self.score_metadata.cross_window_context_unqualified,
+                "cross_window_context_unqualified",
+                "Multiple scoring windows lack qualified cross-window context.",
+            ),
+        ] {
+            if enabled {
+                warnings.push(FitWarning {
+                    code: code.into(),
+                    message: message.into(),
+                });
+            }
+        }
         let receipt = Receipt {
             kind: "tokenfold.fit".into(),
             schema_version: "1.0".into(),
@@ -864,7 +939,12 @@ impl FitSession {
                 .map(|g| g.id.clone())
                 .collect(),
             warnings,
-            timings_ms: TimingsMs::default(),
+            timings_ms: TimingsMs {
+                score_queue: self.score_metadata.score_queue_ms,
+                startup: self.score_metadata.startup_ms,
+                scoring: self.score_metadata.scoring_ms,
+                ..TimingsMs::default()
+            },
         };
         receipt.validate()?;
         let output = FitOutput {

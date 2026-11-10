@@ -576,7 +576,14 @@ fn receipt_scorer_outcome_invariants() {
         );
         receipt.scorer_attempted = true;
         receipt.scorer = Some(attempted_scorer());
-        assert_invalid_receipt(&receipt);
+        if reason == FitReason::SelectionLimit {
+            assert_eq!(
+                Receipt::from_json(&receipt.to_json().unwrap()).unwrap(),
+                receipt
+            );
+        } else {
+            assert_invalid_receipt(&receipt);
+        }
         receipt.scorer_succeeded = true;
         assert_invalid_receipt(&receipt);
     }

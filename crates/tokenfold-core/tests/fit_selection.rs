@@ -804,3 +804,25 @@ fn unsafe_selected_splice_is_rejected_after_scores_before_a_third_counter_call()
     ));
     assert_eq!(counter.0.get(), 2);
 }
+#[test]
+fn runtime_metadata_is_receipt_owned_and_poststart_limits_are_attempted() {
+    let (output, _) = run(Box::new(groups()), ready(), exact, |id, _, _| {
+        FitReply::ScoreCompleted {
+            action_id: id,
+            outcome: ScoreOutcome::Failed(ScoreFailure::SelectionLimitAttempted),
+            metadata: ScoreMetadata {
+                outside_training_group_counts: true,
+                cross_window_context_unqualified: true,
+                score_queue_ms: Some(2.0),
+                startup_ms: Some(3.0),
+                scoring_ms: None,
+            },
+        }
+    });
+    assert_eq!(output.receipt.reason, Some(FitReason::SelectionLimit));
+    assert!(output.receipt.scorer_attempted);
+    assert!(!output.receipt.scorer_succeeded);
+    assert_eq!(output.receipt.timings_ms.startup, Some(3.0));
+    assert_eq!(output.receipt.warnings.len(), 2);
+    output.receipt.validate().unwrap();
+}
