@@ -30,22 +30,27 @@ def provision(bundle, manifest_sha256, device, config_out, approved_by, scratch_
     if output.exists(): raise FileExistsError('approval_exists_use_new_destination')
     manifest=inspect_bundle(bundle,manifest_sha256)
     environment.mkdir()
-    venv.EnvBuilder(with_pip=True).create(environment)
+    venv.EnvBuilder(with_pip=False).create(environment)
     python=environment/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
+    run_setup([str(python),'-I','-m','ensurepip','--upgrade','--default-pip'])
     for command in dependency_commands(python,device):
-        subprocess.run(command,check=True,timeout=1200,env=provision_environment())
+        run_setup(command)
     expected=dict(ENVIRONMENT)
     expected['torch']='2.11.0+cpu' if device=='cpu' else '2.11.0+cu128'
     check="import importlib.metadata,json; print(json.dumps({n:importlib.metadata.version(n) for n in "+repr(list(expected))+"}))"
-    versions=json.loads(subprocess.run([str(python),'-I','-c',check],check=True,capture_output=True,text=True,timeout=30,env=provision_environment()).stdout)
+    versions=json.loads(run_setup([str(python),'-I','-c',check],capture_output=True,text=True,timeout=30).stdout)
     if versions!=expected: raise ValueError('exact_dependency_profile_required')
-    config=dict(python_executable=str(python.resolve()),python_sha256=sha(python,64*1024*1024),
+    config=dict(python_executable=str(python.absolute()),python_sha256=sha(python,64*1024*1024),
         runtime_source=str(Path(__file__).parent.resolve()),runtime_source_sha256=source_digest(),runtime_version=__version__,
         bundle=str(Path(bundle).resolve()),manifest_sha256=manifest_sha256,revision=manifest['revision'],device=device,
         precision='fp32' if device=='cpu' else 'fp32-parameters-bf16-autocast',approved_by=approved_by,
         scratch_root=str(scratch.resolve()),startup_timeout_ms=120000,inference_timeout_ms=5000,cleanup_timeout_ms=1000)
     atomic_approval(output,config)
     return config
+
+
+def run_setup(command, *, timeout=1200, **kwargs):
+    return subprocess.run(command,check=True,timeout=timeout,env=provision_environment(),**kwargs)
 
 
 def provision_environment():

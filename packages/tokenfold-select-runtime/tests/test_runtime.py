@@ -54,12 +54,13 @@ class ApprovalTests(unittest.TestCase):
                 from types import SimpleNamespace
                 with patch('tokenfold_select_runtime.provision.inspect_bundle',return_value={'revision':'a'*64}),patch('venv.EnvBuilder.create',side_effect=create),patch('subprocess.run',return_value=SimpleNamespace(stdout=json.dumps(expected))) as run:
                     config=provision(root,'b'*64,device,output,'human',root)
-                    self.assertEqual(run.call_args_list[0].args[0],dependency_commands(config['python_executable'],device)[0])
-                    self.assertEqual(run.call_args_list[1].args[0],dependency_commands(config['python_executable'],device)[1])
+                    self.assertEqual(run.call_args_list[0].args[0],[config['python_executable'],'-I','-m','ensurepip','--upgrade','--default-pip'])
+                    self.assertEqual(run.call_args_list[1].args[0],dependency_commands(config['python_executable'],device)[0])
+                    self.assertEqual(run.call_args_list[2].args[0],dependency_commands(config['python_executable'],device)[1])
                     self.assertEqual(config['runtime_source_sha256'],source_digest())
                     self.assertEqual(json.loads(output.read_text()),config)
                     with self.assertRaises(FileExistsError): provision(root,'b'*64,device,output,'human',root)
-                    self.assertEqual(run.call_count,3)
+                    self.assertEqual(run.call_count,4)
     def test_failed_setup_does_not_approve_or_reuse_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);output=root/'approval.json'
@@ -181,5 +182,68 @@ class BundleIntegrityTests(unittest.TestCase):
             with self.assertRaises(ValueError):inspect_bundle(root,'0'*64)
             (root/'model.safetensors').write_bytes(b'changed')
             with self.assertRaisesRegex(ValueError,'ettin_bundle_file_pin_mismatch'):inspect_bundle(root,pin)
+
+
+class ProvisionBootstrapIsolationTests(unittest.TestCase):
+    def test_all_setup_children_include_sanitized_bounded_isolated_bootstrap(self):
+        import os
+        from types import SimpleNamespace
+        scratch=Path(__file__).resolve().parents[3]/'.superpowers/sdd/sdk-updates/runtime-scratch'
+        scratch.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='provision-fix-',dir=scratch) as directory:
+            root=Path(directory);output=root/'approval.json';calls=[]
+            expected=dict(__import__('tokenfold_select_runtime.ettin',fromlist=['ENVIRONMENT']).ENVIRONMENT);expected['torch']='2.11.0+cpu'
+            def run(command,**kwargs):
+                calls.append((command,kwargs));return SimpleNamespace(stdout=json.dumps(expected))
+            def legacy_bootstrap(command,**kwargs):
+                calls.append((command,kwargs));return b''
+            with patch.dict(os.environ,{'OPENAI_API_KEY':'test-only-secret','HTTPS_PROXY':'http://test-only-proxy'}),patch('tokenfold_select_runtime.provision.inspect_bundle',return_value={'revision':'a'*64}),patch('subprocess.run',side_effect=run),patch('subprocess.check_output',side_effect=legacy_bootstrap):
+                original=dict(os.environ);provision(root,'b'*64,'cpu',output,'human',root);self.assertEqual(dict(os.environ),original)
+            self.assertEqual(len(calls),4)
+            self.assertIn('ensurepip',calls[0][0])
+            for command,kwargs in calls:
+                self.assertIn('-I',command)
+                self.assertGreater(kwargs.get('timeout',0),0)
+                self.assertTrue(__import__('math').isfinite(kwargs['timeout']))
+                self.assertTrue(Path(command[0]).is_absolute())
+                self.assertTrue(kwargs.get('check',False))
+                for key in ('OPENAI_API_KEY','HTTPS_PROXY','HTTP_PROXY','PYTHONPATH'):
+                    self.assertNotIn(key,kwargs['env'])
+    def test_bootstrap_failure_keeps_destination_unapproved_and_reserved(self):
+        import subprocess
+        scratch=Path(__file__).resolve().parents[3]/'.superpowers/sdd/sdk-updates/runtime-scratch'
+        scratch.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='provision-fix-',dir=scratch) as directory:
+            root=Path(directory);output=root/'approval.json';calls=[]
+            def fail(command,**kwargs):
+                calls.append(command)
+                if 'ensurepip' in command:raise subprocess.TimeoutExpired(command,kwargs.get('timeout',1))
+                self.fail('a dependency command ran before explicit ensurepip')
+            with patch('tokenfold_select_runtime.provision.inspect_bundle',return_value={'revision':'a'*64}),patch('subprocess.run',side_effect=fail),patch('subprocess.check_output',side_effect=fail):
+                with self.assertRaises(subprocess.TimeoutExpired):provision(root,'b'*64,'cpu',output,'human',root)
+                self.assertFalse(output.exists());self.assertFalse(output.with_name(output.name+'.pending').exists());self.assertTrue(output.with_name(output.name+'.venv').is_dir())
+                with self.assertRaises(FileExistsError):provision(root,'b'*64,'cpu',output,'human',root)
+                self.assertEqual(len(calls),1)
+
+
+
+class ProvisionExecutableIdentityTests(unittest.TestCase):
+    def test_symlinked_venv_approval_preserves_lexical_executable_identity(self):
+        import os
+        from types import SimpleNamespace
+        scratch=Path(__file__).resolve().parents[3]/'.superpowers/sdd/sdk-updates/runtime-scratch'
+        scratch.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='provision-fix-',dir=scratch) as directory:
+            root=Path(directory);output=root/'approval.json'
+            expected=dict(__import__('tokenfold_select_runtime.ettin',fromlist=['ENVIRONMENT']).ENVIRONMENT);expected['torch']='2.11.0+cpu'
+            def create(environment):
+                executable=environment/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
+                executable.parent.mkdir()
+                try:executable.symlink_to(Path(sys.executable).resolve())
+                except OSError as error:self.skipTest('owned executable symlink unavailable: '+str(error.winerror if os.name=='nt' else error.errno))
+            with patch('tokenfold_select_runtime.provision.inspect_bundle',return_value={'revision':'a'*64}),patch('venv.EnvBuilder.create',side_effect=create),patch('subprocess.run',return_value=SimpleNamespace(stdout=json.dumps(expected))):
+                config=provision(root,'b'*64,'cpu',output,'human',root)
+                self.assertEqual(config['python_executable'],str(output.with_name(output.name+'.venv')/('Scripts/python.exe' if os.name=='nt' else 'bin/python')))
+                self.assertNotEqual(config['python_executable'],str(Path(sys.executable).resolve()))
 
 if __name__ == "__main__": unittest.main()

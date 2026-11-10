@@ -597,3 +597,116 @@ fn schema_one_formatted_byte_limit_is_checked_before_spawn() {
     assert!(f.pids().is_empty());
     d.close();
 }
+fn source_pin(root: &std::path::Path) -> String {
+    let mut bytes = vec![];
+    for name in [
+        "__init__.py",
+        "__main__.py",
+        "ettin.py",
+        "integrity.py",
+        "protocol.py",
+        "provision.py",
+        "worker.py",
+    ] {
+        bytes.extend_from_slice(name.as_bytes());
+        bytes.push(0);
+        bytes.extend(std::fs::read(root.join(name)).unwrap());
+        bytes.push(0);
+    }
+    hex_sha256(&bytes)
+}
+fn owned_venv(f: &Fixture, symlinks: bool) -> (PathBuf, PathBuf) {
+    let approval: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(f.root.join("approval.json")).unwrap()).unwrap();
+    let root = f.root.join("owned-venv");
+    let output=std::process::Command::new(approval["python_executable"].as_str().unwrap()).args(["-I","-S","-B","-c", "import json,os,sys,sysconfig,venv; root=sys.argv[1]; venv.EnvBuilder(with_pip=False,symlinks=sys.argv[2]=='1').create(root); print(json.dumps(dict(python=os.path.join(root,'Scripts' if os.name=='nt' else 'bin','python.exe' if os.name=='nt' else 'python'),site=sysconfig.get_path('purelib',vars=dict(base=root,platbase=root)))))"]).arg(&root).arg(if symlinks{"1"}else{"0"}).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let paths: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    (
+        PathBuf::from(paths["python"].as_str().unwrap()),
+        PathBuf::from(paths["site"].as_str().unwrap()),
+    )
+}
+fn repin(f: &Fixture, python: &std::path::Path, source: &std::path::Path) -> SelectRuntimeConfig {
+    let mut approval: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(f.root.join("approval.json")).unwrap()).unwrap();
+    approval["python_executable"] = json!(python);
+    approval["python_sha256"] = json!(hex_sha256(&std::fs::read(python).unwrap()));
+    approval["runtime_source"] = json!(source);
+    approval["runtime_source_sha256"] = json!(source_pin(source));
+    SelectRuntimeConfig::from_json(&serde_json::to_vec(&approval).unwrap()).unwrap()
+}
+#[test]
+fn startup_hooks_cannot_run_or_cache_an_unpinned_worker() {
+    let f = Fixture::new("normal", 5000);
+    let (python, site) = owned_venv(&f, false);
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/tokenfold-select-runtime/src/tokenfold_select_runtime")
+        .canonicalize()
+        .unwrap();
+    let before = source_pin(&source);
+    let marker = f.root.join("startup-hook-ran");
+    let cached = f.root.join("cached-worker-ran");
+    std::fs::write(site.join("runtime_test_startup_hook.py"),format!("import pathlib,sys,types\npathlib.Path({}).write_text('unapproved startup ran')\nmodule=types.ModuleType('tokenfold_select_runtime.worker')\nmodule.main=lambda: pathlib.Path({}).write_text('cached worker ran')\nsys.modules[module.__name__]=module\n",json!(marker.to_string_lossy()),json!(cached.to_string_lossy()))).unwrap();
+    std::fs::write(
+        site.join("startup-hook.pth"),
+        "import runtime_test_startup_hook\n",
+    )
+    .unwrap();
+    let customize = f.root.join("sitecustomize-ran");
+    std::fs::write(
+        site.join("sitecustomize.py"),
+        format!(
+            "from pathlib import Path\nPath({}).write_text('sitecustomize ran')\n",
+            json!(customize.to_string_lossy())
+        ),
+    )
+    .unwrap();
+    let d = ScorerDispatcher::new(repin(&f, &python, &source), QueuePolicy::default()).unwrap();
+    // The real maintained worker rejects this fixture's incomplete bundle before loading ML.
+    assert_eq!(
+        d.warmup().unwrap().wait().outcome,
+        Err(RuntimeError::Failure)
+    );
+    d.close();
+    assert_eq!(
+        [marker.exists(), customize.exists(), cached.exists()],
+        [false; 3],
+        "startup hook, sitecustomize, cached worker must all remain unexecuted"
+    );
+    assert_eq!(source_pin(&source), before);
+}
+#[test]
+fn isolated_startup_discovers_venv_dependencies_without_resolving_away_its_prefix() {
+    let f = Fixture::new("normal", 5000);
+    let (python, site) = owned_venv(&f, true);
+    if !std::fs::symlink_metadata(&python)
+        .unwrap()
+        .file_type()
+        .is_symlink()
+    {
+        println!("SKIPPED symlink-specific assertion: platform venv used a copied executable");
+    }
+    let source = f.root.join("src/tokenfold_select_runtime");
+    let prefix = python.parent().unwrap().parent().unwrap();
+    std::fs::write(
+        site.join("runtime_test_dependency.py"),
+        format!(
+            "import os,sys\nassert os.path.samefile(sys.prefix,{})\n",
+            json!(prefix.to_string_lossy())
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        source.join("__main__.py"),
+        format!("import runtime_test_dependency\n{FAKE}"),
+    )
+    .unwrap();
+    let d = ScorerDispatcher::new(repin(&f, &python, &source), QueuePolicy::default()).unwrap();
+    assert!(submit(&d, "normal").wait().outcome.is_ok());
+    d.close();
+}

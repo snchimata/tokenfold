@@ -19,6 +19,27 @@ use tokenfold_core::retrieval_store::hex_sha256;
 
 const REQUEST_LIMIT: usize = 1024 * 1024;
 const RESPONSE_LIMIT: usize = 65536;
+// -S prevents .pth/sitecustomize before this code; add dependency paths without site hooks.
+const BOOTSTRAP: &str = r#"
+import importlib.util,os,runpy,sys,sysconfig
+sys.pycache_prefix=sys.argv.pop(1)
+root=sys.argv.pop(1)
+prefix=os.path.dirname(os.path.dirname(sys.executable))
+if os.path.isfile(os.path.join(prefix,'pyvenv.cfg')):
+    sys.prefix=sys.exec_prefix=prefix
+else:
+    prefix=sys.prefix
+for kind in ('purelib','platlib'):
+    path=sysconfig.get_path(kind,vars=dict(base=prefix,platbase=prefix))
+    if os.path.isdir(path) and path not in sys.path:
+        sys.path.append(path)
+spec=importlib.util.spec_from_file_location('tokenfold_select_runtime',os.path.join(root,'__init__.py'),submodule_search_locations=[root])
+module=importlib.util.module_from_spec(spec)
+sys.modules[spec.name]=module
+spec.loader.exec_module(module)
+runpy.run_module('tokenfold_select_runtime',run_name='__main__')
+"#;
+
 const SOURCE_FILES: &[&str] = &[
     "__init__.py",
     "__main__.py",
@@ -668,12 +689,25 @@ impl Worker {
             .create(&directory)
             .map_err(|_| RuntimeError::Config)?;
         let mut command = Command::new(&a.python_executable);
-        command.args(["-I","-B","-u","-c","import importlib.util,os,runpy,sys; sys.pycache_prefix=sys.argv.pop(1); root=sys.argv.pop(1); spec=importlib.util.spec_from_file_location('tokenfold_select_runtime',os.path.join(root,'__init__.py'),submodule_search_locations=[root]); module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module; spec.loader.exec_module(module); runpy.run_module('tokenfold_select_runtime',run_name='__main__')"])
-            .arg(directory.join("unwritten-bytecode")).arg(&a.runtime_source).arg("worker").env_clear()
-            .env("HF_HUB_OFFLINE","1").env("TRANSFORMERS_OFFLINE","1").env("CUDA_VISIBLE_DEVICES","0")
-            .env("TOKENIZERS_PARALLELISM","false").env("USERNAME","tokenfold-worker").env("TEMP",&directory).env("TMP",&directory)
-            .env("HOME",&directory).env("HF_HOME",&directory).current_dir(&directory)
-            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        command
+            .args(["-I", "-S", "-B", "-u", "-c", BOOTSTRAP])
+            .arg(directory.join("unwritten-bytecode"))
+            .arg(&a.runtime_source)
+            .arg("worker")
+            .env_clear()
+            .env("HF_HUB_OFFLINE", "1")
+            .env("TRANSFORMERS_OFFLINE", "1")
+            .env("CUDA_VISIBLE_DEVICES", "0")
+            .env("TOKENIZERS_PARALLELISM", "false")
+            .env("USERNAME", "tokenfold-worker")
+            .env("TEMP", &directory)
+            .env("TMP", &directory)
+            .env("HOME", &directory)
+            .env("HF_HOME", &directory)
+            .current_dir(&directory)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;

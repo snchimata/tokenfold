@@ -17,6 +17,8 @@ python -m tokenfold_select_runtime provision --bundle /absolute/bundle --manifes
 Only this command may fetch dependencies. It reserves a dedicated environment next
 to the config, installs exact CPU or CUDA (`--device cuda:0`) package pins and
 atomically publishes approval without overwriting an existing approval/environment.
+Even ensurepip bootstrap uses the same isolated, sanitized, deadline-bounded setup
+path; setup never mutates the calling process environment.
 Failed setup leaves the reserved environment unapproved; use a new destination.
 CPU uses FP32. CUDA requires FP32 parameters, BF16 autocast with its cache disabled,
 and TF32 disabled; it never falls back to another device/precision.
@@ -62,7 +64,9 @@ spawn call that fails still counts as a start attempt. Malformed/duplicate frame
 stale IDs, nonfinite scores, crash, timeout and active cancellation invalidate/reap
 the worker; only a later explicit request may cold-start again.
 
-Cleared environments, isolated source imports, offline audit guards, bounded
+Cleared environments, startup-hook-free (`-I -S`) Python, isolated source imports,
+and explicitly admitted dependency paths (without `.pth`/sitecustomize processing),
+offline audit guards, bounded
 reader/writer threads and confined owned scratch cleanup are not an OS sandbox or
 hard memory quota. Applications own OS enforcement and permissions. Selection
 quality remains unqualified, especially group counts outside training and multiple
