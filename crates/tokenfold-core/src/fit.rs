@@ -298,7 +298,7 @@ pub trait TokenCounter {
 pub struct EncodingCounter {
     id: String,
     #[cfg(feature = "tiktoken")]
-    estimator: crate::token_estimator::TiktokenEstimator,
+    estimator: &'static crate::token_estimator::TiktokenEstimator,
 }
 impl EncodingCounter {
     pub fn new(encoding: &str) -> Result<Self, FitError> {
@@ -307,11 +307,7 @@ impl EncodingCounter {
         }
         #[cfg(feature = "tiktoken")]
         {
-            let estimator = match encoding {
-                "o200k_base" => crate::token_estimator::TiktokenEstimator::o200k_base(),
-                _ => crate::token_estimator::TiktokenEstimator::cl100k_base(),
-            }
-            .map_err(|_| FitError::Accounting("bundled encoding unavailable".into()))?;
+            let estimator = bundled_encoding(encoding)?;
             Ok(Self {
                 id: format!("encoding:{encoding}:v1"),
                 estimator,
@@ -976,13 +972,7 @@ pub fn guide_count(bytes: &[u8]) -> Result<usize, FitError> {
 pub fn guide_estimator() -> Result<&'static dyn TokenEstimator, FitError> {
     #[cfg(feature = "tiktoken")]
     {
-        static GUIDE: std::sync::OnceLock<Result<crate::token_estimator::TiktokenEstimator, ()>> =
-            std::sync::OnceLock::new();
-        GUIDE
-            .get_or_init(|| crate::token_estimator::TiktokenEstimator::o200k_base().map_err(|_| ()))
-            .as_ref()
-            .map(|g| g as &dyn TokenEstimator)
-            .map_err(|_| FitError::Accounting("bundled guide unavailable".into()))
+        bundled_encoding("o200k_base").map(|g| g as &dyn TokenEstimator)
     }
     #[cfg(not(feature = "tiktoken"))]
     {
@@ -990,9 +980,42 @@ pub fn guide_estimator() -> Result<&'static dyn TokenEstimator, FitError> {
     }
 }
 
+#[cfg(feature = "tiktoken")]
+fn bundled_encoding(
+    encoding: &str,
+) -> Result<&'static crate::token_estimator::TiktokenEstimator, FitError> {
+    use crate::token_estimator::TiktokenEstimator;
+    use std::sync::OnceLock;
+    static O200K: OnceLock<Result<TiktokenEstimator, ()>> = OnceLock::new();
+    static CL100K: OnceLock<Result<TiktokenEstimator, ()>> = OnceLock::new();
+    let encoder = match encoding {
+        "o200k_base" => O200K.get_or_init(|| TiktokenEstimator::o200k_base().map_err(|_| ())),
+        "cl100k_base" => CL100K.get_or_init(|| TiktokenEstimator::cl100k_base().map_err(|_| ())),
+        _ => return Err(FitError::Config("unsupported encoding".into())),
+    };
+    encoder
+        .as_ref()
+        .map_err(|_| FitError::Accounting("bundled encoding unavailable".into()))
+}
+
 #[cfg(all(test, feature = "tiktoken"))]
 mod selection_cache_tests {
     use super::*;
+    #[test]
+    fn bundled_counters_share_encoders() {
+        for encoding in ["o200k_base", "cl100k_base"] {
+            let first = EncodingCounter::new(encoding).unwrap();
+            let second = EncodingCounter::new(encoding).unwrap();
+            assert!(std::ptr::eq(first.estimator, second.estimator));
+            if encoding == "o200k_base" {
+                assert_eq!(
+                    first.estimator as *const _ as *const (),
+                    guide_estimator().unwrap() as *const _ as *const ()
+                );
+            }
+        }
+    }
+
     #[test]
     fn trimming_keeps_only_one_current_candidate_slot() {
         let input = ContextRequest::new(

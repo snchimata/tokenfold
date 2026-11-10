@@ -54,3 +54,19 @@ def test_installed_precise_typing_fixtures(tmp_path):
     assert all(Path(item["file"]).name == "sdk_invalid.py" for item in errors)
     assert {item["range"]["start"]["line"] for item in errors} == {1, 2, 3, 4, 5}
     assert diagnostics["summary"]["warningCount"] == 0
+
+
+def test_lightweight_select_extra_is_exact_and_no_ml_dependencies():
+    distribution = importlib.metadata.distribution("tokenfold")
+    requires = distribution.requires or []
+    assert len(requires) == 1
+    requirement, marker = requires[0].split(";")
+    assert requirement.strip() == "tokenfold-select-runtime==0.6.0"
+    assert marker.replace("'", '"').strip() == 'extra == "select"'
+
+
+def test_installed_sdk_fit_example(tmp_path):
+    example = Path(__file__).resolve().parents[1] / "examples/sdk_fit.py"
+    completed = subprocess.run([sys.executable, "-I", str(example)], cwd=tmp_path,
+                               text=True, capture_output=True, check=True)
+    assert completed.stdout.splitlines()[0] == '{"answer":42,"source":"example"}'

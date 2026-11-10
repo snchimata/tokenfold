@@ -11,8 +11,8 @@ description = "In-process Node-API bindings for Tokenfold fitting."
 crate-type = ["cdylib"]
 
 [dependencies]
-tokenfold-core = { version = "0.5.4", path = "../tokenfold-core" }
-tokenfold-adapters = { version = "0.5.4", path = "../tokenfold-adapters" }
+tokenfold-core = { version = "0.6.0", path = "../tokenfold-core" }
+tokenfold-adapters = { version = "0.6.0", path = "../tokenfold-adapters" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 napi = { version = "3", default-features = false, features = ["napi8", "dyn-symbols"] }

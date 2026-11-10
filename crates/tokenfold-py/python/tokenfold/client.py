@@ -108,6 +108,7 @@ class Tokenfold:
             value = self._counter.id
             if type(value) is not str:
                 raise ValueError
+            value.encode("utf-8")
             return value
         except Exception:
             raise AccountingError("invalid counter ID") from None
@@ -116,9 +117,15 @@ class Tokenfold:
             session.check_cancelled()
             before = self._counter_id()
             request = RenderedRequest(action["format"], json.dumps(action["payload"], ensure_ascii=False, separators=(",", ":")), action["scope"])
+            try:
+                callback = self._counter.count
+                if not callable(callback):
+                    raise TypeError
+            except Exception:
+                raise AccountingError("custom counter failed") from None
             session.check_cancelled()
             try:
-                count = self._counter.count(request)
+                count = callback(request)
                 after = self._counter_id()
                 if not isinstance(count, TokenCount) or after != before:
                     raise ValueError

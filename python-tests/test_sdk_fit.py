@@ -333,6 +333,41 @@ def test_custom_id_drift_and_invalid_configuration_are_typed():
         with pytest.raises(tf.ConfigError): make()
 
 
+@pytest.mark.parametrize("value", ["\ud800", "profile:\udfff"])
+@pytest.mark.parametrize("kind", ["custom", "encoding", "provider"])
+def test_counter_unicode_errors_are_typed(value, kind):
+    class Counter:
+        id = value
+        def count(self, request):
+            raise AssertionError("invalid ID reached callback")
+    with pytest.raises(tf.AccountingError if kind == "custom" else tf.ConfigError):
+        if kind == "custom":
+            tf.fit("text", target_tokens=10, counter=Counter())
+        elif kind == "encoding":
+            tf.EncodingCounter(value)
+        else:
+            tf.ProviderCounter.openai(model=value)
+
+
+@pytest.mark.parametrize("mode", ["cancel", "close"])
+def test_count_accessor_cancellation_prevents_callback_start(mode):
+    token = tf.CancellationToken()
+    calls = []
+    class Counter:
+        id = "custom:accessor:v1"
+        @property
+        def count(self):
+            token.cancel() if mode == "cancel" else client.close()
+            def callback(request):
+                calls.append(request)
+                return tf.TokenCount(1)
+            return callback
+    with tf.Tokenfold(counter=Counter()) as client:
+        with pytest.raises(tf.CancelledError):
+            client.fit("text", target_tokens=10, cancel=token)
+    assert calls == [], "cancelled accessor admitted a new callback"
+
+
 def test_builtin_counters_stay_native_not_host_callbacks(monkeypatch):
     def forbidden(*args): raise AssertionError("built-in count crossed host boundary")
     monkeypatch.setattr(tf.EncodingCounter, "count", forbidden)

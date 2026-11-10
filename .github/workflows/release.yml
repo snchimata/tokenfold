@@ -21,6 +21,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  sdk-artifacts:
+    uses: ./.github/workflows/sdk-artifacts.yml
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -152,7 +155,7 @@ jobs:
 
   publish-github-release:
     name: publish-github-release
-    needs: [cross-compile, sbom]
+    needs: [cross-compile, sbom, sdk-artifacts]
     runs-on: ubuntu-latest
     permissions:
       contents: write

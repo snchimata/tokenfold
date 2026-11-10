@@ -1,6 +1,6 @@
 {
   "name": "tokenfold",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "Native in-process token budget fitting for text and provider requests.",
   "license": "Apache-2.0",
   "repository": {
@@ -55,16 +55,16 @@
     "test:types": "tsc --noEmit --strict --target ES2022 --lib ES2024 --module NodeNext --moduleResolution NodeNext test/fit-types.ts"
   },
   "optionalDependencies": {
-    "@tokenfold/cli-darwin-x64": "0.5.4",
-    "@tokenfold/cli-darwin-arm64": "0.5.4",
-    "@tokenfold/cli-linux-x64": "0.5.4",
-    "@tokenfold/cli-linux-arm64": "0.5.4",
-    "@tokenfold/cli-win32-x64": "0.5.4",
-    "@tokenfold/native-darwin-x64": "0.5.4",
-    "@tokenfold/native-darwin-arm64": "0.5.4",
-    "@tokenfold/native-linux-x64": "0.5.4",
-    "@tokenfold/native-linux-arm64": "0.5.4",
-    "@tokenfold/native-win32-x64": "0.5.4"
+    "@tokenfold/cli-darwin-x64": "0.6.0",
+    "@tokenfold/cli-darwin-arm64": "0.6.0",
+    "@tokenfold/cli-linux-x64": "0.6.0",
+    "@tokenfold/cli-linux-arm64": "0.6.0",
+    "@tokenfold/cli-win32-x64": "0.6.0",
+    "@tokenfold/native-darwin-x64": "0.6.0",
+    "@tokenfold/native-darwin-arm64": "0.6.0",
+    "@tokenfold/native-linux-x64": "0.6.0",
+    "@tokenfold/native-linux-arm64": "0.6.0",
+    "@tokenfold/native-win32-x64": "0.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

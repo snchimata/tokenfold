@@ -381,7 +381,7 @@ pub const OPENAI_REQUEST_FIELDS: &[&str] = &[
 ];
 pub const OPENAI_MESSAGE_FIELDS: &[&str] = &["role", "content", "name"];
 /// Historical offline recipe, never an exact framing or current model-availability claim.
-/// https://developers.openai.com/cookbook/examples/how_to_count_tokens_with_tiktoken
+/// <https://developers.openai.com/cookbook/examples/how_to_count_tokens_with_tiktoken>
 pub struct ProviderCounter {
     encoding: EncodingCounter,
 }

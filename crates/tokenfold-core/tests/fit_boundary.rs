@@ -68,3 +68,29 @@ fn shared_number_fixture_has_identical_payloads_and_refuses_unsafe_values() {
         ));
     }
 }
+
+#[test]
+fn shared_encoders_count_concurrently_and_after_accounting_failure() {
+    for encoding in ["o200k_base", "cl100k_base"] {
+        let first = EncodingCounter::new(encoding).unwrap();
+        let second = EncodingCounter::new(encoding).unwrap();
+        let request = RenderedRequest {
+            format: FitFormat::Text,
+            payload: RenderedPayload::Text("hello world".into()),
+            scope: AccountingScope::RenderedText,
+            core_transforms: vec![],
+        };
+        let expected = TokenCount::exact(2);
+        std::thread::scope(|scope| {
+            let good = scope.spawn(|| second.count(&request));
+            let bad = RenderedRequest {
+                payload: RenderedPayload::Text("x".repeat(MAX_SOURCE_BYTES)),
+                ..request.clone()
+            };
+            assert!(matches!(first.count(&bad), Err(FitError::Accounting(_))));
+            assert_eq!(good.join().unwrap().unwrap(), expected);
+        });
+        assert_eq!(first.count(&request).unwrap(), expected);
+        assert_eq!(second.count(&request).unwrap(), expected);
+    }
+}

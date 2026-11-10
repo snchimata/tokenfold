@@ -29,7 +29,9 @@ test('fresh packed install outside checkout: native Core, fake worker, missing a
     const stage=join(temp,'native');mkdirSync(stage);
     copyFileSync(join(root,'crates/tokenfold-node/npm',platform,'package.json'),join(stage,'package.json'));
     copyFileSync(join(facade,'native/tokenfold.node'),join(stage,'tokenfold.node'));
+    copyFileSync(join(root,'LICENSE'),join(stage,'LICENSE'));
     const nativePack=pack(stage),sdkPack=pack(facade);
+    assert.ok(nativePack.files.some(f=>f.path==='LICENSE'));
     assert.equal(sdkPack.files.some(f=>f.path.endsWith('.node')),false);
     assert.ok(sdkPack.files.some(f=>f.path==='dist/index.d.ts'));
     const install=join(temp,'installed');mkdirSync(install);
@@ -53,6 +55,17 @@ test('fresh packed install outside checkout: native Core, fake worker, missing a
     const cleanEnv={...process.env,PATH:'',TOKENFOLD_BINARY_PATH:join(temp,'must-not-run.exe')};
     const output=execFileSync(process.execPath,[script],{cwd:install,env:cleanEnv,encoding:'utf8'});
     assert.equal(JSON.parse(output).core,true);
+    copyFileSync(join(root,'examples/sdk_fit.mjs'),join(install,'example.mjs'));
+    execFileSync(process.execPath,['example.mjs'],{cwd:install,env:cleanEnv,stdio:'pipe'});
+    // Reuse the real lifecycle/parity suite against installed JS and the packed addon.
+    for (const name of ['fit.test.mjs','native.test.mjs','parity.test.mjs']) {
+      const source=readFileSync(join(facade,'test',name),'utf8')
+        .replaceAll("'../dist/", "'./node_modules/tokenfold/dist/")
+        .replaceAll("'./runtime-fixture.mjs'",JSON.stringify(runtimeURL))
+        .replaceAll('../../../tests/fixtures/sdk-fit/',pathToFileURL(join(root,'tests/fixtures/sdk-fit')+'/').href);
+      writeFileSync(join(install,name),source);
+    }
+    execFileSync(process.execPath,['--test','fit.test.mjs','native.test.mjs','parity.test.mjs'],{cwd:install,env:cleanEnv,stdio:'pipe'});
     copyFileSync(join(facade,'test/fit-types.ts'),join(install,'fit-types.ts'));
     execFileSync(process.execPath,[join(facade,'node_modules/typescript/bin/tsc'),'--noEmit','--strict','--target','ES2022','--lib','ES2024','--module','NodeNext','--moduleResolution','NodeNext','--typeRoots',join(facade,'node_modules/@types'),'fit-types.ts'],{cwd:install,stdio:'pipe'});
     const addon=join(install,'node_modules/@tokenfold',`native-${platform}`,'tokenfold.node');

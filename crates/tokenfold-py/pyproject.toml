@@ -24,6 +24,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 
+[project.optional-dependencies]
+select = ["tokenfold-select-runtime==0.6.0"]
+
 [tool.maturin]
 # The compiled Cargo artifact is named "tokenfold_py" (see ../Cargo.toml's [lib] comment,
 # it can't be "tokenfold" -- that collides with tokenfold-cli's binary); this maps it to

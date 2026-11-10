@@ -1,0 +1,110 @@
+name: SDK installed artifacts
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  installed:
+    name: installed (${{ matrix.platform.os }}, Python ${{ matrix.runtime.python }}, Node ${{ matrix.runtime.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - {os: ubuntu-22.04, target: x86_64-unknown-linux-gnu}
+          - {os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu}
+          - {os: macos-15-intel, target: x86_64-apple-darwin}
+          - {os: macos-15, target: aarch64-apple-darwin}
+          - {os: windows-latest, target: x86_64-pc-windows-msvc}
+        runtime:
+          - {python: '3.12', node: 22}
+          - {python: '3.13', node: 24}
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@1.98
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.runtime.python }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.runtime.node }}
+          cache: npm
+          cache-dependency-path: packages/tokenfold/package-lock.json
+      - name: Python test and packaging tools
+        run: python -m pip install -r python-tests/requirements-sdk.txt maturin build twine
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --locked --out dist -m crates/tokenfold-py/Cargo.toml
+          manylinux: auto
+      - name: Install current wheel, not checkout code
+        shell: bash
+        run: |
+          python -m pip install --no-deps dist/*.whl
+          python -m pytest python-tests -q
+          python examples/sdk_fit.py
+          python scripts/check-release-versions.py
+          python scripts/test_release_versions.py
+      - name: Lightweight runtime package without ML
+        shell: bash
+        run: |
+          python -m build --outdir dist-runtime packages/tokenfold-select-runtime
+          python -m twine check dist-runtime/*
+          python -m pip install --no-deps dist-runtime/*.whl
+          python -I scripts/check-runtime-install.py
+          python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select-runtime/tests" -v
+      - name: Native addon and separate legacy CLI
+        shell: bash
+        run: |
+          cargo build --release --locked -p tokenfold-cli
+          cd packages/tokenfold
+          npm ci
+          npm run build:native
+      - name: Shared fixtures, cancellation, concurrency and packed installed execution
+        shell: bash
+        run: |
+          export TOKENFOLD_TEST_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          export TOKENFOLD_TEST_PARITY_PYTHON="$TOKENFOLD_TEST_PYTHON"
+          export TOKENFOLD_TEST_BINARY="${{ github.workspace }}/target/release/tokenfold${{ runner.os == 'Windows' && '.exe' || '' }}"
+          cd packages/tokenfold
+          npm test
+      - name: Pack exact platform addon with license and checksum
+        if: matrix.runtime.node == 24
+        shell: bash
+        run: |
+          platform=$(node -p 'process.platform + "-" + process.arch')
+          mkdir -p target/sdk-native target/sdk-native-stage
+          cp "crates/tokenfold-node/npm/$platform/package.json" target/sdk-native-stage/
+          cp packages/tokenfold/native/tokenfold.node LICENSE target/sdk-native-stage/
+          npm pack ./target/sdk-native-stage --pack-destination target/sdk-native
+          python -c "import hashlib,pathlib; [(p.with_name(p.name+'.sha256').write_text(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n')) for p in pathlib.Path('target/sdk-native').glob('*.tgz')]"
+      - uses: actions/upload-artifact@v7
+        if: matrix.runtime.node == 24
+        with:
+          name: sdk-native-${{ matrix.platform.target }}
+          path: target/sdk-native/*
+          if-no-files-found: error
+
+  sdist:
+    name: installed sdist (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@1.98
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install maturin twine -r python-tests/requirements-sdk.txt
+      - run: python -m maturin sdist --out dist -m crates/tokenfold-py/Cargo.toml
+      - run: python -m twine check dist/*
+      - run: python -m pip install dist/*.tar.gz
+      - run: python -m pytest python-tests -q

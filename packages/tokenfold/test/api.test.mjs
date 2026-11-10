@@ -35,7 +35,7 @@ test("versioned reader retains archived receipts and refuses unsupported shapes"
 });
 
 test("resolves an explicit binary", async () => {
-  assert.equal(binaryPath(), testBinary);
+  assert.equal(binaryPath(), path.resolve(testBinary));
   assert.match(Buffer.from((await run(["--version"])).stdout).toString(), /^tokenfold /);
 });
 

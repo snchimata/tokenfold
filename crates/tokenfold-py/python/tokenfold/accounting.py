@@ -24,6 +24,10 @@ class EncodingCounter:
     def __post_init__(self) -> None:
         if type(self.encoding) is not str:
             raise ConfigError("invalid encoding")
+        try:
+            self.encoding.encode("utf-8")
+        except UnicodeError:
+            raise ConfigError("invalid encoding") from None
         _native.counter_id("encoding", self.encoding)
     @property
     def id(self) -> str:
@@ -38,6 +42,10 @@ class ProviderCounter:
     def __post_init__(self) -> None:
         if type(self.model) is not str:
             raise ConfigError("invalid provider profile")
+        try:
+            self.model.encode("utf-8")
+        except UnicodeError:
+            raise ConfigError("invalid provider profile") from None
         _native.counter_id("openai", self.model)
     @classmethod
     def openai(cls, *, model: str) -> "ProviderCounter":

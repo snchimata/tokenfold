@@ -5,7 +5,7 @@ The primary SDK runs Rust in-process through Node-API; it never spawns a CLI,
 downloads a model, sends a request or requires Python for Core fitting.
 
 ```sh
-npm install tokenfold
+npm install tokenfold  # after publication; 0.6.0 is currently unreleased
 ```
 
 ```ts
@@ -80,8 +80,8 @@ message contents. Unlisted/protected messages remain required; system/developer,
 latest-user and tool/multimodal safety constraints are checked natively. Initial
 selection is text-only and cannot establish semantic correctness.
 
-Node >=22 is supported with prebuilt addons for Linux GNU x64/arm64, macOS x64/arm64
-and Windows x64. No browser/musl support is claimed. Install optional dependencies;
+The Node >=22 prebuilt-addon target matrix is Linux GNU x64/arm64, macOS x64/arm64
+and Windows x64; all installed-artifact gates must pass before 0.6 publication. No browser/musl support is claimed. Install optional dependencies;
 a missing or mismatched native addon raises `InstallationError` with no global-binary
 fallback. The five `@tokenfold/native-*` packages are separate from CLI packages.
 For a source checkout: `npm ci`, `npm run build:native`, then `npm test` (set
@@ -143,3 +143,10 @@ const jsonBytes = await decode(encoded.payload, { from: "toon" });
 
 Requires Node.js 22 or newer. The matching native CLI is installed through an
 optional platform package; set `TOKENFOLD_BINARY_PATH` to use a custom binary.
+
+Default JSON preserves insertion order; explicit folded JSON may normalize per-object
+key order. Safe integral floats and signed zero normalize lexically; opaque text is
+byte-preserved. Some long valid inputs cause typed AccountingError from the pinned
+tokenizer, possibly with a native panic diagnostic; there is no heuristic/zero fallback.
+See the [migration guide](https://github.com/snchimata/tokenfold/blob/main/docs/sdk-migration.md)
+for explicit provisioning, construction-time sidecar groups, and accounting limits.

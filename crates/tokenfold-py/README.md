@@ -18,7 +18,8 @@ are available under `tokenfold.lowlevel`. Fit receipts are a separate schema.
 compact JSON. `Data(value, representation="folded")` explicitly opts into the
 reversible Tokenfold codec: the consumer must understand that syntax (or decode
 with `tokenfold.lowlevel.decode`). Typed JSON normalizes safe integral floats and
-signed zero in Rust; object order and opaque text are preserved.
+signed zero in Rust; default JSON preserves insertion order, while explicit folded
+JSON may normalize per-object key order. Opaque text is byte-preserved.
 
 Provider `Request.openai(...)` / `Request.anthropic(...)` payloads are full request
 objects, not bare message lists. The default encoding counter cannot establish
@@ -41,3 +42,11 @@ consent. Required groups and the query are retained; callers must bundle semanti
 dependencies themselves. `warmup()` only loads that configured runtime; import and
 already-fitting Core requests never start it. Provisioning the optional runtime and
 acquiring its pinned local model are separate explicit setup actions.
+
+0.6.0 is unreleased; install a locally built wheel for current validation. The exact
+`tokenfold[select]` extra adds only `tokenfold-select-runtime==0.6.0`, not ML packages.
+Prebuilt targets: Linux GNU x64/arm64, macOS x64/arm64, Windows x64, gated by installed
+artifact CI before release. See the [migration guide](https://github.com/snchimata/tokenfold/blob/main/docs/sdk-migration.md)
+for provisioning, grouping recipes and queue/cold-start limits. The pinned tokenizer
+may refuse long valid inputs with AccountingError (and its own panic diagnostic);
+there is no heuristic/zero fallback.
