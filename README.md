@@ -197,7 +197,7 @@ Advanced compression remains under `tokenfold.lowlevel` / `tokenfold/cli`.
 
 ### Python: compress JSON directly
 
-After `pip install tokenfold`, try this self-contained example. Thirty uniform
+After installing the locally built 0.6 wheel, try this self-contained example. Thirty uniform
 records provide enough repeated structure to demonstrate lossless folding:
 
 ```python
