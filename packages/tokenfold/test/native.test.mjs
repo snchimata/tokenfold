@@ -28,6 +28,22 @@ test('actual session checkpoints prevent custom callbacks after abort or close d
     assert.equal(calls,0); await closing; await client.close();
   }
 });
+for(const mode of ['abort','close']) test(`count accessor ${mode} cannot admit its returned callback`,async()=>{
+  let calls=0,reads=0,closing;
+  const abort=new AbortController();
+  const counter={id:'count-accessor:v1',get count(){reads++;if(mode==='abort')abort.abort();else closing=client.close();return function(){calls++;return {tokens:1,basis:'exact'};};}};
+  const client=new tf.Tokenfold({counter});
+  try {
+    await assert.rejects(client.fit('text',{targetTokens:10,signal:abort.signal}),tf.CancelledError);
+    assert.equal(reads,1);assert.equal(calls,0,'cancelled accessor must not start its callback');
+  } finally {await closing;await client.close();}
+});
+test('custom count accessors preserve receiver and sanitize lookup failures',async()=>{
+  const counter={id:'count-receiver:v1',get count(){return function(){assert.equal(this,counter);return {tokens:1,basis:'exact'};};}};
+  assert.equal((await tf.fit('text',{targetTokens:10,counter})).requireMet(),'text');
+  for(const count of [null,1,{}]) await assert.rejects(tf.fit('text',{targetTokens:10,counter:{id:'bad-callable:v1',get count(){return count;}}}),tf.AccountingError);
+  await assert.rejects(tf.fit('text',{targetTokens:10,counter:{id:'throwing-accessor:v1',get count(){throw Error('private accessor content');}}}),e=>e instanceof tf.AccountingError&&!String(e).includes('private'));
+});
 test('paused native Count handoff never starts a callback after cancellation or close', async () => {
   for(const mode of ['abort','close']) {
     const proto=native().NativeClient.prototype,begin=proto.begin;

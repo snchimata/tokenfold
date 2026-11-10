@@ -16,7 +16,10 @@ export class ProviderCounter implements TokenCounter {
   private constructor(readonly model: string) {
     if (model !== 'gpt-4o-2024-08-06') throw new ConfigError('unsupported provider profile');
   }
-  static openai(options: {model: string}): ProviderCounter { return new ProviderCounter(options.model); }
+  static openai(options: {model: string}): ProviderCounter {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new ConfigError('invalid provider options');
+    return new ProviderCounter(options.model);
+  }
   get id(): string { return `openai_chat:${this.model}:local-text-v1`; }
   async count(request: RenderedRequest): Promise<TokenCount> {
     try { return tokenCount(JSON.parse(await native().count('openai', this.model, json(request)))); }

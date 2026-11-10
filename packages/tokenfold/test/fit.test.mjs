@@ -27,6 +27,21 @@ test('null configuration, malformed metadata and sparse arrays with extra proper
   await assert.rejects(tf.fit('text',{targetTokens:10,counter:{id:'bad\ud800',count:()=>({tokens:1,basis:'exact'})}}),tf.AccountingError);
   assert.throws(()=>new tf.Tokenfold({select:{config:'bad\ud800',experimental:true}}),tf.ConfigError);
 });
+test('option containers reject before property access while undefined client defaults remain valid',async()=>{
+  const client=new tf.Tokenfold(undefined);
+  try {
+    for(const options of [null,false,1,'options',[],()=>{}]) {
+      assert.throws(()=>new tf.Tokenfold(options),tf.ConfigError);
+      await assert.rejects(tf.fit('text',options),tf.ConfigError);
+      await assert.rejects(client.fit('text',options),tf.ConfigError);
+      assert.throws(()=>tf.ProviderCounter.openai(options),tf.ConfigError);
+    }
+    await assert.rejects(tf.fit('text',undefined),tf.ConfigError);
+    await assert.rejects(client.fit('text',undefined),tf.ConfigError);
+    assert.throws(()=>tf.ProviderCounter.openai(undefined),tf.ConfigError);
+    assert.equal((await client.fit('text',{targetTokens:10})).requireMet(),'text');
+  } finally {await client.close();}
+});
 test('custom exceptions, invalid counts and counter identity drift are sanitized', async () => {
   for (const count of [{tokens:true,basis:'exact'},{tokens:-1,basis:'estimated'},{tokens:0,basis:'unavailable'},{tokens:null,basis:'exact'},{tokens:2**53,basis:'exact'}]) await assert.rejects(tf.fit('text',{targetTokens:20,counter:{id:'counter:v1',count:()=>count}}),tf.AccountingError);
   await assert.rejects(tf.fit('text',{targetTokens:20,counter:{id:'counter:v1',count(){throw Error('private source secret');}}}),e=> e instanceof tf.AccountingError && !String(e).includes('private'));

@@ -36,6 +36,7 @@ export class Tokenfold {
   readonly #pending = new Set<Promise<unknown>>();
   #closing: Promise<void> | undefined;
   constructor(options: ClientOptions = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new ConfigError('invalid client options');
     const capacity = options.maxPendingScores === undefined ? 32 : options.maxPendingScores;
     const timeout = options.scoreWaitTimeoutMs === undefined ? 5000 : options.scoreWaitTimeoutMs;
     integer(capacity,0,128,ConfigError); integer(timeout,1,120000,ConfigError);
@@ -60,6 +61,7 @@ export class Tokenfold {
   }
   private async run(request: Input, options: FitOptions): Promise<FitResult<string> | FitResult<JsonObject>> {
     if (this.#closing) throw new ClosedError('client is closed');
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new ConfigError('invalid fit options');
     integer(options.targetTokens,0,Number.MAX_SAFE_INTEGER,InvalidInputError);
     const mode = options.budgetMode === undefined ? 'strict' : options.budgetMode;
     const selection = options.allowSelection === undefined ? false : options.allowSelection;
@@ -86,9 +88,15 @@ export class Tokenfold {
           const before = this.counterId();
           const rendered: RenderedRequest = freeze({format:action.format,payload:action.payload,scope:action.scope});
           session.checkCancelled();
+          let callable: TokenCounter['count'];
+          try {
+            callable = counter.count;
+            if (typeof callable !== 'function') throw Error();
+          } catch { throw new AccountingError('custom counter failed'); }
+          session.checkCancelled();
           let count, after;
           try {
-            count = tokenCount(await counter.count(rendered));
+            count = tokenCount(await Reflect.apply(callable, counter, [rendered]));
             after = this.counterId();
             if (before !== after) throw Error();
           } catch { throw new AccountingError('custom counter failed'); }
@@ -118,6 +126,7 @@ export function fit(request: string | Data | Context, options: CoreFitOptions): 
 export function fit(request: Request, options: CoreFitOptions): Promise<FitResult<JsonObject>>;
 export function fit(request: Input, options: CoreFitOptions): Promise<FitResult<string> | FitResult<JsonObject>>;
 export async function fit(request: Input, options: CoreFitOptions): Promise<FitResult<string> | FitResult<JsonObject>> {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) throw new ConfigError('invalid fit options');
   const client = new Tokenfold(options.counter === undefined ? {} : {counter:options.counter});
   try { return await client.fit(request, {...options,allowSelection:false}); }
   finally { await client.close(); }
