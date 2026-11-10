@@ -503,3 +503,98 @@ fn malformed_provider_structure_and_non_text_system_are_not_silently_flattened()
         Err(FitError::InvalidInput(_))
     ));
 }
+
+fn audio_payload(content: Value) -> Value {
+    json!({
+        "model":"gpt-4o-2024-08-06",
+        "messages":[
+            {"role":"assistant","content":content,"audio":{"id":"audio_previous"}},
+            {"role":"assistant","content":"optional text"},
+            {"role":"user","content":"latest question"}
+        ],
+        "unknown_field":"preserved"
+    })
+}
+#[test]
+fn message_audio_with_string_content_cannot_be_declared_optional() {
+    let result = PreparedRequest::openai(
+        audio_payload(json!("spoken answer")),
+        Some("active query".into()),
+        vec![MessageGroup {
+            id: "audio_history".into(),
+            indices: vec![0],
+            required: false,
+        }],
+    );
+    assert!(matches!(result, Err(FitError::InvalidInput(_))));
+}
+fn assert_audio_baseline(content: Value) {
+    use std::cell::Cell;
+    let payload = audio_payload(content);
+    let request = PreparedRequest::openai(
+        payload.clone(),
+        Some("active query".into()),
+        vec![MessageGroup {
+            id: "text_history".into(),
+            indices: vec![1],
+            required: false,
+        }],
+    )
+    .unwrap();
+    struct Counter {
+        expected: Value,
+        calls: Cell<usize>,
+    }
+    impl TokenCounter for Counter {
+        fn id(&self) -> &str {
+            "audio:complete:v1"
+        }
+        fn count(&self, request: &RenderedRequest) -> Result<TokenCount, FitError> {
+            assert_eq!(request.scope, AccountingScope::ProviderRequest);
+            assert_eq!(
+                request.payload,
+                RenderedPayload::Json(self.expected.clone())
+            );
+            self.calls.set(self.calls.get() + 1);
+            Ok(TokenCount::exact(100))
+        }
+    }
+    let counter = Counter {
+        expected: payload.clone(),
+        calls: Cell::new(0),
+    };
+    let mut session = FitSession::new(
+        Box::new(request),
+        FitOptions {
+            target_tokens: 1,
+            counter_id: counter.id().into(),
+            allow_selection: true,
+            select: Some(pin()),
+            ..FitOptions::default()
+        },
+    )
+    .unwrap();
+    let FitAction::Done(output) = session.drive(&counter, None).unwrap() else {
+        panic!("audio must return its baseline without Score")
+    };
+    assert_eq!(output.payload, RenderedPayload::Json(payload));
+    assert_eq!(output.receipt.reason, Some(FitReason::UnsupportedSelection));
+    assert_eq!(output.receipt.final_tokens, Some(100));
+    assert_eq!(output.receipt.accounting.final_basis, CountBasis::Exact);
+    assert_eq!(
+        output.receipt.groups_kept,
+        ["__tf_message_0", "text_history", "__tf_message_2"]
+    );
+    assert!(output.receipt.groups_dropped.is_empty());
+    assert!(!output.receipt.selection_applied);
+    assert!(!output.receipt.scorer_attempted);
+    assert_eq!(counter.calls.get(), 1);
+}
+#[test]
+fn required_message_audio_disables_selection_of_other_optional_text() {
+    assert_audio_baseline(json!("spoken answer"));
+}
+#[test]
+fn nullable_message_audio_survives_complete_object_accounting() {
+    assert_audio_baseline(Value::Null);
+}

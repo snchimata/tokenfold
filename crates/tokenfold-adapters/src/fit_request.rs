@@ -105,13 +105,22 @@ impl PreparedRequest {
                 || ["tool_calls", "function_call", "tool_call_id"]
                     .iter()
                     .any(|k| m.contains_key(*k));
+            let media = m.contains_key("audio");
             let text = m.get("content").is_some_and(Value::is_string);
-            if !text && !tool && !m.get("content").is_some_and(Value::is_array) {
+            let nullable_audio = !anthropic
+                && role == "assistant"
+                && media
+                && m.get("content").is_some_and(Value::is_null);
+            if !text && !tool && !nullable_audio && !m.get("content").is_some_and(Value::is_array) {
                 return Err(invalid());
             }
-            supported &= text && !tool;
+            supported &= text && !tool && !media;
             protected.push(
-                matches!(role, "system" | "developer") || Some(i) == latest_user || tool || !text,
+                matches!(role, "system" | "developer")
+                    || Some(i) == latest_user
+                    || tool
+                    || media
+                    || !text,
             );
         }
         let mut claimed = vec![false; messages.len()];
