@@ -264,6 +264,15 @@ impl Drop for PyFit {
 }
 #[pymethods]
 impl PyFit {
+    fn check_cancelled(&self) -> PyResult<()> {
+        self.state
+            .lock()
+            .unwrap()
+            .session
+            .cancellation_token()
+            .check()
+            .map_err(fit_error)
+    }
     #[pyo3(signature = (count=None, counter_id=None))]
     fn step(
         &self,

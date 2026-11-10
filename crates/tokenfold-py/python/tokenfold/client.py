@@ -113,9 +113,12 @@ class Tokenfold:
             raise AccountingError("invalid counter ID") from None
     def _step(self, session: _native._Fit, action: dict | None = None) -> dict:
         if action is not None:
+            session.check_cancelled()
+            before = self._counter_id()
+            request = RenderedRequest(action["format"], json.dumps(action["payload"], ensure_ascii=False, separators=(",", ":")), action["scope"])
+            session.check_cancelled()
             try:
-                before = self._counter_id()
-                count = self._counter.count(RenderedRequest(action["format"], json.dumps(action["payload"], ensure_ascii=False, separators=(",", ":")), action["scope"]))
+                count = self._counter.count(request)
                 after = self._counter_id()
                 if not isinstance(count, TokenCount) or after != before:
                     raise ValueError

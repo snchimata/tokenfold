@@ -277,19 +277,31 @@ def test_async_ticket_wait_cancellation_busy_and_core_executor_independence(runt
     asyncio.run(check())
 
 
-def test_queue_timeout_and_close_wake_waiters(runtime):
-    import asyncio
+@pytest.mark.parametrize("mode", ["queue_timeout", "close"])
+def test_queue_timeout_and_close_wake_waiters(runtime, mode):
+    import asyncio, threading
     config, root = runtime
+    submitted = threading.Event()
+    class ObservedAdmission(tf.Tokenfold):
+        def _step(self, session, action=None):
+            reply = super()._step(session, action)
+            if reply["action"] == "score": submitted.set()
+            return reply
     async def check():
-        client = tf.Tokenfold(counter=LengthCounter(), select=config, score_wait_timeout_ms=30)
+        client = ObservedAdmission(counter=LengthCounter(), select=config, score_wait_timeout_ms=30 if mode == "queue_timeout" else 5000)
         active = asyncio.create_task(client.afit(optional_context("hold"), target_tokens=20, allow_selection=True))
         await wait_active(root)
-        timed = await client.afit(optional_context(), target_tokens=20, allow_selection=True)
-        assert timed.reason == "scorer_queue_timeout" and not timed.receipt.scorer_attempted
-        waiting = asyncio.create_task(client.afit(optional_context(), target_tokens=20, allow_selection=True))
-        await asyncio.sleep(.005)
+        if mode == "queue_timeout":
+            timed = await client.afit(optional_context(), target_tokens=20, allow_selection=True)
+            assert timed.reason == "scorer_queue_timeout" and not timed.receipt.scorer_attempted
+        else:
+            submitted.clear()
+            waiting = asyncio.create_task(client.afit(optional_context(), target_tokens=20, allow_selection=True))
+            async with asyncio.timeout(10):
+                while not submitted.is_set(): await asyncio.sleep(0)
+            await asyncio.to_thread(client.close)
+            with pytest.raises(tf.ClosedError): await waiting
         await asyncio.to_thread(client.close)
-        with pytest.raises(tf.ClosedError): await waiting
         with pytest.raises((tf.CancelledError, tf.ClosedError)): await active
         client.close()
     asyncio.run(check())
@@ -374,3 +386,60 @@ def test_shared_numeric_fixture():
     assert results[0].original_tokens == results[1].original_tokens
     for value in fixture["unsafe_values"]:
         with pytest.raises(tf.InvalidInputError): tf.Data(value)
+
+
+def paused_count_client(counter, produced, release):
+    """Pause only after a real native Count exists, before the host callback admission."""
+    class PausedHandoff(tf.Tokenfold):
+        def _step(self, session, action=None):
+            reply = super()._step(session, action)
+            if action is None and reply["action"] == "count" and not produced.is_set():
+                produced.set()
+                assert release.wait(10), "Count handoff was not released"
+            return reply
+    return PausedHandoff(counter=counter)
+
+
+def test_cancelled_count_handoff_never_starts_sync_custom_callback():
+    import concurrent.futures, threading
+    produced, release = threading.Event(), threading.Event()
+    counter, token = LengthCounter(), tf.CancellationToken()
+    with paused_count_client(counter, produced, release) as client, concurrent.futures.ThreadPoolExecutor(1) as pool:
+        future = pool.submit(client.fit, "hello", target_tokens=10, cancel=token)
+        try:
+            assert produced.wait(10), "native Count was not produced"
+            token.cancel()
+        finally:
+            release.set()
+        with pytest.raises(tf.CancelledError): future.result(timeout=10)
+    assert counter.calls == [], "cancelled handoff admitted a new custom callback"
+
+
+@pytest.mark.parametrize("mode", ["repeated_task_cancel", "client_close"])
+def test_cancelled_count_handoff_never_starts_async_custom_callback(mode):
+    import asyncio, threading
+    produced, release = threading.Event(), threading.Event()
+    counter, token = LengthCounter(), tf.CancellationToken()
+    async def check():
+        async with paused_count_client(counter, produced, release) as client:
+            task = asyncio.create_task(client.afit("hello", target_tokens=10, cancel=token))
+            try:
+                async with asyncio.timeout(10):
+                    while not produced.is_set(): await asyncio.sleep(0)
+                if mode == "repeated_task_cancel":
+                    task.cancel()
+                    async with asyncio.timeout(10):
+                        while not token.cancelled: await asyncio.sleep(0)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    assert not task.done(), "repeated cancellation abandoned the shielded runner"
+                    expected = asyncio.CancelledError
+                else:
+                    await asyncio.to_thread(client.close)
+                    assert not token.cancelled, "close must be observed through the native session, not only the external token"
+                    expected = tf.CancelledError
+            finally:
+                release.set()
+            with pytest.raises(expected): await task
+        assert counter.calls == [], "cancelled handoff admitted a new custom callback"
+    asyncio.run(check())
