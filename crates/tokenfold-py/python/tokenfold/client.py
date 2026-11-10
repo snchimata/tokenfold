@@ -25,6 +25,7 @@ class SelectRuntime:
             path = fspath(self.config)
             if type(path) is not str:
                 raise TypeError
+            path.encode("utf-8")
             object.__setattr__(self, "config", path)
         except Exception:
             raise ConfigError("invalid Select configuration path") from None

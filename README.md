@@ -210,7 +210,7 @@ print(f"{result.report.original_tokens} -> {result.report.compressed_tokens} tok
       f"({result.saved_pct():.1f}% saved)")
 ```
 
-Send `result.payload` (bytes) to the model. Use `tokenfold.decode` when your
+Send `result.payload` (bytes) to the model. Use `tokenfold.lowlevel.decode` when your
 application needs the original JSON shape again. Small or irregular inputs may
 pass through unchanged under the never-larger guard.
 

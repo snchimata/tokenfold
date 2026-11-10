@@ -25,12 +25,14 @@ import importlib.util,os,runpy,sys,sysconfig
 sys.pycache_prefix=sys.argv.pop(1)
 root=sys.argv.pop(1)
 prefix=os.path.dirname(os.path.dirname(sys.executable))
+scheme=sysconfig.get_default_scheme()
 if os.path.isfile(os.path.join(prefix,'pyvenv.cfg')):
     sys.prefix=sys.exec_prefix=prefix
+    scheme='venv'
 else:
     prefix=sys.prefix
 for kind in ('purelib','platlib'):
-    path=sysconfig.get_path(kind,vars=dict(base=prefix,platbase=prefix))
+    path=sysconfig.get_path(kind,scheme=scheme,vars=dict(base=prefix,platbase=prefix))
     if os.path.isdir(path) and path not in sys.path:
         sys.path.append(path)
 spec=importlib.util.spec_from_file_location('tokenfold_select_runtime',os.path.join(root,'__init__.py'),submodule_search_locations=[root])
@@ -39,6 +41,39 @@ sys.modules[spec.name]=module
 spec.loader.exec_module(module)
 runpy.run_module('tokenfold_select_runtime',run_name='__main__')
 "#;
+
+#[test]
+fn bootstrap_venv_ignores_captured_base_installation_scheme() {
+    let setup = r#"
+import os,pathlib,sys,sysconfig,tempfile
+with tempfile.TemporaryDirectory() as directory:
+    root=pathlib.Path(directory)
+    (root/'pyvenv.cfg').touch()
+    sys.executable=str(root/('Scripts/python.exe' if os.name=='nt' else 'bin/python'))
+    site=pathlib.Path(sysconfig.get_path('purelib',scheme='venv',vars=dict(base=directory,platbase=directory)))
+    site.mkdir(parents=True)
+    (site/'bootstrap_dependency.py').write_text('VALUE=42\n')
+    source=root/'source'
+    source.mkdir()
+    (source/'__init__.py').touch()
+    (source/'__main__.py').write_text('from bootstrap_dependency import VALUE\nassert VALUE==42\n')
+    # Reproduce a distro base default captured before -S venv prefix restoration.
+    sysconfig._INSTALL_SCHEMES['base_fixture']=dict(sysconfig._INSTALL_SCHEMES['venv'],purelib='{base}/wrong-site',platlib='{platbase}/wrong-site')
+    sysconfig.get_path.__defaults__=('base_fixture',None,True)
+    bootstrap=sys.argv[1]
+    sys.argv=['-c',str(root/'cache'),str(source)]
+    exec(bootstrap)
+"#;
+    let output = Command::new("python")
+        .args(["-I", "-S", "-B", "-c", setup, BOOTSTRAP])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 const SOURCE_FILES: &[&str] = &[
     "__init__.py",

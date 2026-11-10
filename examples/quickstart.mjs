@@ -1,8 +1,8 @@
 ﻿/** Minimal Node.js quickstart for Tokenfold's bytes-first v2 interface. */
 import { readFile } from "node:fs/promises";
 
-const { compress, decode, inspect } = await import("tokenfold").catch(() =>
-  import(new URL("../packages/tokenfold/dist/index.js", import.meta.url).href),
+const { compress, decode, inspect } = await import("tokenfold/cli").catch(() =>
+  import(new URL("../packages/tokenfold/dist/cli.js", import.meta.url).href),
 );
 const here = (name) => new URL(name, import.meta.url);
 const show = (label, report) => console.log(

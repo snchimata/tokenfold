@@ -91,6 +91,14 @@ def test_closed_config_and_disabled_runtime():
         client.fit("text", target_tokens=20, cancel=token)
 
 
+@pytest.mark.parametrize("pathlike", [False, True])
+def test_select_config_surrogate_is_typed(pathlike):
+    class Path:
+        def __fspath__(self): return "bad\ud800"
+    with pytest.raises(tf.ConfigError, match="invalid Select configuration path"):
+        tf.SelectRuntime(Path() if pathlike else "bad\ud800", experimental=True)
+
+
 def test_counter_errors_are_sanitized_and_counts_validated():
     class Counter:
         id = "custom:test:v1"

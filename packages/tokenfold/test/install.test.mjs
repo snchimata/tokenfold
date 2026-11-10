@@ -57,6 +57,11 @@ test('fresh packed install outside checkout: native Core, fake worker, missing a
     assert.equal(JSON.parse(output).core,true);
     copyFileSync(join(root,'examples/sdk_fit.mjs'),join(install,'example.mjs'));
     execFileSync(process.execPath,['example.mjs'],{cwd:install,env:cleanEnv,stdio:'pipe'});
+    for (const name of ['quickstart.mjs','openai_payload.json','api_response.json']) {
+      copyFileSync(join(root,'examples',name),join(install,name));
+    }
+    const quickstart=execFileSync(process.execPath,['quickstart.mjs'],{cwd:install,env:{...cleanEnv,TOKENFOLD_BINARY_PATH:process.env.TOKENFOLD_TEST_BINARY},encoding:'utf8'});
+    assert.match(quickstart,/== explicit TOON ==/);
     // Reuse the real lifecycle/parity suite against installed JS and the packed addon.
     for (const name of ['fit.test.mjs','native.test.mjs','parity.test.mjs']) {
       const source=readFileSync(join(facade,'test',name),'utf8')

@@ -619,7 +619,7 @@ fn owned_venv(f: &Fixture, symlinks: bool) -> (PathBuf, PathBuf) {
     let approval: serde_json::Value =
         serde_json::from_slice(&std::fs::read(f.root.join("approval.json")).unwrap()).unwrap();
     let root = f.root.join("owned-venv");
-    let output=std::process::Command::new(approval["python_executable"].as_str().unwrap()).args(["-I","-S","-B","-c", "import json,os,sys,sysconfig,venv; root=sys.argv[1]; venv.EnvBuilder(with_pip=False,symlinks=sys.argv[2]=='1').create(root); print(json.dumps(dict(python=os.path.join(root,'Scripts' if os.name=='nt' else 'bin','python.exe' if os.name=='nt' else 'python'),site=sysconfig.get_path('purelib',vars=dict(base=root,platbase=root)))))"]).arg(&root).arg(if symlinks{"1"}else{"0"}).output().unwrap();
+    let output=std::process::Command::new(approval["python_executable"].as_str().unwrap()).args(["-I","-S","-B","-c", "import json,os,sys,sysconfig,venv; root=sys.argv[1]; venv.EnvBuilder(with_pip=False,symlinks=sys.argv[2]=='1').create(root); print(json.dumps(dict(python=os.path.join(root,'Scripts' if os.name=='nt' else 'bin','python.exe' if os.name=='nt' else 'python'),site=sysconfig.get_path('purelib',scheme='venv',vars=dict(base=root,platbase=root)))))"]).arg(&root).arg(if symlinks{"1"}else{"0"}).output().unwrap();
     assert!(
         output.status.success(),
         "{}",

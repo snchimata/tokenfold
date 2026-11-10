@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,6 +20,13 @@ import {
 const testBinary = process.env.TOKENFOLD_TEST_BINARY;
 if (!testBinary) throw new Error("TOKENFOLD_TEST_BINARY must point to a tokenfold binary");
 process.env.TOKENFOLD_BINARY_PATH = testBinary;
+
+test("advertised quickstart runs through the checkout CLI fallback", () => {
+  const output = execFileSync(process.execPath, [path.join(import.meta.dirname, "../../../examples/quickstart.mjs")], { encoding: "utf8" });
+  assert.match(output, /== OpenAI request ==/);
+  assert.match(output, /== generic JSON preview ==/);
+  assert.match(output, /== explicit TOON ==/);
+});
 
 test("versioned reader retains archived receipts and refuses unsupported shapes", async () => {
   const fixtures = path.join(import.meta.dirname, "..", "..", "..", "tests", "fixtures");
