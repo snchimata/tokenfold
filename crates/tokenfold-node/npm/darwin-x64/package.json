@@ -1,0 +1,24 @@
+{
+  "name": "@tokenfold/native-darwin-x64",
+  "version": "0.6.0",
+  "description": "Tokenfold native addon for darwin-x64",
+  "license": "Apache-2.0",
+  "main": "tokenfold.node",
+  "files": [
+    "tokenfold.node",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

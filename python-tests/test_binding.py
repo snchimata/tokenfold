@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import tokenfold
+from tokenfold import lowlevel as tokenfold
 
 
 def test_public_surface_is_the_v2_contract():

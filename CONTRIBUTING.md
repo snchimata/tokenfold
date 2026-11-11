@@ -51,10 +51,17 @@ same ones.
 
 Release commits go through a PR like everything else.
 
-Also align `packages/tokenfold-select/pyproject.toml` and its package version;
-`python scripts/check-release-versions.py` checks the registry version set. The
-optional Select wheel/sdist is published alongside the `tokenfold` binding.
-Model weights remain a separate, explicitly approved Hugging Face release.
+Align all active Cargo versions/path pins/lockfile, npm root/CLI/native platform
+packages and lockfile, maintained runtime version, and exact Python select extra.
+`python scripts/check-release-versions.py` checks this active set dynamically.
+Historical archives/model snapshots are not version-synchronized release packages.
+The optional lightweight `tokenfold-select-runtime` wheel/sdist is published with
+`tokenfold`; model weights remain a separate explicitly approved acquisition.
+
+Before release, require the five-platform installed-artifact matrix (Python 3.12/3.13,
+Node 22/24), wheel/sdist and packed addon execution, shared fixtures and lifecycle
+checks. GNU native addons and musl CLI binaries are distinct assets. A local Windows
+pass is not evidence for other targets. See [SDK migration](docs/sdk-migration.md).
 
 ```sh
 git switch main && git pull

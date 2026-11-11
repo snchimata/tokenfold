@@ -1,0 +1,27 @@
+{
+  "name": "@tokenfold/native-linux-arm64",
+  "version": "0.6.0",
+  "description": "Tokenfold native addon for linux-arm64",
+  "license": "Apache-2.0",
+  "main": "tokenfold.node",
+  "files": [
+    "tokenfold.node",
+    "LICENSE"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "libc": [
+    "glibc"
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "tokenfold",
-  "version": "0.5.4",
-  "description": "Token-aware compression for LLM payloads, backed by the tokenfold Rust CLI.",
+  "version": "0.6.0",
+  "description": "Native in-process token budget fitting for text and provider requests.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -36,7 +36,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
   },
   "files": [
     "bin",
@@ -45,15 +49,22 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test test/*.test.mjs ../../scripts/*.test.mjs",
-    "prepack": "npm run build"
+    "test": "npm run build && npm run test:types && node --test test/*.test.mjs ../../scripts/*.test.mjs",
+    "prepack": "npm run build",
+    "build:native": "node ../../scripts/build-native.mjs",
+    "test:types": "tsc --noEmit --strict --target ES2022 --lib ES2024 --module NodeNext --moduleResolution NodeNext test/fit-types.ts"
   },
   "optionalDependencies": {
-    "@tokenfold/cli-darwin-x64": "0.5.4",
-    "@tokenfold/cli-darwin-arm64": "0.5.4",
-    "@tokenfold/cli-linux-x64": "0.5.4",
-    "@tokenfold/cli-linux-arm64": "0.5.4",
-    "@tokenfold/cli-win32-x64": "0.5.4"
+    "@tokenfold/cli-darwin-x64": "0.6.0",
+    "@tokenfold/cli-darwin-arm64": "0.6.0",
+    "@tokenfold/cli-linux-x64": "0.6.0",
+    "@tokenfold/cli-linux-arm64": "0.6.0",
+    "@tokenfold/cli-win32-x64": "0.6.0",
+    "@tokenfold/native-darwin-x64": "0.6.0",
+    "@tokenfold/native-darwin-arm64": "0.6.0",
+    "@tokenfold/native-linux-x64": "0.6.0",
+    "@tokenfold/native-linux-arm64": "0.6.0",
+    "@tokenfold/native-win32-x64": "0.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

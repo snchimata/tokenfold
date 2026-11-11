@@ -1,0 +1,72 @@
+{
+  "kind": "format_neutral_selection_plan",
+  "query": "query",
+  "fixed_guide_text": "",
+  "groups": [
+    {
+      "id": "A",
+      "scoring_text": "x x x x x x",
+      "required": true,
+      "guide_cost": 6,
+      "score": -100
+    },
+    {
+      "id": "B",
+      "scoring_text": "x x x x",
+      "required": false,
+      "guide_cost": 4,
+      "score": 2
+    },
+    {
+      "id": "C",
+      "scoring_text": "x x x x",
+      "required": false,
+      "guide_cost": 4,
+      "score": 1
+    }
+  ],
+  "target_tokens": 10,
+  "cases": [
+    {
+      "id": "exact_AB",
+      "counts": {
+        "A B C": 14,
+        "A": 6,
+        "A B": 10
+      },
+      "groups_kept": [
+        "A",
+        "B"
+      ],
+      "final_tokens": 10
+    },
+    {
+      "id": "nonadditive_trim",
+      "counts": {
+        "A B C": 14,
+        "A": 6,
+        "A B": 11
+      },
+      "groups_kept": [
+        "A"
+      ],
+      "final_tokens": 6
+    },
+    {
+      "id": "nonmonotone_conservative_preflight",
+      "counts": {
+        "A B C": 14,
+        "A": 11,
+        "A B": 9
+      },
+      "groups_kept": [
+        "A",
+        "B",
+        "C"
+      ],
+      "final_tokens": 14,
+      "reason": "required_over_budget",
+      "not_an_impossibility_proof": true
+    }
+  ]
+}

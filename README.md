@@ -169,14 +169,40 @@ inputs and provenance live in [`tests/fixtures/readme_metrics.json`](tests/fixtu
 
 ## Quick start
 
+### Native SDK fitting (0.6.0)
+
+Python >=3.12 (`pip install tokenfold==0.6.0`) and Node >=22
+(`npm install tokenfold@0.6.0`). See the migration guide for breaking import changes.
+Base fitting is offline and model-free, with no auto-send, model download or storage.
+
+```python
+from tokenfold import fit
+result = fit("Keep this text unchanged.", target_tokens=32)
+payload = result.require_met()
+print(result.receipt.to_json())
+```
+
+```js
+import { fit } from "tokenfold";
+const result = await fit("Keep this text unchanged.", { targetTokens: 32 });
+const payload = result.requireMet();
+```
+
+Text/Data/Context return text; full provider requests return JSON objects. Provider
+framing is not an encoding count: exact checked access rejects unavailable/estimated
+budgets. Explicit best-effort can accept an estimate without calling it exact.
+See [SDK migration](docs/sdk-migration.md), [Python example](examples/sdk_fit.py),
+[Node example](examples/sdk_fit.mjs), and [validation status](docs/sdk-validation-0.6.0.md).
+Advanced compression remains under `tokenfold.lowlevel` / `tokenfold/cli`.
+
 ### Python: compress JSON directly
 
-After `pip install tokenfold`, try this self-contained example. Thirty uniform
+After installing Tokenfold, try this self-contained example. Thirty uniform
 records provide enough repeated structure to demonstrate lossless folding:
 
 ```python
 import json
-from tokenfold import InputFormat, compress
+from tokenfold.lowlevel import InputFormat, compress
 
 records = [{"id": i, "role": "member", "status": "active"} for i in range(30)]
 result = compress(json.dumps(records), format=InputFormat.JSON)
@@ -184,7 +210,7 @@ print(f"{result.report.original_tokens} -> {result.report.compressed_tokens} tok
       f"({result.saved_pct():.1f}% saved)")
 ```
 
-Send `result.payload` (bytes) to the model. Use `tokenfold.decode` when your
+Send `result.payload` (bytes) to the model. Use `tokenfold.lowlevel.decode` when your
 application needs the original JSON shape again. Small or irregular inputs may
 pass through unchanged under the never-larger guard.
 
@@ -297,13 +323,15 @@ without folding the provider envelope; see [observation compression](docs/config
 > `schema_compaction` is not enabled by any preset. Unlike the default
 > transforms, it truncates `examples` arrays and is not reversible.
 
-### Runnable examples (Python >=3.9, Node.js >=22, Rust >=1.98)
+### Runnable examples (Python >=3.12, Node.js >=22, Rust >=1.98)
 
 Runnable examples, one per surface, all under [`examples/`](examples):
 
 ```bash
-python examples/quickstart.py      # Python: compress messages, request bodies, JSON data
-node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read the receipt
+python examples/sdk_fit.py         # Python: native fit, checked payload, fit receipt
+node examples/sdk_fit.mjs          # Node: native fit, checked payload, fit receipt
+python examples/quickstart.py      # Advanced Python lowlevel compression and decoding
+node examples/quickstart.mjs       # Advanced Node CLI compression and decoding
 cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
 python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
 python examples/contextdoctor_report.py   # source checkout: offline outcome/regression controls
@@ -362,115 +390,15 @@ Tokenfold solves a different problem first: repeated keys, values, schemas, rows
 **When structure ends, rank what matters.**
 
 [Tokenfold Select v3][tokenfold-select] is an Apache-2.0, **149.6M-parameter**
-joint-group scorer built on the full 22-layer Ettin encoder. It scores groups
-against the query and their neighbors within each window; your allocator keeps
-selected source text unchanged, protects required content, and enforces the exact
-token budget. The model returns scores, not a compressed string or calibrated
-probabilities. Core remains model-free and neither loads nor invokes Select.
-
-Use the [v3 model card][tokenfold-select] for the included custom loader and
-explicit CPU/FP32 or CUDA/BF16 setup. The older Granite/LoRA model is Select v1,
-not the v3 architecture or loader.
-
-| | Tokenfold Core | Tokenfold Select |
-| --- | --- | --- |
-| Best at | Structural compression | Query-conditioned group ranking |
-| Runtime | Static Rust binary | Ettin 150M encoder (v3), CPU or CUDA |
-| Output | Compressed payload + exact receipt | Group relevance scores; caller-owned allocation |
-
-<details>
-<summary><strong>Optional tokenfold-select 0.5.4 SDK: Select v2 setup</strong></summary>
-
-V3 is provisioned separately through its model card. The version-aligned 0.5.4 SDK
-continues to use the v2 backend below; this README update does not change it.
-
-**Select v2 is the default scorer backend in the optional `tokenfold-select`
-0.5.4 package: local FP32 ONNX inference, original text, whole-group ranking.**
-Provision the separate pinned model artifact, generate explicit runtime approval,
-and invoke `tokenfold --experimental select`. Core remains model-free and
-deterministic; installing or upgrading Tokenfold does not silently load a model
-or enable lossy selection. See the [Select v2 setup and limits](packages/tokenfold-select/README.md).
-The separate model bundle also carries Safetensors weights and a custom reference
-loader; ONNX remains the CLI worker default. V2 is an experimental preview:
-[Both formats are published under Apache-2.0](https://huggingface.co/snchimata/tokenfold-select-v2).
-Synthetic CPU parity is verified, but task-quality and cold/warm performance
-qualification are still open. The notebook's [separate v3 CUDA example](examples/quickstart.ipynb#10-tokenfold-select-v3-local-cuda-ranking)
-is explicitly enabled and needs a provisioned v3 bundle; it does not change this SDK's defaults.
-
-<details>
-<summary><strong>Python: try Tokenfold Select v2 (ONNX)</strong></summary>
-
-Install `tokenfold-select[onnx]==0.5.4` and `huggingface_hub==1.33.0`, then download
-only the ONNX profile at the pinned release commit:
-
-```python
-from pathlib import Path
-from huggingface_hub import snapshot_download
-from tokenfold_select import OnnxScorer
-
-root = Path(snapshot_download(
-    "snchimata/tokenfold-select-v2",
-    revision="78736d9afea819322f212d6d53eedcf68ac7a39b",
-    allow_patterns=["model.onnx", "model.onnx.data", "onnx-manifest.json",
-                    "tokenizer/*", "runtime/*", "LICENSE", "NOTICE.md"],
-)).resolve()
-scorer = OnnxScorer(root, development=True)
-response = scorer.score({
-    "schema_version": 1, "model_revision": scorer.revision,
-    "query": "Which delivery city?",
-    "groups": [{"id": "delivery", "text": "Delivery city: Paris"}],
-})
-print(response)  # scores only; your controller owns protection and allocation
-```
-
-For Safetensors, use the model card's custom loader rather than a stock
-Transformers classification class. Neither format silently changes Core behavior.
-
-</details>
-
-</details>
-
-<details>
-<summary><strong>Archived Select v1: Granite + LoRA scoring example (not v3)</strong></summary>
-
-```python
-from pathlib import Path
-
-import torch
-from huggingface_hub import snapshot_download
-from peft import PeftModel
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-base_id = "ibm-granite/granite-embedding-reranker-english-r2"
-repo_dir = Path(snapshot_download("snchimata/tokenfold-select"))
-adapter_dir = repo_dir / "adapter"
-tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
-base = AutoModelForSequenceClassification.from_pretrained(
-    base_id,
-    dtype=torch.float32,
-)
-model = PeftModel.from_pretrained(base, adapter_dir).eval()
-
-def score(query: str, spans: list[str]) -> list[float]:
-    if not spans:
-        return []
-    encoded = tokenizer(
-        [query] * len(spans),
-        spans,
-        padding=True,
-        truncation=True,
-        max_length=8192,
-        return_tensors="pt",
-    )
-    with torch.no_grad():
-        output = model(
-            input_ids=encoded["input_ids"],
-            attention_mask=encoded["attention_mask"],
-        )
-    return output.logits.view(-1).float().tolist()
-```
-
-</details>
+joint-group Ettin scorer. Core remains model-free and neither loads nor invokes Select.
+The 0.6 SDK uses the lightweight maintained [tokenfold-select-runtime](packages/tokenfold-select-runtime/README.md),
+not the superseded v2 package or an implicit direct-bundle loader. Model files are
+acquired separately at an immutable revision; they do not ship in a clone or base SDK.
+Use explicit CPU/FP32 or CUDA/BF16 setup and per-fit selection consent. Import and
+already-fitting Core requests never load weights. Selection is experimental and
+unqualified: grouping and required flags preserve caller-declared dependencies,
+not independent proof of answer quality. No automatic recoverable pruning occurs.
+See [provisioning, accounting, and lifecycle](docs/sdk-migration.md).
 
 ### Tokenfold Select v3 benchmarks
 
@@ -769,7 +697,7 @@ Use a throwaway store directory while experimenting and reuse it for retrieval:
 ```python
 import json
 from pathlib import Path
-from tokenfold import InputFormat, PruningPolicy, compress, retrieve
+from tokenfold.lowlevel import InputFormat, PruningPolicy, compress, retrieve
 
 store = Path(".tokenfold-readme-store")
 feed_bytes = Path("examples/incident_feed.json").read_bytes()

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenfold-select-runtime"
+version = "0.6.0"
+requires-python = ">=3.12"
+description = "Explicit pinned offline resident Select v3 runtime"
+readme = "README.md"
+license-files = ["LICENSE", "NOTICE", "PROVENANCE.json"]
+license = "Apache-2.0"
+
+[tool.setuptools.packages.find]
+where = ["src"]

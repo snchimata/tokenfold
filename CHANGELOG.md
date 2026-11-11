@@ -1,6 +1,22 @@
 # Changelog
 
+
 ## [Unreleased]
+
+## [0.6.0] - 2026-11-10
+
+- Replace primary Python/Node APIs with native, offline `fit`, typed inputs/results,
+  checked exact/best-effort budgets and versioned fit receipts; no automatic sending.
+- Move advanced Python APIs to `tokenfold.lowlevel` and Node CLI utilities to
+  `tokenfold/cli`. Python now requires 3.12; Node requires 22.
+- Add explicit maintained Select v3 runtime provisioning, per-fit consent, bounded
+  resident scoring and cancellation; selection remains unqualified.
+- Package native addons separately from CLI binaries; gate installed artifacts on
+  five targets and Python 3.12/3.13 plus Node 22/24. Remove obsolete active v2 scaffolding.
+- Preserve legacy CLI/compression report and golden contracts. See
+  [migration](docs/sdk-migration.md) and [validation](docs/sdk-validation-0.6.0.md).
+- Refresh Python, Node and notebook examples for registry installation and keep
+  native fitting separate from advanced lowlevel compression.
 
 ## [0.5.4] - 2026-11-09
 

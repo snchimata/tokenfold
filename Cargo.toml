@@ -5,6 +5,7 @@ members = [
     "crates/tokenfold-cli",
     "crates/tokenfold-proxy",
     "crates/tokenfold-py",
+    "crates/tokenfold-node",
     "crates/tokenfold-image",
     "crates/tokenfold-adapters",
     "crates/tokenfold-rag",
@@ -14,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.4"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.98"
 license = "Apache-2.0"
@@ -22,7 +23,7 @@ repository = "https://github.com/snchimata/tokenfold"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 thiserror = "1"
 regex = "1"
 clap = { version = "4", features = ["derive"] }

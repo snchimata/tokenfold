@@ -6,7 +6,7 @@ on:
       version:
         description: Existing GitHub release version to publish
         required: true
-        default: 0.5.4
+        default: 0.6.0
 
 permissions:
   contents: read
@@ -16,13 +16,18 @@ env:
   VERSION: ${{ inputs.version }}
 
 jobs:
+  sdk-artifacts:
+    uses: ./.github/workflows/sdk-artifacts.yml
+    with:
+      ref: v${{ inputs.version }}
+
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: v${{ inputs.version }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -54,7 +59,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: v${{ inputs.version }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98
       - name: Publish ordered Cargo dependency chain
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -119,7 +124,15 @@ jobs:
       - name: Install and test wheel
         shell: bash
         run: |
-          python -m pip install pytest dist/*.whl
+          python -m pip install -r python-tests/requirements-sdk.txt dist/*.whl
+          python -m pytest python-tests -q
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Verify abi3 wheel on Python 3.13
+        shell: bash
+        run: |
+          python -m pip install -r python-tests/requirements-sdk.txt dist/*.whl
           python -m pytest python-tests -q
       - uses: actions/upload-artifact@v7
         with:
@@ -139,12 +152,18 @@ jobs:
       - run: python -m pip install "maturin>=1.5,<2.0" twine
       - run: python -m maturin sdist --out dist -m crates/tokenfold-py/Cargo.toml
       - run: python -m twine check dist/*
+      - uses: dtolnay/rust-toolchain@1.98
+      - name: Build and test the sdist, not the checkout wheel
+        shell: bash
+        run: |
+          python -m pip install -r python-tests/requirements-sdk.txt dist/*.tar.gz
+          python -m pytest python-tests -q
       - uses: actions/upload-artifact@v7
         with:
           name: python-sdist
           path: dist/*
 
-  select-python:
+  runtime-python:
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -154,19 +173,20 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m pip install build twine numpy==2.5.3
-      - run: python -m build --outdir dist-select packages/tokenfold-select
-      - run: python -m twine check dist-select/*
-      - run: python -m pip install --no-deps dist-select/*.whl
-      - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select/tests" -v
+      - run: python -m pip install build twine
+      - run: python -m build --outdir dist-runtime packages/tokenfold-select-runtime
+      - run: python -m twine check dist-runtime/*
+      - run: python -m pip install --no-deps dist-runtime/*.whl
+      - run: python -I scripts/check-runtime-install.py
+      - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select-runtime/tests" -v
         working-directory: ${{ runner.temp }}
       - uses: actions/upload-artifact@v7
         with:
-          name: python-select
-          path: dist-select/*
+          name: python-runtime
+          path: dist-runtime/*
 
   publish-python:
-    needs: [publish-crates, python-wheels, python-sdist, select-python]
+    needs: [publish-crates, python-wheels, python-sdist, runtime-python]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -182,7 +202,7 @@ jobs:
           skip-existing: true
 
   npm-pack:
-    needs: validate
+    needs: [validate, sdk-artifacts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -200,10 +220,19 @@ jobs:
       - run: node scripts/stage-npm-platform-packages.mjs "$VERSION" target/npm-assets target/npm-platforms
       - run: npm ci
         working-directory: packages/tokenfold
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: sdk-native-*
+          merge-multiple: true
+          path: target/native-tarballs
       - name: Pack npm packages
         shell: bash
         run: |
           mkdir -p target/npm-tarballs
+          cd target/native-tarballs
+          sha256sum -c *.sha256
+          cd ../..
+          cp target/native-tarballs/*.tgz target/npm-tarballs/
           for package in target/npm-platforms/*; do
             npm pack "$package" --pack-destination target/npm-tarballs
           done
@@ -217,25 +246,8 @@ jobs:
     needs: npm-pack
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            node: 22
-            package: tokenfold-cli-linux-x64
-          - os: ubuntu-latest
-            node: 24
-            package: tokenfold-cli-linux-x64
-          - os: ubuntu-24.04-arm
-            node: 24
-            package: tokenfold-cli-linux-arm64
-          - os: macos-15-intel
-            node: 24
-            package: tokenfold-cli-darwin-x64
-          - os: macos-15
-            node: 24
-            package: tokenfold-cli-darwin-arm64
-          - os: windows-latest
-            node: 24
-            package: tokenfold-cli-win32-x64
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-15, windows-latest]
+        node: [22, 24]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/setup-node@v6
@@ -249,15 +261,18 @@ jobs:
         shell: bash
         run: |
           mkdir smoke
-          npm install --prefix smoke --ignore-scripts --no-audit --no-fund \
+          platform=$(node -p 'process.platform + "-" + process.arch')
+          npm install --prefix smoke --ignore-scripts --offline --omit=optional --no-audit --no-fund \
             "./tarballs/tokenfold-$VERSION.tgz" \
-            "./tarballs/${{ matrix.package }}-$VERSION.tgz"
+            "./tarballs/tokenfold-cli-$platform-$VERSION.tgz" \
+            "./tarballs/tokenfold-native-$platform-$VERSION.tgz"
       - name: Smoke CLI and TypeScript API
         working-directory: smoke
         shell: bash
         run: |
           npx --no-install tokenfold --version | grep "tokenfold $VERSION"
-          node --input-type=module --eval "import { compress, inspect } from 'tokenfold'; const input = Uint8Array.from(Buffer.from('[{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"}]')); const a = await compress(input, { format: 'json' }); const b = await inspect(input, { format: 'json' }); if (a.report.schema_version !== '2.0' || b.schema_version !== '2.0' || !a.payload.byteLength) process.exit(1);"
+          node --input-type=module --eval "import {fit} from 'tokenfold'; if ((await fit('installed native', {targetTokens:32})).requireMet() !== 'installed native') process.exit(1);"
+          node --input-type=module --eval "import { compress, inspect } from 'tokenfold/cli'; const input = Uint8Array.from(Buffer.from('[{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"},{\"status\":\"ok\"}]')); const a = await compress(input, { format: 'json' }); const b = await inspect(input, { format: 'json' }); if (a.report.schema_version !== '2.0' || b.schema_version !== '2.0' || !a.payload.byteLength) process.exit(1);"
       - if: runner.os == 'Linux'
         name: Prove Linux binary is static
         shell: bash
@@ -267,7 +282,7 @@ jobs:
           ! readelf -l "$binary" | grep -q INTERP
 
   release-ready:
-    needs: [validate, python-wheels, python-sdist, select-python, npm-smoke]
+    needs: [validate, sdk-artifacts, python-wheels, python-sdist, runtime-python, npm-smoke]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All registry artifacts passed their pre-publication checks."
@@ -306,4 +321,7 @@ jobs:
           publish @tokenfold/cli-linux-arm64 "./tarballs/tokenfold-cli-linux-arm64-$VERSION.tgz"
           publish @tokenfold/cli-linux-x64 "./tarballs/tokenfold-cli-linux-x64-$VERSION.tgz"
           publish @tokenfold/cli-win32-x64 "./tarballs/tokenfold-cli-win32-x64-$VERSION.tgz"
+          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64 win32-x64; do
+            publish "@tokenfold/native-$platform" "./tarballs/tokenfold-native-$platform-$VERSION.tgz"
+          done
           publish tokenfold "./tarballs/tokenfold-$VERSION.tgz"

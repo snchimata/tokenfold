@@ -1,0 +1,35 @@
+{
+  "kind": "tokenfold.fit",
+  "schema_version": "1.0",
+  "format": "json_data",
+  "budget_mode": "strict",
+  "budget_status": "met",
+  "reason": null,
+  "target_tokens": 12,
+  "original_tokens": 20,
+  "baseline_tokens": 12,
+  "final_tokens": 12,
+  "accounting": {
+    "counter_id": "fixture:whole-request:v1",
+    "scope": "rendered_text",
+    "original_basis": "exact",
+    "baseline_basis": "exact",
+    "final_basis": "exact"
+  },
+  "core_transforms": ["json_field_fold"],
+  "scorer_attempted": false,
+  "scorer_succeeded": false,
+  "selection_applied": false,
+  "scorer": null,
+  "groups_kept": [],
+  "groups_dropped": [],
+  "warnings": [],
+  "timings_ms": {
+    "total": null,
+    "core": null,
+    "accounting": null,
+    "score_queue": null,
+    "startup": null,
+    "scoring": null
+  }
+}
