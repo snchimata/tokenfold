@@ -98,6 +98,26 @@ Release tags are protected against deletion and force-moves: a published tag is
 immutable, because `publish-packages.yml` builds registry artifacts from the
 release it produced.
 
+### One-time npm native 0.6.0 bootstrap
+
+Trusted publishers are per package; the root `tokenfold` configuration does not
+authorize creation of `@tokenfold/native-*`. Keep the stricter 2FA policy. The
+manual `bootstrap-npm-native.yml` workflow checks the five original native tarballs
+from publication run `42955400102` against pinned SHA-256 hashes, then repairs only
+their missing repository metadata required for provenance. It verifies unchanged
+compiled addon/license bytes and records new tarball hashes in the
+`native-bootstrap-tarballs` artifact before staging with provenance. It creates
+package placeholders, not a public 0.6.0 SDK. No binaries are rebuilt, package scripts
+executed, original assets overwritten, tags moved or 2FA bypassed.
+
+Approve the staged native packages on npm with maintainer 2FA, then configure each
+package's GitHub trusted publisher as `snchimata/tokenfold`, workflow
+`publish-packages.yml`, with publishing allowed. Do not approve a different tarball.
+If a rerun stops at an already-staged version, approve that pending stage before
+rerunning; never overwrite it. Once all five native versions are public, rerun only
+the failed npm publication job in the original run, then verify all public versions,
+artifact digests and a fresh install. Existing tested artifacts remain the source.
+
 ## Repository rulesets
 
 The protection above is stored as code in [.github/rulesets/](.github/rulesets/)
