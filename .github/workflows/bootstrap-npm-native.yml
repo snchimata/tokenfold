@@ -39,13 +39,14 @@ jobs:
         run: |
           set -euo pipefail
           cd tarballs
-          sha256sum -c <<'SHA256'
+          cat > ORIGINAL_SHA256SUMS <<'SHA256'
           07b2cadecf85e7eaaaa625032dfc126a895ff9788b924a0d5afbcaeb8f3279d4  tokenfold-native-darwin-arm64-0.6.0.tgz
           cc0520e04c71862df36ce4f9e712bf21fbb9a1a2cb33602f13baf890f8c65f25  tokenfold-native-darwin-x64-0.6.0.tgz
           1563bde4a51836ce4043c2fbca2aa3a0459aaa6e77bc19335cda507d9928d42f  tokenfold-native-linux-arm64-0.6.0.tgz
           01b440f0091b2eeaa5d1cba2696ddf7bff84f40b7ee936ad477f99e5aac0a60c  tokenfold-native-linux-x64-0.6.0.tgz
           5718176346edabac8af28cd91408354767bb60ed068c1a76a7fc07b17be5978c  tokenfold-native-win32-x64-0.6.0.tgz
           SHA256
+          sha256sum -c ORIGINAL_SHA256SUMS
       - run: python scripts/test_npm_native_metadata.py
       - name: Repair only missing repository metadata
         run: python scripts/repair_npm_native_metadata.py tarballs corrected

@@ -30,6 +30,8 @@ test('native bootstrap verifies all five immutable tarballs before staging', () 
   assert.ok(source.indexOf('repair_npm_native_metadata.py') < source.indexOf('npm stage publish'));
   assert.match(source, /name: native-bootstrap-tarballs/);
   assert.match(source, /set -euo pipefail/);
+  assert.match(source, /sha256sum -c ORIGINAL_SHA256SUMS/);
+  assert.doesNotMatch(source, /sha256sum -c <</);
 });
 
 test('native bootstrap preserves provenance and requires separate human approval', () => {
