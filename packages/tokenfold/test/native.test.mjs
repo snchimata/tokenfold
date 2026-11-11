@@ -169,6 +169,7 @@ test('close rejects an admitted waiting score and concurrent cold warmups own on
   proto.begin=async function(...args){const result=await begin.apply(this,args);if(JSON.parse(result.action).action==='score')admitted=true;return result;};
   let waiting;
   try {waiting=client.fit(context(),{targetTokens:8,allowSelection:true});await waitFor(()=>admitted);}finally{proto.begin=begin;}
-  const waitingRejected=assert.rejects(waiting,tf.ClosedError);
+  // Close signals cancellation before asynchronous dispatcher shutdown can win the race.
+  const waitingRejected=assert.rejects(waiting,e=>e instanceof tf.CancelledError||e instanceof tf.ClosedError);
   await client.close();await waitingRejected;await activeRejected;
 });
