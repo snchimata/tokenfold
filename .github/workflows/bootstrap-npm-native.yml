@@ -1,0 +1,74 @@
+name: Bootstrap npm native 0.6.0
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-native-0.6.0-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  stage-native:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # Immutable tarballs from the 0.6.0 publication run's installed-artifact gates.
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: 13827437119
+          run-id: 42955400102
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          path: tarballs
+      - name: Verify original tested tarballs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tarballs
+          sha256sum -c <<'SHA256'
+          07b2cadecf85e7eaaaa625032dfc126a895ff9788b924a0d5afbcaeb8f3279d4  tokenfold-native-darwin-arm64-0.6.0.tgz
+          cc0520e04c71862df36ce4f9e712bf21fbb9a1a2cb33602f13baf890f8c65f25  tokenfold-native-darwin-x64-0.6.0.tgz
+          1563bde4a51836ce4043c2fbca2aa3a0459aaa6e77bc19335cda507d9928d42f  tokenfold-native-linux-arm64-0.6.0.tgz
+          01b440f0091b2eeaa5d1cba2696ddf7bff84f40b7ee936ad477f99e5aac0a60c  tokenfold-native-linux-x64-0.6.0.tgz
+          5718176346edabac8af28cd91408354767bb60ed068c1a76a7fc07b17be5978c  tokenfold-native-win32-x64-0.6.0.tgz
+          SHA256
+      - run: python scripts/test_npm_native_metadata.py
+      - name: Repair only missing repository metadata
+        run: python scripts/repair_npm_native_metadata.py tarballs corrected
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-bootstrap-tarballs
+          path: corrected/*
+          if-no-files-found: error
+      - name: Stage corrected native packages for maintainer approval
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          cd corrected
+          sha256sum -c SHA256SUMS
+          echo 'Approve the staged native packages on npm with 2FA; do not weaken account/package security settings.' >> "$GITHUB_STEP_SUMMARY"
+          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64 win32-x64; do
+            package="@tokenfold/native-$platform"
+            if npm view "$package@0.6.0" version >/dev/null 2>&1; then
+              echo "$package@0.6.0 already public; skipping"
+            else
+              npm stage publish "./tokenfold-native-$platform-0.6.0.tgz" --access public --provenance --ignore-scripts --json | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done

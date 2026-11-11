@@ -15,6 +15,8 @@ test('five native manifests are synchronized and install never compiles',()=>{
     const m=JSON.parse(readFileSync(join(root,'crates/tokenfold-node/npm',platform,'package.json')));
     assert.equal(m.name,`@tokenfold/native-${platform}`);assert.equal(m.version,version);
     assert.equal(pkg.optionalDependencies[m.name],version);assert.equal(m.main,'tokenfold.node');
+    assert.equal(m.repository.url,pkg.repository.url);
+    assert.equal(m.repository.directory,`crates/tokenfold-node/npm/${platform}`);
     assert.equal(m.scripts?.install,undefined);assert.equal(m.scripts?.postinstall,undefined);
   }
   assert.equal(pkg.scripts.install,undefined);assert.equal(pkg.scripts.postinstall,undefined);

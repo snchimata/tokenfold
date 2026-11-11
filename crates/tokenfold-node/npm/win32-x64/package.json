@@ -1,6 +1,11 @@
 {
   "name": "@tokenfold/native-win32-x64",
   "version": "0.6.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snchimata/tokenfold.git",
+    "directory": "crates/tokenfold-node/npm/win32-x64"
+  },
   "description": "Tokenfold native addon for win32-x64",
   "license": "Apache-2.0",
   "main": "tokenfold.node",
