@@ -1,4 +1,4 @@
-// Offline 0.6 fitting; install the current root and platform tarballs first.
+// Offline fitting: Node >=22; npm install tokenfold@0.6.0.
 import { fit } from 'tokenfold';
 
 const result = await fit({kind: 'json_data', value: {answer: 42, source: 'example'}}, {targetTokens: 32});

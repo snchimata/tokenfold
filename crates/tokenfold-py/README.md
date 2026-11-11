@@ -43,7 +43,7 @@ dependencies themselves. `warmup()` only loads that configured runtime; import a
 already-fitting Core requests never start it. Provisioning the optional runtime and
 acquiring its pinned local model are separate explicit setup actions.
 
-0.6.0 is unreleased; install a locally built wheel for current validation. The exact
+Install with `pip install tokenfold==0.6.0`. The exact
 `tokenfold[select]` extra adds only `tokenfold-select-runtime==0.6.0`, not ML packages.
 Prebuilt targets: Linux GNU x64/arm64, macOS x64/arm64, Windows x64, gated by installed
 artifact CI before release. See the [migration guide](https://github.com/snchimata/tokenfold/blob/main/docs/sdk-migration.md)

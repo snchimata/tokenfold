@@ -38,7 +38,8 @@ class ReadmeLayout(unittest.TestCase):
 
     def test_fit_onboarding_and_migration_are_visible(self):
         for text in ('0.6.0', 'Python >=3.12', 'from tokenfold import fit', 'require_met()',
-                     'docs/sdk-migration.md', 'unreleased', 'tokenfold-select-runtime'):
+                     'docs/sdk-migration.md', 'pip install tokenfold==0.6.0',
+                     'npm install tokenfold@0.6.0', 'tokenfold-select-runtime'):
             self.assertIn(text, self.text)
 
     def test_local_links_resolve(self):

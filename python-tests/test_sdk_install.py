@@ -65,8 +65,10 @@ def test_lightweight_select_extra_is_exact_and_no_ml_dependencies():
     assert marker.replace("'", '"').strip() == 'extra == "select"'
 
 
-def test_installed_sdk_fit_example(tmp_path):
-    example = Path(__file__).resolve().parents[1] / "examples/sdk_fit.py"
-    completed = subprocess.run([sys.executable, "-I", str(example)], cwd=tmp_path,
-                               text=True, capture_output=True, check=True)
-    assert completed.stdout.splitlines()[0] == '{"answer":42,"source":"example"}'
+def test_installed_examples(tmp_path):
+    examples = Path(__file__).resolve().parents[1] / "examples"
+    for name, expected in (("sdk_fit.py", '{"answer":42,"source":"example"}'),
+                           ("quickstart.py", "== explicit TOON ==")):
+        completed = subprocess.run([sys.executable, "-I", str(examples / name)],
+                                   cwd=tmp_path, text=True, capture_output=True, check=True)
+        assert expected in completed.stdout

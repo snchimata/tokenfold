@@ -1,7 +1,7 @@
 # SDK 0.6.0 validation scope
 
-**Unreleased; Select remains unqualified.** Local installs are not registry publication
-or hosted CI. No golden output/report-contract change was intended.
+**Select remains unqualified.** Local installs, hosted CI and registry publication
+are separate checks. No golden output/report-contract change was intended.
 
 ## Local installation and correctness
 
@@ -27,8 +27,10 @@ not source implementation imports, for installed SDK execution.
 
 The five-target workflow covers Linux GNU x64/arm64, macOS x64/arm64 and Windows x64,
 with Python 3.12/Node 22 and Python 3.13/Node 24 on each, plus sdist installation.
-**Other-platform execution and all exact-head hosted checks remain pending** until
-CI records success. Fake workers are not real-model qualification.
+The [hosted CI run](https://github.com/snchimata/tokenfold/actions/runs/42892707678)
+passed this full matrix and the sdist check at SDK commit
+`3304fe2340b29ab72f96783283d7af0eebc9840a`. Release-preparation changes must pass
+again on their exact head before merge. Fake workers are not real-model qualification.
 
 ## Measured local performance, not a promise
 
@@ -133,4 +135,4 @@ Clean-source functional artifacts used core wheel
 and runtime wheel
 `9069920c8e507f3da6da6fb878e5831818d2d67ee36c1774cd258323e671e26b`,
 with new byte-pinned approvals for the LF source digest above. These notebook passes
-do not change the inconclusive downstream result or pending hosted gates.
+do not change the inconclusive downstream result or replace exact-head release gates.

@@ -169,10 +169,10 @@ inputs and provenance live in [`tests/fixtures/readme_metrics.json`](tests/fixtu
 
 ## Quick start
 
-### Native SDK fitting (0.6.0, unreleased)
+### Native SDK fitting (0.6.0)
 
-Python >=3.12 and Node >=22. Build/install local artifacts while 0.6.0 is unreleased;
-registry installation is a future release step, not a completed publication.
+Python >=3.12 (`pip install tokenfold==0.6.0`) and Node >=22
+(`npm install tokenfold@0.6.0`). See the migration guide for breaking import changes.
 Base fitting is offline and model-free, with no auto-send, model download or storage.
 
 ```python
@@ -197,7 +197,7 @@ Advanced compression remains under `tokenfold.lowlevel` / `tokenfold/cli`.
 
 ### Python: compress JSON directly
 
-After installing the locally built 0.6 wheel, try this self-contained example. Thirty uniform
+After installing Tokenfold, try this self-contained example. Thirty uniform
 records provide enough repeated structure to demonstrate lossless folding:
 
 ```python
@@ -328,8 +328,10 @@ without folding the provider envelope; see [observation compression](docs/config
 Runnable examples, one per surface, all under [`examples/`](examples):
 
 ```bash
-python examples/quickstart.py      # Python: compress messages, request bodies, JSON data
-node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read the receipt
+python examples/sdk_fit.py         # Python: native fit, checked payload, fit receipt
+node examples/sdk_fit.mjs          # Node: native fit, checked payload, fit receipt
+python examples/quickstart.py      # Advanced Python lowlevel compression and decoding
+node examples/quickstart.mjs       # Advanced Node CLI compression and decoding
 cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
 python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
 python examples/contextdoctor_report.py   # source checkout: offline outcome/regression controls

@@ -1,7 +1,9 @@
 # Changelog
 
 
-## 0.6.0 - UNRELEASED
+## [Unreleased]
+
+## [0.6.0] - 2026-11-10
 
 - Replace primary Python/Node APIs with native, offline `fit`, typed inputs/results,
   checked exact/best-effort budgets and versioned fit receipts; no automatic sending.
@@ -13,8 +15,8 @@
   five targets and Python 3.12/3.13 plus Node 22/24. Remove obsolete active v2 scaffolding.
 - Preserve legacy CLI/compression report and golden contracts. See
   [migration](docs/sdk-migration.md) and [validation](docs/sdk-validation-0.6.0.md).
-
-## [Unreleased]
+- Refresh Python, Node and notebook examples for registry installation and keep
+  native fitting separate from advanced lowlevel compression.
 
 ## [0.5.4] - 2026-11-09
 

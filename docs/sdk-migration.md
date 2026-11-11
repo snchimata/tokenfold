@@ -1,10 +1,11 @@
 # Migrating to the 0.6 SDK
 
-**0.6.0 is unreleased.** Local build/install checks are not registry publication.
-Build a Python wheel with `maturin build --release --locked -m crates/tokenfold-py/Cargo.toml`;
+Install with `pip install tokenfold==0.6.0` (Python >=3.12) or
+`npm install tokenfold@0.6.0` (Node >=22). For source development,
+build a Python wheel with `maturin build --release --locked -m crates/tokenfold-py/Cargo.toml`;
 install that wheel into a fresh Python >=3.12 environment. Node requires >=22:
 developers run `npm ci`, `npm run build:native`, `npm test` in `packages/tokenfold`.
-Published users will consume prebuilt addons, with no install-time compiler or Python
+Registry installs use prebuilt addons, with no install-time compiler or Python
 requirement for Node Core. Targets are Linux GNU x64/arm64, macOS x64/arm64 and
 Windows x64; hosted installed-artifact checks must pass before release. No browser
 or Linux musl addon support is claimed (the separate CLI has static musl binaries).

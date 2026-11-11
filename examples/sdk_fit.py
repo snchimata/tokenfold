@@ -1,4 +1,4 @@
-"""Offline 0.6 fitting; install the current wheel before running."""
+"""Offline fitting: Python >=3.12; pip install tokenfold==0.6.0."""
 from tokenfold import Data, fit
 
 result = fit(Data({"answer": 42, "source": "example"}), target_tokens=32)

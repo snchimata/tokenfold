@@ -1,4 +1,5 @@
-﻿/** Minimal Node.js quickstart for Tokenfold's bytes-first v2 interface. */
+﻿/** Advanced CLI compression: Node >=22; npm install tokenfold@0.6.0.
+ * For native SDK fitting and fit receipts, start with sdk_fit.mjs instead. */
 import { readFile } from "node:fs/promises";
 
 const { compress, decode, inspect } = await import("tokenfold/cli").catch(() =>

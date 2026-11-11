@@ -5,7 +5,7 @@ The primary SDK runs Rust in-process through Node-API; it never spawns a CLI,
 downloads a model, sends a request or requires Python for Core fitting.
 
 ```sh
-npm install tokenfold  # after publication; 0.6.0 is currently unreleased
+npm install tokenfold@0.6.0  # Node >=22; prebuilt native addon, no compiler needed
 ```
 
 ```ts
