@@ -17,9 +17,6 @@ rustup toolchain install 1.98 --profile minimal
 cargo build --release --locked -p tokenfold-cli
 install -Dm755 target/release/tokenfold /usr/bin/tokenfold
 
-wget "$SHARUN" -O ./quick-sharun
-chmod +x ./quick-sharun
-
-./quick-sharun /usr/bin/tokenfold
-./quick-sharun --make-appimage
-./quick-sharun --simple-test ./dist/*.AppImage
+quick-sharun /usr/bin/tokenfold
+quick-sharun --make-appimage
+quick-sharun --simple-test ./dist/*.AppImage
