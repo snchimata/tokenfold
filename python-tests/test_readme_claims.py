@@ -105,8 +105,16 @@ def test_every_headline_metric_has_versioned_provenance():
     manifest = json.loads(METRICS.read_text(encoding="utf-8"))
     readme = README.read_text(encoding="utf-8")
     compression = manifest["compression"]
-    for name in ("search_rag", "repetitive_json", "api_responses", "tool_schemas"):
+    for name in ("search_rag",):
         assert f"{compression[name]['reduction_pct']:.1f}% fewer tokens" in readme
+    tool_schema_pct = compression["tool_schemas"]["reduction_pct"]
+    api_response_pct = compression["api_responses"]["reduction_pct"]
+    assert (
+        f"**{tool_schema_pct:.1f}-{api_response_pct:.1f}% on two fixtures, lossless**"
+        in readme
+    )
+    historical = compression["repetitive_json"]["reduction_pct"]
+    assert f"historical **{historical:.1f}%** result" in readme
     for budget, values in manifest["select"]["budgets"].items():
         ratio = str(int(float(budget) * 100))
         row = re.compile(

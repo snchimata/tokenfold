@@ -1,4 +1,6 @@
-Output docs/assets/tokenfold-demo.gif
+# Legacy Core-only terminal recording. The README marketing GIF is generated
+# by scripts/render-demo.py; keep this tape's output separate.
+Output tmp/tokenfold-core-terminal.gif
 
 # Window geometry optimized for GitHub README width (prevents browser blur & empty void)
 Set Shell "bash"

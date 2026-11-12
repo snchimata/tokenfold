@@ -7,15 +7,15 @@
 
 # TOKENFOLD
 
-<h3>More context. Fewer tokens. Exact by default.</h3>
+<h3>Select what matters. Fit more context.</h3>
 
 <p>
-  <strong>Deterministic context compression for LLMs. Cut JSON tokens by up to 68% with exact recovery, or exceed 90% with opt-in, recoverable pruning.</strong>
+  <strong>Tokenfold Select brings query-aware relevance ranking to your LLM context. Fit complete context groups to a token budget, backed by Core's structural compression and inspectable receipts.</strong>
 </p>
 
-<p><em>Tokenfold Core delivers model-free structural compression.</em></p>
-<p><em>
-Tokenfold Select ranks the context that matters most when token budgets get tight.</em></p>
+<p><em>Python-first SDK. TypeScript alongside it. Rust at the core.</em></p>
+<p><em>One <code>fit()</code> workflow for text, JSON, grouped context, and provider requests.</em></p>
+<p><em>Select for relevance. Core for structural efficiency. One integrated workflow.</em></p>
 
 <br />
 
@@ -25,162 +25,212 @@ Tokenfold Select ranks the context that matters most when token budgets get tigh
 
 </div>
 
-[Install](#installation) | [Quick start](#quick-start) | [How it works](#how-it-works) | [MCP & agents](#coding-agents-and-mcp-integration) | [Core](#tokenfold-core) | [Select](#tokenfold-select) | [Benchmarks](#measured-results) | [Safety](#safety-and-auditability)
+![Terminal demo: Python fit() code and verified 2,366 to 1,376 token savings from the first frame, followed by Core-first processing and optional Tokenfold Select. Select illustration only.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-demo.gif)
 
-<br />
+<details>
+<summary><strong>Demo scope and regeneration</strong></summary>
 
-## Installation
+The 13-second FIT -> CORE -> SELECT loop returns directly to the code, with no
+closing slide. It opens on the executed Python SDK `fit()` example and its
+verified result: explicit folding reduces already-compact JSON from 2,366 to
+1,376 tokens (**41.8%**), meeting a 1,500-token budget without dropping any of
+the 30 records. The compact baseline exceeds that same budget.
+
+The following Core frame starts from the formatted API-response fixture:
+3,812 to 1,376 tokens (**63.9%**), with exact JSON-value recovery. These are
+different input representations, not interchangeable SDK and CLI baselines.
+The workflow builds the Core baseline first; Select requires a still-over-budget,
+eligible request, an approved runtime and explicit per-fit opt-in. Select is an
+**illustration, not live inference**, and remains experimental and unqualified.
+Fixture savings are not universal, and reversible data is not model-answer proof.
+
+The [renderer](scripts/render-demo.py) requires Pillow, a locally built CLI and
+the current SDK installed in a Python >=3.12 environment. It checks the fixture
+hash, Core counts, decode equality and SDK receipt before rendering:
 
 ```bash
-pip install tokenfold        # Python library
-npm install tokenfold        # Node.js / TypeScript library
-cargo install tokenfold-cli  # Standalone CLI
-cargo add tokenfold-core     # Rust library
+python scripts/render-demo.py --sdk-python /path/to/sdk-env/python
 ```
 
-These installs provide Core. For optional query-aware model scoring, see
-[Select setup](#tokenfold-select); its models and runtime setup are separate.
-
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <br />
-      <strong>Up to 96.3% fewer tokens (showcase)</strong>
-      <br /><br />
-      Opt-in, recoverable pruning for heterogeneous array feeds - every dropped row stays fetchable.
-      <br /><br />
-    </td>
-    <td align="center" width="33%">
-      <br />
-      <strong>45.6-67.6% on three fixtures, lossless</strong>
-      <br /><br />
-      Reversible structural folding of repeated keys and columns on three bundled fixtures - verified by exact JSON-value recovery.
-      <br /><br />
-    </td>
-    <td align="center" width="33%">
-      <br />
-      <strong>Model-free &amp; deterministic</strong>
-      <br /><br />
-      No GPU, no semantic guesswork, no model in the Core path. A Rust engine with Python, Node.js, CLI and proxy interfaces.
-      <br /><br />
-    </td>
-  </tr>
-</table>
-
-> [!NOTE]
-> **Built for:** Developers and AI teams sending structured JSON, tool definitions, and RAG feeds to LLMs. Start with a representative payload, inspect the receipt, and validate the result in your application.
-
-<br />
-
-## How it works
-
-- **Core (default):** folds repeated structure without removing data. The
-  compact payload decodes to the original JSON value.
-- **[Recoverable pruning](#recoverable-lossy-pruning) (opt-in):** model-free
-  rules rank eligible JSON rows; omissions are stored locally before replacement
-  with `$tf_ref` handles. This is the path behind the **96.3% showcase**, not Select.
-- **[Select](#tokenfold-select) (separate):** a model scores groups against your
-  query; your allocator keeps selected original text under a token budget.
-  Select does not automatically store omissions or create recovery handles.
-
-### What the model sees
-
-```jsonc
-// Input (conceptual illustration - 2 rows shown; small inputs like this
-// pass through unchanged under the never-larger guard)
-[{"id":1,"role":"admin"},{"id":2,"role":"member"}]
-
-// Tokenfold output on larger uniform arrays -> still JSON
-{"__tf_cols__":["id","role"],"__tf_rows__":[[1,"admin"],[2,"member"]]}
-```
-
-![Terminal demo: Tokenfold reduces the bundled API response from 3,812 to 1,376 tokens.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-demo.gif)
-
-<details>
-<summary><strong>How this demo was generated (VHS tape)</strong></summary>
-
-The [VHS tape](docs/tokenfold-demo.tape) runs `inspect`, `compress`, and
-`decode` against the bundled API response, including the **63.9%** receipt.
-Run `vhs docs/tokenfold-demo.tape` to regenerate the GIF; the tape requires
-`tokenfold` on `PATH`.
+The [VHS tape](docs/tokenfold-demo.tape) is a separate, Core-only terminal
+recording and writes to `tmp/tokenfold-core-terminal.gif`.
 
 </details>
 
-Send the folded JSON directly to the model: column names label each value's
-position in every row. Decode only when your application needs the original
-object shape again.
+## Table of contents
 
-#### Why Tokenfold, not LLMLingua / prompt compressors?
+[Python quickstart](#quick-start) | [Python fit workflow](#native-sdk-fitting) | [Select](#tokenfold-select) | [Benchmark highlights](#benchmark-highlights) | [Other integrations](#other-integrations) | [How it works](#how-it-works) | [Core](#tokenfold-core) | [Full results](#measured-results) | [Extended tooling](#extended-tooling) | [Safety and auditability](#safety-and-auditability) | [Reproduce the results](#reproduce-the-results) | [Contributing](#contributing) | [License](#license)
 
-- **Targets structured JSON, not prose.** Folds repeated keys and columns
-  mechanically rather than using semantic guesswork.
-- **Model-free and deterministic.** Zero models running in Core and zero GPU
-  overhead.
-- **Verified by exact decode.** Every lossless transform is verified by an
-  in-memory round trip before emitting; lossy pruning is strictly opt-in and
-  recoverable.
-
-#### How Tokenfold decides what to fold
-
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#f8fafc", "primaryTextColor": "#0f172a", "primaryBorderColor": "#94a3b8", "lineColor": "#64748b", "edgeLabelBackground": "#f8fafc", "fontFamily": "Arial", "fontSize": "15px"}, "flowchart": {"curve": "linear", "padding": 16, "nodeSpacing": 40, "rankSpacing": 32}}}%%
-flowchart LR
-    accTitle: Lossless first, pruning only when opted in
-    accDescr: Build a verified lossless baseline. Consider pruning only when opted in, eligible, and still needed. Store omissions before removal and use pruning only if it beats the lossless baseline; otherwise keep that baseline.
-    Lossless["Build lossless JSON baseline<br/>Verify folds; retain savings"] --> OptIn{"Pruning enabled,<br/>eligible and needed?"}
-    OptIn -->|No| Keep("Lossless payload<br/>+ receipt")
-    OptIn -->|Yes| Prune["Rank eligible rows<br/>Store before removal"]
-    Prune -->|No further savings| Keep
-    Prune -->|Fewer tokens than baseline| Emit("Pruned payload<br/>+ markers and receipt")
-
-    classDef core fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
-    classDef optional fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 4,color:#334155
-    class Lossless,Keep core
-    class Prune optional
-```
-
-<details>
-<summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
-
-1. Build the lossless baseline using eligible transforms. Verify structural
-   folds with an exact decode round trip and keep only token reductions.
-2. Consider pruning only when explicitly opted in, the payload is eligible,
-   and the lossless baseline has not already met a requested token target.
-3. Rank eligible rows and store omissions locally before removing them.
-   Rows refused by storage stay inline.
-4. Use the pruned payload only if it has fewer tokens than the lossless
-   baseline; otherwise keep the lossless baseline.
-5. Emit the chosen payload and compression receipt. Pruned payloads include
-   retrieval markers for stored omissions.
-
-</details>
-
-| Workload | Type | Core mode | Savings |
-| --- | --- | --- | --- |
-| API responses | 30-record JSON payload | Lossless | **63.9% fewer tokens** |
-| Tool schemas | OpenAI tool-schema fixture (Criterion bench) | Lossless | **45.6% fewer tokens** |
-| Repetitive JSON | 50-record payload | Lossless | **67.6% fewer tokens** |
-
-These figures use exact `o200k_base` counts in the balanced preset. Versioned
-inputs and provenance live in [`tests/fixtures/readme_metrics.json`](tests/fixtures/readme_metrics.json).
-[Recoverable pruning](#recoverable-lossy-pruning) is separate, opt-in extended tooling.
-
-<br />
+> **Built for:** Python application developers and AI teams fitting JSON, tool
+> definitions, and grouped context into LLM requests. TypeScript, coding agents,
+> CLI, proxy, and Rust integrations use the same underlying Core engine.
 
 ## Quick start
 
-### Native SDK fitting (0.6.0)
+### Published Python SDK
 
-Python >=3.12 (`pip install tokenfold==0.6.0`) and Node >=22
-(`npm install tokenfold@0.6.0`). See the migration guide for breaking import changes.
-Base fitting is offline and model-free, with no auto-send, model download or storage.
+Python >=3.12. Install the current SDK release; the base workflow needs no
+repository checkout, model, GPU, or ML framework:
+
+```bash
+python -m pip install "tokenfold==0.6.0"
+```
+
+<a id="native-sdk-fitting"></a>
+
+### Python fit workflow
+
+The SDK fits text, JSON, or grouped context to an explicit token ceiling.
+Fitting is offline and model-free unless you explicitly configure and consent to
+Select. No automatic sending, model downloads, or recoverable pruning occurs.
+
+Default `Data(records)` renders standard compact JSON; opt into the folded
+representation only for consumers you have validated:
 
 ```python
-from tokenfold import fit
-result = fit("Keep this text unchanged.", target_tokens=32)
-payload = result.require_met()
+from tokenfold import Data, fit
+
+records = [
+    {"id": i, "service": "checkout-api", "region": "us-east-1",
+     "status": 200, "latency_ms": 42 + i}
+    for i in range(1, 31)
+]
+result = fit(Data(records, representation="folded"), target_tokens=500)
+print(f"{result.original_tokens} -> {result.final_tokens} tokens")
+payload_text = result.require_met()
 print(result.receipt.to_json())
 ```
+
+`require_met()` returns the payload only when the exact budget is met; otherwise
+it raises `BudgetUnmetError` or `BudgetIndeterminateError` with the receipt.
+Text/Data/Context return text; full provider requests return JSON objects.
+An exact encoding count is not an exact provider-framing or billing count.
+Explicit best-effort can accept an estimate without calling it exact.
+
+See the [Python example](examples/sdk_fit.py), [migration guide](docs/sdk-migration.md),
+and [validation status](docs/sdk-validation-0.6.0.md). Advanced compression lives
+under `tokenfold.lowlevel`.
+
+For callers using the lower-level compression API, import it from
+`tokenfold.lowlevel`:
+
+```python
+import json
+from tokenfold.lowlevel import InputFormat, compress, decode
+
+records = [
+    {"id": i, "service": "checkout-api", "region": "us-east-1",
+     "status": 200, "latency_ms": 42 + i}
+    for i in range(1, 31)
+]
+raw_bytes = json.dumps(records).encode("utf-8")
+result = compress(raw_bytes, format=InputFormat.JSON)
+print(f"{result.report.original_tokens} -> {result.report.compressed_tokens} tokens")
+assert json.loads(decode(result.payload)) == records
+```
+
+<a id="tokenfold-select"></a>
+
+## Tokenfold Select
+
+**When structure ends, rank what matters.**
+
+[Tokenfold Select v3][tokenfold-select] is an Apache-2.0, **149.6M-parameter**
+joint-group Ettin scorer, integrated into the SDK's `fit()` workflow.
+Core remains model-free and neither loads nor invokes Select.
+The SDK uses the lightweight maintained [tokenfold-select-runtime](packages/tokenfold-select-runtime/README.md),
+not the superseded v2 package or an implicit direct-bundle loader. Model files are
+acquired separately at an immutable revision; they do not ship in a clone or base SDK.
+Use explicit CPU/FP32 or CUDA/BF16 setup and per-fit selection consent. Import and
+already-fitting Core requests never load weights. Selection is experimental and
+unqualified: grouping and required flags preserve caller-declared dependencies,
+not independent proof of answer quality. No automatic recoverable pruning occurs.
+See [provisioning, accounting, and lifecycle](docs/sdk-migration.md).
+
+### Python Select workflow
+
+After [explicit runtime provisioning](docs/sdk-migration.md#explicit-select-provisioning-and-consent),
+supply the resulting config and allow selection on each fit. Keep dependent
+content in one group or mark it required:
+
+```python
+from tokenfold import Context, Group, SelectRuntime, Tokenfold
+
+context = Context(
+    query="Which change caused the cache failure?",
+    groups=[
+        Group("constraints", "Use only the supplied release evidence.", required=True),
+        Group("changes", "Commit a41f9c changed the Redis TTL to 0ms."),
+        Group("logs", "After that release, cache evictions spiked on shard-02."),
+        Group("notes", "Weekly planning notes cover unrelated roadmap items. " * 40),
+    ],
+)
+with Tokenfold(select=SelectRuntime("select-runtime.json", experimental=True)) as client:
+    result = client.fit(context, target_tokens=96, allow_selection=True)
+    print(result.receipt.to_json())
+    fitted_context = result.require_met()
+    print("Selection applied:", result.selection_applied)
+    print("Kept:", result.groups_kept, "Dropped:", result.groups_dropped)
+```
+
+The full context deliberately exceeds the ceiling. A successful fit requires
+selection; the example does not promise particular kept IDs or answer accuracy.
+If scoring fails or cannot meet the budget, checked access rejects the overflow
+rather than silently returning a successful fit. Already-fitting requests skip
+scoring even when consent is present.
+
+## Benchmark highlights
+
+Saved fixture results, not universal savings or downstream quality guarantees:
+
+| Scope | Measured result | Limits and evidence |
+| --- | --- | --- |
+| Core structural compression | **45.6-63.9% on two fixtures, lossless** | Tool schemas and the 30-record API response; exact JSON-value recovery |
+| Core vs. Headroom | **6/6 fixture wins**, 13,071 -> 8,715 tokens (**33.3% saved**) | Default local generic-JSON paths; Tokenfold recovered 6/6 exactly, Headroom matched 4/6 |
+| Tokenfold JSON vs. TOON 4.1.1 | **7/7 fixture wins**, 12,776 vs. 14,841 tokens | 13.9% fewer tokens than TOON in this corpus; both paths round-trip |
+| Opt-in, recoverable pruning | **Up to 96.3% fewer tokens (showcase)** | A 100-row heterogeneous feed; omitted rows stored behind local `$tf_ref` handles, not lossless inline compression |
+
+These structural counts use exact `o200k_base` accounting. Inputs and provenance
+live in [the metric manifest](tests/fixtures/readme_metrics.json); see
+[full comparisons and methods](#measured-results) and the
+[pruning showcase](#recoverable-lossy-pruning). The historical **67.6%** result
+is a 50-record CHANGELOG measurement without a versioned source fixture; it was
+not reproduced in the SDK rerun and is not used in the headline.
+
+The [saved downstream-answer diagnostic](#sdk-downstream-answer-diagnostic)
+recorded **8/8 correct baseline answers vs. 6/8 with folded JSON**; Select matched
+16/16 baseline answers on eight synthetic tasks with two trials each. These are
+small development diagnostics, not representative quality or Select qualification.
+
+## Other integrations
+
+Python is the primary SDK onboarding path. TypeScript is supported alongside it;
+CLI, MCP, proxy, and Rust are alternative entry points, not Python prerequisites.
+
+<a id="installation"></a>
+
+### Interfaces
+
+| Interface | Install / setup | Primary use case |
+| --- | --- | --- |
+| Python | `python -m pip install "tokenfold==0.6.0"` | Native fitting SDK; start above |
+| TypeScript / Node.js | `npm install tokenfold@0.6.0` | Native fitting; CLI utilities live under `tokenfold/cli` |
+| MCP | `tokenfold mcp serve` | Coding agents and editors; install the CLI first |
+| CLI | `cargo install tokenfold-cli` | Files, stdin, and shell workflows |
+| Proxy | `cargo install tokenfold-proxy` | Existing OpenAI-compatible clients |
+| Rust | `cargo add tokenfold-core` | Native embedding |
+
+### TypeScript / Node.js
+
+Node >=22. Install the published SDK package. Core fitting runs in-process;
+the base install needs neither Python nor a source build:
+
+```sh
+npm install tokenfold@0.6.0
+```
+
+See the [Node example](examples/sdk_fit.mjs) and
+[migration guide](docs/sdk-migration.md):
 
 ```js
 import { fit } from "tokenfold";
@@ -188,41 +238,33 @@ const result = await fit("Keep this text unchanged.", { targetTokens: 32 });
 const payload = result.requireMet();
 ```
 
-Text/Data/Context return text; full provider requests return JSON objects. Provider
-framing is not an encoding count: exact checked access rejects unavailable/estimated
-budgets. Explicit best-effort can accept an estimate without calling it exact.
-See [SDK migration](docs/sdk-migration.md), [Python example](examples/sdk_fit.py),
-[Node example](examples/sdk_fit.mjs), and [validation status](docs/sdk-validation-0.6.0.md).
-Advanced compression remains under `tokenfold.lowlevel` / `tokenfold/cli`.
+### Coding agents and MCP integration
 
-### Python: compress JSON directly
-
-After installing Tokenfold, try this self-contained example. Thirty uniform
-records provide enough repeated structure to demonstrate lossless folding:
-
-```python
-import json
-from tokenfold.lowlevel import InputFormat, compress
-
-records = [{"id": i, "role": "member", "status": "active"} for i in range(30)]
-result = compress(json.dumps(records), format=InputFormat.JSON)
-print(f"{result.report.original_tokens} -> {result.report.compressed_tokens} tokens "
-      f"({result.saved_pct():.1f}% saved)")
-```
-
-Send `result.payload` (bytes) to the model. Use `tokenfold.lowlevel.decode` when your
-application needs the original JSON shape again. Small or irregular inputs may
-pass through unchanged under the never-larger guard.
-
-### CLI: inspect and compress a file
-
-Install the CLI with `cargo install tokenfold-cli` or use a
-[checksummed GitHub Release](https://github.com/snchimata/tokenfold/releases/latest), then:
+Coding agents can exhaust context limits on large shell outputs. Tokenfold runs as a
+stdio MCP server exposing `tokenfold_compress`, `tokenfold_inspect`,
+`tokenfold_retrieve`, and `tokenfold_stats`, with pre-configured filters for Git
+status, diffs, build output, and test logs before they consume agent context.
+`tokenfold init` currently supports Claude Code; Codex uses manual MCP
+registration:
 
 ```bash
-tokenfold inspect payload.json --format json
-tokenfold compress payload.json --format json --output payload.compact.json
+tokenfold init --agent claude-code
+tokenfold doctor --agent claude-code
+
+# Or connect manually in Codex:
+codex mcp add tokenfold -- tokenfold mcp serve
 ```
+
+`tokenfold init --agent claude-code` merges a project-scoped `.mcp.json` entry without replacing
+other servers; `tokenfold doctor --agent claude-code` verifies it. `tokenfold_inspect`
+is side-effect-free (never returns a modified payload); `tokenfold_retrieve`
+retrieves by hash or marker (report references are reserved but not yet
+resolvable). See
+[`docs/configuration.md`](docs/configuration.md) for tested MCP JSON/TOML and every environment
+override. Trusted filters for Git, build, and test output
+are available through `tokenfold filters list`.
+
+<br />
 
 ### Drop-in proxy for OpenAI-compatible clients
 
@@ -294,16 +336,120 @@ sequenceDiagram
     P-->>-C: Response
 ```
 
-### Interfaces
+### CLI and low-level Python
 
-| Interface | 1-line install / command | Primary use case |
-| --- | --- | --- |
-| Proxy | `cargo install tokenfold-proxy` | Existing OpenAI-compatible clients |
-| CLI | `cargo install tokenfold-cli` | Files, stdin, and shell workflows |
-| Python | `pip install tokenfold` | Application pipelines |
-| TypeScript | `npm install tokenfold` | Node.js applications and automation |
-| Rust | `cargo add tokenfold-core` | Native embedding |
-| MCP | `tokenfold mcp serve` | Agents and editors |
+For files and stdin, install the CLI with `cargo install tokenfold-cli` or use a
+[checksummed GitHub Release](https://github.com/snchimata/tokenfold/releases/latest):
+
+```bash
+tokenfold inspect payload.json --format json
+tokenfold compress payload.json --format json --output payload.compact.json
+```
+
+For provider-shaped JSON, use the low-level Python API from `tokenfold.lowlevel`:
+
+```python
+from tokenfold.lowlevel import InputFormat, compress
+
+# Accepts raw JSON bytes or str (messages, tools, or schemas)
+request_json_bytes = b'{"messages": [{"role": "user", "content": "hello"}]}'
+result = compress(request_json_bytes, format=InputFormat.OPENAI_JSON)
+
+# For standalone JSON records, use: format=InputFormat.JSON
+compressed_payload = result.payload  # bytes
+print(f"Saved {result.report.saved_tokens} tokens ({result.saved_pct():.1f}%)")
+```
+
+### Runnable examples (Python >=3.12, Node.js >=22, Rust >=1.98)
+
+After building and installing the SDK, run the examples under [`examples/`](examples):
+
+```bash
+python examples/quickstart.py      # Python: compress messages, request bodies, JSON data
+node examples/quickstart.mjs       # TypeScript/Node: compress, inspect, read the receipt
+cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
+python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
+```
+
+[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the guided tour of the whole
+Python surface: everything `quickstart.py` shows, plus previews, budgets and presets,
+provider payloads, recoverable pruning with retrieval, and where Tokenfold Select fits.
+
+## How it works
+
+### What the model sees
+
+```json
+// Input (conceptual illustration - 2 rows shown; small inputs like this
+// pass through unchanged under the never-larger guard)
+[{"id":1,"role":"admin"},{"id":2,"role":"member"}]
+
+// Tokenfold output on larger uniform arrays -> still JSON
+{"__tf_cols__":["id","role"],"__tf_rows__":[[1,"admin"],[2,"member"]]}
+```
+
+Column names label each value's position in every row. Use folded JSON only
+with a consumer you have validated for that representation; decode when your
+application needs the original object shape. The SDK's default `Data`
+representation keeps standard compact JSON.
+
+#### Why Tokenfold Core for structured payloads?
+
+- **Targets structured JSON, not prose.** Folds repeated keys and columns
+  mechanically rather than using semantic guesswork.
+- **Model-free and deterministic.** Zero models running in Core and zero GPU
+  overhead.
+- **Verified by exact decode.** Every lossless transform is verified by an
+  in-memory round trip before emitting; lossy pruning is strictly opt-in and
+  recoverable.
+
+#### How Tokenfold decides what to fold
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#f8fafc", "primaryTextColor": "#0f172a", "primaryBorderColor": "#94a3b8", "lineColor": "#64748b", "edgeLabelBackground": "#f8fafc", "fontFamily": "Arial", "fontSize": "15px"}, "flowchart": {"curve": "linear", "padding": 16, "nodeSpacing": 40, "rankSpacing": 32}}}%%
+flowchart LR
+    accTitle: Lossless first, pruning only when opted in
+    accDescr: Build a verified lossless baseline. Consider pruning only when opted in, eligible, and still needed. Store omissions before removal and use pruning only if it beats the lossless baseline; otherwise keep that baseline.
+    Lossless["Build lossless JSON baseline<br/>Verify folds; retain savings"] --> OptIn{"Pruning enabled,<br/>eligible and needed?"}
+    OptIn -->|No| Keep("Lossless payload<br/>+ receipt")
+    OptIn -->|Yes| Prune["Rank eligible rows<br/>Store before removal"]
+    Prune -->|No further savings| Keep
+    Prune -->|Fewer tokens than baseline| Emit("Pruned payload<br/>+ markers and receipt")
+
+    classDef core fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    classDef optional fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 4,color:#334155
+    class Lossless,Keep core
+    class Prune optional
+```
+
+<details>
+<summary><strong>Text version (screen readers / no-image fallback)</strong></summary>
+
+1. Build the lossless baseline using eligible transforms. Verify structural
+   folds with an exact decode round trip and keep only token reductions.
+2. Consider pruning only when explicitly opted in, the payload is eligible,
+   and the lossless baseline has not already met a requested token target.
+3. Rank eligible rows and store omissions locally before removing them.
+   Rows refused by storage stay inline.
+4. Use the pruned payload only if it has fewer tokens than the lossless
+   baseline; otherwise keep the lossless baseline.
+5. Emit the chosen payload and compression receipt. Pruned payloads include
+   retrieval markers for stored omissions.
+
+</details>
+
+## Tokenfold Core
+
+### Structural, not semantic compression
+
+Core removes structural redundancy, not prose selected by a language model.
+See [what the model sees](#what-the-model-sees) for the columnar JSON format and
+the verified lossless-first pipeline. Unlike semantic prompt compressors such
+as [LLMLingua](https://github.com/microsoft/LLMLingua), Core needs no model or GPU,
+does not inject prompt guidance, and does not fine-tune models.
+
+[Tokenfold Select](#tokenfold-select) complements Core when query-aware group
+selection is explicitly enabled.
 
 ### Presets
 
@@ -323,183 +469,33 @@ without folding the provider envelope; see [observation compression](docs/config
 > `schema_compaction` is not enabled by any preset. Unlike the default
 > transforms, it truncates `examples` arrays and is not reversible.
 
-### Runnable examples (Python >=3.12, Node.js >=22, Rust >=1.98)
-
-Runnable examples, one per surface, all under [`examples/`](examples):
-
-```bash
-python examples/sdk_fit.py         # Python: native fit, checked payload, fit receipt
-node examples/sdk_fit.mjs          # Node: native fit, checked payload, fit receipt
-python examples/quickstart.py      # Advanced Python lowlevel compression and decoding
-node examples/quickstart.mjs       # Advanced Node CLI compression and decoding
-cargo run -p tokenfold-core --example quickstart   # Rust: the embedded core API
-python examples/lossy_pruning.py   # CLI: opt-in recoverable pruning, end to end
-python examples/contextdoctor_report.py   # source checkout: offline outcome/regression controls
-```
-
-[`examples/quickstart.ipynb`](examples/quickstart.ipynb) is the guided tour of the whole
-Python surface: everything `quickstart.py` shows, plus previews, budgets and presets,
-provider payloads, recoverable pruning previews, and the offline ContextDoctor controls.
-Its separately provisioned Select v3 CUDA example is explicitly enabled; set
-`RUN_SELECT_V3 = False` for a core-only tour. See the [evaluation guide](eval/README.md)
-for ContextDoctor's source-only interface and evidence limits.
-
-### Coding agents and MCP integration
-
-Coding agents can exhaust context limits on large shell outputs. Tokenfold runs as a
-stdio MCP server exposing `tokenfold_compress`, `tokenfold_inspect`,
-`tokenfold_retrieve`, and `tokenfold_stats`, with pre-configured filters for Git
-status, diffs, build output, and test logs before they consume agent context.
-`tokenfold init` currently supports Claude Code; Codex uses manual MCP
-registration:
-
-```bash
-tokenfold init --agent claude-code
-tokenfold doctor --agent claude-code
-
-# Or connect manually in Codex:
-codex mcp add tokenfold -- tokenfold mcp serve
-```
-
-`tokenfold init --agent claude-code` merges a project-scoped `.mcp.json` entry without replacing
-other servers; `tokenfold doctor --agent claude-code` verifies it. `tokenfold_inspect`
-is side-effect-free (never returns a modified payload); `tokenfold_retrieve`
-retrieves by hash or marker (report references are reserved but not yet
-resolvable). See
-[`docs/configuration.md`](docs/configuration.md) for tested MCP JSON/TOML and every environment
-override. Trusted filters for Git, build, and test output
-are available through `tokenfold filters list`.
-
-<br />
-
-## Tokenfold Core
-
-### Structural, not semantic compression
-
-Semantic prompt compressors such as [LLMLingua](https://github.com/microsoft/LLMLingua) use a smaller language model to identify and remove less-important prompt tokens.
-Tokenfold solves a different problem first: repeated keys, values, schemas, rows, and other structural redundancy. Core needs no model, is deterministic, and verifies an exact decode before accepting a lossless transform. Core does not inject prompt guidance or fine-tune models.
-
-[Tokenfold Select](#tokenfold-select) is Tokenfold's complementary query-aware offering: when structure ends, it ranks what matters under a token budget.
-
-<br />
-
-<a id="tokenfold-select"></a>
-
-## Tokenfold Select
-
-**When structure ends, rank what matters.**
-
-[Tokenfold Select v3][tokenfold-select] is an Apache-2.0, **149.6M-parameter**
-joint-group Ettin scorer. Core remains model-free and neither loads nor invokes Select.
-The 0.6 SDK uses the lightweight maintained [tokenfold-select-runtime](packages/tokenfold-select-runtime/README.md),
-not the superseded v2 package or an implicit direct-bundle loader. Model files are
-acquired separately at an immutable revision; they do not ship in a clone or base SDK.
-Use explicit CPU/FP32 or CUDA/BF16 setup and per-fit selection consent. Import and
-already-fitting Core requests never load weights. Selection is experimental and
-unqualified: grouping and required flags preserve caller-declared dependencies,
-not independent proof of answer quality. No automatic recoverable pruning occurs.
-See [provisioning, accounting, and lifecycle](docs/sdk-migration.md).
-
-### Tokenfold Select v3 benchmarks
-
-Saved results from the [published v3 benchmark snapshot](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md),
-pinned to model-card revision `317d3424d3de78c1a708c42a47a7812ab877f1a8`.
-These measurements include the scorer **and whole-group allocator**, not the
-scoring model alone. Core's lossless benchmarks remain separate below.
-
-#### Context-token reduction at a 50% budget
-
-Select v3 removed **50.0-60.0%** of the original context tokens in these five
-saved development examples. Both models had the same exact `o200k_base` output
-cap for each workload; retained V3 groups were copied without rewriting.
-
-| Workload | Original tokens | Select v3 output | V3 reduction | Kompress v2 output |
-| --- | ---: | ---: | ---: | ---: |
-| Code | 4,411 | 2,205 | **50.0%** | 2,149 |
-| JSON | 1,303 | 651 | **50.0%** | Refused; 1,303 raw |
-| Logs | 1,103 | 503 | **54.4%** | Refused; 1,103 raw |
-| Multi-turn | 587 | 235 | **60.0%** | 284 |
-| Retrieval | 4,498 | 2,217 | **50.7%** | 2,219 |
-
-One exposed source per workload; JSON and logs share a source population.
-Token reduction does not establish answer accuracy or semantic preservation.
-Six of ten historical Kompress cells refused the budget across the 25%/50%
-screen; refusals and raw fallbacks are **inconclusive, not V3 wins**. The
-[full ten-cell history](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md#benchmark-methodology)
-retains every result.
-
-#### Resident-warm complete-request latency at a 50% budget
-
-| Workload | Select v3 ms | Kompress v2 ms | V3 time difference | Measurement basis |
-| --- | ---: | ---: | ---: | --- |
-| Code | 146.088 | 200.304 | -27.1% | One historical request per model |
-| Retrieval | 139.291 | 201.564 | -30.9% | One historical request per model |
-| Multi-turn | 66.572 | 77.751 | -14.4% | Median of 5 requests per model |
-
-Resident-warm RTX 5080 research pipelines, FP32 parameters/BF16 compute;
-startup excluded. Separate time blocks, not controlled-idle or paired trials.
-These are descriptive development observations, **not representative quality, population p50/p95, or superiority qualification**.
-
-<details>
-<summary><strong>Benchmark methodology and preserved history</strong></summary>
-
-RTX 5080, FP32 parameters/BF16 compute, cache off, TF32 off, one Torch thread.
-V3 used the serialized SDPA research runner; Kompress v2 used native EAGER.
-Complete-request clocks include grouping, counting, IPC, scoring, allocation,
-final recount and applicable teardown, but **exclude process/model startup and
-conditioning**. They are not cold-CLI or quickstart-SDK latency measurements.
-
-The models ran in separate time blocks. The five-request multi-turn repeat was
-not controlled-idle: the GPU-busy admission gate was explicitly waived, with
-pre-model busy observations of 25% and 38%. All five samples per model are
-retained. The earlier multi-turn result was **69.362 ms vs 64.411 ms** (V3 time
-7.7% higher), and remains in the history rather than being replaced by the
-repeat's sample medians.
-
-The shared synthetic publisher-data pilot has incomplete comparator/answer
-evaluation; its literal-substring checks are not answer accuracy. The separate
-[partial answer-lookup evaluation](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/QUALITY-EVAL.json)
-also remains incomplete, with no overall quality score or qualified 90%
-comparability claim.
-
-Sources: [exact counts, timings, all repeat samples and refusals](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/COMPARISON.json),
-[validation](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/VALIDATION.json), and
-[full methodology](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md#benchmark-methodology).
-</details>
-
-<details>
-<summary><strong>Historical Select v1 benchmarks (not v3 results)</strong></summary>
-
-The original [Tokenfold Select v1][tokenfold-select-v1] model card reports the
-following literal-answer-retention results against Kompress-v2 and BM25.
-These are source-reported external results, not Core CI or v3 results.
-
-| Tokens kept | Tokenfold Select | Kompress-v2 (Headroom) native | Kompress-v2 (Headroom) relevance | BM25 | vs. best baseline |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 50% | **86.3%** | 66.5% | 80.5% | 79.4% | **+5.8 pp** |
-| 25% | **70.3%** | 47.2% | 61.5% | 60.7% | **+8.8 pp** |
-| 10% | **39.9%** | 30.4% | 37.7% | 37.7% | **+2.2 pp** |
-
-In this v1 evaluation, Select beat every measured baseline at every budget.
-At a 25% budget, the fine-tuned ranker keeps the answer **70.3% of the time**:
-an **8.8 percentage-point** lead over the strongest baseline (Kompress-v2 relevance, 61.5%), and a
-**15.8% relative lift** over BM25 (60.7% -> 70.3%). Critical-content survival is
-**100% at every measured budget** through allocator force-keep. Results are
-three-seed repeated subsampling over roughly 73,000 training and 24,000
-held-out fixtures per run; the [v1 model card][tokenfold-select-v1] publishes the
-training recipe and full baseline set. Here, task success means the literal
-gold answer survived selection under the stated budget.
-These are source-reported external results, pinned by model revision in the
-[metric manifest](tests/fixtures/readme_metrics.json); Core CI does not reproduce them.
-
-See the [Select v1 model card][tokenfold-select-v1] for its setup, evaluation,
-training data, and limitations.
-
-</details>
-
-<br />
-
 ## Measured results
+
+### SDK downstream-answer diagnostic
+
+On 2026-11-10, one free hosted model (`nvidia/nemotron-3.5-super-vl:free`,
+Nvidia provider) answered 12 predeclared tasks twice per arm, with counterbalanced
+order and exact typed-JSON grading. The 48 completed quality calls measured
+answers, not just whether answer text survived compression:
+
+| Path | Distinct tasks x trials | Baseline correct | Candidate correct | Provider prompt tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Explicit folded JSON vs. compact JSON | 4 x 2 | 8/8 | **6/8** | 24,496 -> 16,600 (**32.2% fewer**) |
+| Select at a 50% rendered-text budget vs. full context | 8 x 2 | 16/16 | 16/16 | 5,706 -> 3,416 (**40.1% fewer**) |
+
+**Exact recovery did not guarantee correct model answers:** both folded-JSON
+failures misread the same nested API record's plan tier and seat count. Default
+SDK `Data` uses compact JSON; folding requires explicit opt-in. Select matched
+its baseline on these eight synthetic tasks, not a representative accuracy test.
+Repeated trials are not additional independent tasks; Select remains unqualified.
+
+The first model scope stopped on a rate-limited probe, with all 48 quality cells
+unexecuted; it is retained, not scored as 0% accuracy or silently retried.
+See the [full method, failures and limits](docs/sdk-benchmarks-0.6.0.md),
+[frozen prompts and oracles](eval/research/sdk_quality_corpus.json), and
+[all-attempt results](eval/research/sdk_quality_results.json).
+
+### Lossless corpus counts
 
 Exact `o200k_base` token counts, original input versus Tokenfold's lossless
 output across the six-fixture Headroom corpus:
@@ -604,6 +600,106 @@ and [reproduction command](eval/research/README.md).
 
 <br />
 
+### Tokenfold Select v3 benchmarks
+
+Saved results from the [published v3 benchmark snapshot](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md),
+pinned to model-card revision `317d3424d3de78c1a708c42a47a7812ab877f1a8`.
+These measurements include the scorer **and whole-group allocator**, not the
+scoring model alone. Core's lossless benchmarks are separate above.
+
+#### Context-token reduction at a 50% budget
+
+Select v3 removed **50.0-60.0%** of the original context tokens in these five
+saved development examples. Both models had the same exact `o200k_base` output
+cap for each workload; retained V3 groups were copied without rewriting.
+
+| Workload | Original tokens | Select v3 output | V3 reduction | Kompress v2 output |
+| --- | ---: | ---: | ---: | ---: |
+| Code | 4,411 | 2,205 | **50.0%** | 2,149 |
+| JSON | 1,303 | 651 | **50.0%** | Refused; 1,303 raw |
+| Logs | 1,103 | 503 | **54.4%** | Refused; 1,103 raw |
+| Multi-turn | 587 | 235 | **60.0%** | 284 |
+| Retrieval | 4,498 | 2,217 | **50.7%** | 2,219 |
+
+One exposed source per workload; JSON and logs share a source population.
+Token reduction does not establish answer accuracy or semantic preservation.
+Six of ten historical Kompress cells refused the budget across the 25%/50%
+screen; refusals and raw fallbacks are **inconclusive, not V3 wins**. The
+[full ten-cell history](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md#benchmark-methodology)
+retains every result.
+
+#### Resident-warm complete-request latency at a 50% budget
+
+| Workload | Select v3 ms | Kompress v2 ms | V3 time difference |
+| --- | ---: | ---: | ---: |
+| Code | 146.088 | 200.304 | -27.1% |
+| Retrieval | 139.291 | 201.564 | -30.9% |
+| Multi-turn | 66.572 | 77.751 | -14.4% |
+
+Resident-warm RTX 5080 research pipelines, FP32 parameters/BF16 compute;
+startup excluded. Code and retrieval each use one historical request per model;
+multi-turn uses the median of five. Separate time blocks, not controlled-idle or paired trials.
+These are descriptive development observations, **not representative quality, population p50/p95, or superiority qualification**.
+
+<details>
+<summary><strong>Benchmark methodology and preserved history</strong></summary>
+
+RTX 5080, FP32 parameters/BF16 compute, cache off, TF32 off, one Torch thread.
+V3 used the serialized SDPA research runner; Kompress v2 used native EAGER.
+Complete-request clocks include grouping, counting, IPC, scoring, allocation,
+final recount and applicable teardown, but **exclude process/model startup and
+conditioning**. They are not cold-CLI or quickstart-SDK latency measurements.
+
+The models ran in separate time blocks. The five-request multi-turn repeat was
+not controlled-idle: the GPU-busy admission gate was explicitly waived, with
+pre-model busy observations of 25% and 38%. All five samples per model are
+retained. The earlier multi-turn result was **69.362 ms vs 64.411 ms** (V3 time
+7.7% higher), and remains in the history rather than being replaced by the
+repeat's sample medians.
+
+The shared synthetic publisher-data pilot has incomplete comparator/answer
+evaluation; its literal-substring checks are not answer accuracy. The separate
+[partial answer-lookup evaluation](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/QUALITY-EVAL.json)
+also remains incomplete, with no overall quality score or qualified 90%
+comparability claim.
+
+Sources: [exact counts, timings, all repeat samples and refusals](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/COMPARISON.json),
+[validation](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/VALIDATION.json), and
+[full methodology](https://huggingface.co/snchimata/tokenfold-select-v3/blob/317d3424d3de78c1a708c42a47a7812ab877f1a8/README.md#benchmark-methodology).
+</details>
+
+<details>
+<summary><strong>Historical Select v1 benchmarks (not v3 results)</strong></summary>
+
+The original [Tokenfold Select v1][tokenfold-select-v1] model card reports the
+following literal-answer-retention results against Kompress-v2 and BM25.
+These are source-reported external results, not Core CI or v3 results.
+
+| Tokens kept | Tokenfold Select | Kompress-v2 (Headroom) native | Kompress-v2 (Headroom) relevance | BM25 | vs. best baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 50% | **86.3%** | 66.5% | 80.5% | 79.4% | **+5.8 pp** |
+| 25% | **70.3%** | 47.2% | 61.5% | 60.7% | **+8.8 pp** |
+| 10% | **39.9%** | 30.4% | 37.7% | 37.7% | **+2.2 pp** |
+
+In this v1 evaluation, Select beat every measured baseline at every budget.
+At a 25% budget, the fine-tuned ranker keeps the answer **70.3% of the time**:
+an **8.8 percentage-point** lead over the strongest baseline (Kompress-v2 relevance, 61.5%), and a
+**15.8% relative lift** over BM25 (60.7% -> 70.3%). Critical-content survival is
+**100% at every measured budget** through allocator force-keep. Results are
+three-seed repeated subsampling over roughly 73,000 training and 24,000
+held-out fixtures per run; the [v1 model card][tokenfold-select-v1] publishes the
+training recipe and full baseline set. Here, task success means the literal
+gold answer survived selection under the stated budget.
+These are source-reported external results, pinned by model revision in the
+[metric manifest](tests/fixtures/readme_metrics.json); Core CI does not reproduce them.
+
+See the [Select v1 model card][tokenfold-select-v1] for its setup, evaluation,
+training data, and limitations.
+
+</details>
+
+<br />
+
 ## Extended tooling
 
 These additional capabilities extend Core with recoverable pruning and an
@@ -624,7 +720,7 @@ pruning when strict context budgets apply:
 | --- | --- | --- |
 | **What it does** | Minifies, folds repeated keys into columns, and stores repeated values once | Adds deterministic ranking and retrieval markers for selected array rows |
 | **Best on** | Uniform records, schemas, logs, diffs | Search results, mixed event feeds, agent traces, long arrays |
-| **Measured here** | **45.6-67.6%** fewer tokens on three bundled fixtures | **51.7-96.3%** fewer tokens (40-event feed at 51.7-68.2%; 100-row showcase at 96.3%) |
+| **Measured here** | **45.6-63.9%** fewer tokens on two versioned fixtures | **51.7-96.3%** fewer tokens (40-event feed at 51.7-68.2%; 100-row showcase at 96.3%) |
 | **Recovery** | All data remains in the payload | Every emitted marker resolves through the local retrieval store |
 
 
@@ -691,8 +787,9 @@ tokenfold inspect examples/incident_feed.json --format json \
   --prune --keep-ratio 0.35
 ```
 
-The same flags, and the same fail-closed contract, from Python and TypeScript.
-Use a throwaway store directory while experimenting and reuse it for retrieval:
+The same flags and fail-closed contract are available through the low-level
+bindings. Use a throwaway store directory while experimenting and reuse it for
+retrieval:
 
 ```python
 import json

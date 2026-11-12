@@ -120,5 +120,16 @@
       "v3": 69.3616,
       "kompress": 64.4106
     }
+  },
+  "sdk_0_6_quality": {
+    "source": "eval/research/sdk_quality_results.json",
+    "corpus": "eval/research/sdk_quality_corpus.json",
+    "source_canonical_json_sha256": "603a988c61d0863bbf0b5be0079bf338e8ecbbda18e7374d5be295da892dc347",
+    "corpus_canonical_json_sha256": "c09c30b004b0bd4405de30b51ac2f215eaad26b5fb3288f8d790ae31fda0474c",
+    "model": "nvidia/nemotron-3.5-super-vl:free",
+    "distinct_tasks": 12,
+    "core": { "baseline_correct": 8, "candidate_correct": 6, "trials": 8, "provider_prompt_reduction_pct": 32.2 },
+    "select": { "baseline_correct": 16, "candidate_correct": 16, "trials": 16, "provider_prompt_reduction_pct": 40.1 },
+    "qualification": false
   }
 }
