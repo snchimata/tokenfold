@@ -27,43 +27,13 @@
 
 ![Terminal demo: Python fit() code and verified 2,366 to 1,376 token savings from the first frame, followed by Core-first processing and optional Tokenfold Select. Select illustration only.](https://raw.githubusercontent.com/snchimata/tokenfold/a5aafaf9fb48047ed03e42e9cc379de49118b25d/docs/assets/tokenfold-demo.gif)
 
-<details>
-<summary><strong>Demo scope and regeneration</strong></summary>
-
-The 13-second FIT -> CORE -> SELECT loop returns directly to the code, with no
-closing slide. It opens on the executed Python SDK `fit()` example and its
-verified result: explicit folding reduces already-compact JSON from 2,366 to
-1,376 tokens (**41.8%**), meeting a 1,500-token budget without dropping any of
-the 30 records. The compact baseline exceeds that same budget.
-
-The following Core frame starts from the formatted API-response fixture:
-3,812 to 1,376 tokens (**63.9%**), with exact JSON-value recovery. These are
-different input representations, not interchangeable SDK and CLI baselines.
-The workflow builds the Core baseline first; Select requires a still-over-budget,
-eligible request, an approved runtime and explicit per-fit opt-in. Select is an
-**illustration, not live inference**, and remains experimental and unqualified.
-Fixture savings are not universal, and reversible data is not model-answer proof.
-
-The [renderer](scripts/render-demo.py) requires Pillow, a locally built CLI and
-the current SDK installed in a Python >=3.12 environment. It checks the fixture
-hash, Core counts, decode equality and SDK receipt before rendering:
-
-```bash
-python scripts/render-demo.py --sdk-python /path/to/sdk-env/python
-```
-
-The [VHS tape](docs/tokenfold-demo.tape) is a separate, Core-only terminal
-recording and writes to `tmp/tokenfold-core-terminal.gif`.
-
-</details>
-
 ## Table of contents
 
 [Python quickstart](#quick-start) | [Python fit workflow](#native-sdk-fitting) | [Select](#tokenfold-select) | [Benchmark highlights](#benchmark-highlights) | [Other integrations](#other-integrations) | [How it works](#how-it-works) | [Core](#tokenfold-core) | [Full results](#measured-results) | [Extended tooling](#extended-tooling) | [Safety and auditability](#safety-and-auditability) | [Reproduce the results](#reproduce-the-results) | [Contributing](#contributing) | [License](#license)
 
-> **Built for:** Python application developers and AI teams fitting JSON, tool
-> definitions, and grouped context into LLM requests. TypeScript, coding agents,
-> CLI, proxy, and Rust integrations use the same underlying Core engine.
+> **Built for:** Python, TypeScript, and Rust developers and AI teams fitting
+> JSON, tool definitions, and grouped context into LLM requests. Coding-agent,
+> CLI, and proxy integrations use the same underlying Core engine.
 
 ## Quick start
 
