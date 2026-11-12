@@ -94,7 +94,9 @@ so its runtime source digest is `df523862e73e3de07000a62a0e78cb133bfaf68cb5af71e
 It requires a **new explicit approval**, not reuse/relabeling of the previous config.
 Clone-built artifacts and their functional receipts are distinct from the timings above.
 
-## Bounded downstream attempt: inconclusive
+<a id="bounded-downstream-attempt-inconclusive"></a>
+
+## Earlier bounded downstream attempt: inconclusive
 
 Three synthetic tasks, two counterbalanced repetitions, baseline/candidate arms,
 1024 output tokens per call, exact predeclared JSON oracles, no retry or provider
@@ -110,6 +112,11 @@ Local candidate preparation did apply selection: rendered-text counts 173 -> 75
 (target 95), 180 -> 85 (target 99), and 217 -> 99 (target 119). Those are exact local
 `o200k_base` rendered-text counts, **not provider-request savings, billed usage,
 answer-quality evidence or superiority qualification**.
+
+A subsequent [2026-11-10 downstream diagnostic](sdk-benchmarks-0.6.0.md) completed
+48 quality calls: compact JSON 8/8 vs. explicit folded JSON 6/8, and full-context
+16/16 vs. Select 16/16 on eight synthetic tasks. Those limited observations do
+not replace the earlier failed attempts or establish general quality preservation.
 
 ## Actual user notebook
 

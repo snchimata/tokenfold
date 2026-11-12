@@ -22,7 +22,12 @@ def select_cell():
 
 
 def test_notebook_sources_compile_and_select_requires_explicit_approval():
-    for i, cell in enumerate(cells()):
+    notebook_cells = cells()
+    intro = "".join(notebook_cells[0]["source"])
+    assert "tokenfold==0.6.0" in intro
+    assert "unreleased" not in intro.lower()
+    assert "locally built wheel" not in intro.lower()
+    for i, cell in enumerate(notebook_cells):
         if cell["cell_type"] == "code":
             ast.parse("".join(cell["source"]), filename=f"notebook-cell-{i}")
             assert cell["outputs"] == []

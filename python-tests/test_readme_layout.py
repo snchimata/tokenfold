@@ -19,7 +19,7 @@ class ReadmeLayout(unittest.TestCase):
         self.assertTrue(self.text.isascii())
         self.assertEqual(self.text.count('Exact decode proves data recovery'), 1)
         self.assertIn('Up to 96.3% fewer tokens (showcase)', self.text)
-        self.assertIn('45.6-67.6% on three fixtures, lossless', self.text)
+        self.assertIn('45.6-63.9% on two fixtures, lossless', self.text)
         self.assertEqual(self.text.count('```mermaid'), 2)
         self.assertIn('flowchart LR\n    accTitle: Lossless first', self.text)
         self.assertLess(self.text.index('![Terminal demo:'), self.text.index('#### Why Tokenfold'))
@@ -37,10 +37,84 @@ class ReadmeLayout(unittest.TestCase):
         self.assertEqual(depth, 0)
 
     def test_fit_onboarding_and_migration_are_visible(self):
-        for text in ('0.6.0', 'Python >=3.12', 'from tokenfold import fit', 'require_met()',
-                     'docs/sdk-migration.md', 'pip install tokenfold==0.6.0',
-                     'npm install tokenfold@0.6.0', 'tokenfold-select-runtime'):
+        for text in ('tokenfold==0.6.0', 'Python >=3.12', 'from tokenfold import Data, fit', 'require_met()',
+                     'docs/sdk-migration.md', 'tokenfold-select-runtime'):
             self.assertIn(text, self.text)
+        visible = re.sub(r'\]\([^)]+\)', ']', self.text)
+        self.assertNotIn('The 0.6 SDK', visible)
+        self.assertNotIn('Measurement basis', self.text)
+        intro = self.text.split('## Table of contents', 1)[0]
+        self.assertIn('Select what matters. Fit more context.', intro)
+        self.assertIn('Tokenfold Select brings query-aware relevance ranking', intro)
+        self.assertIn('Select for relevance. Core for structural efficiency.', intro)
+        self.assertLess(intro.index('Tokenfold Select'), intro.index('Core'))
+        self.assertNotIn('Start model-free with Core.', intro)
+
+    def test_python_first_release_tracks_are_separate(self):
+        published = self.text.split('### Published Python SDK\n', 1)[1]
+        published, fitting = published.split('### Python fit workflow\n', 1)
+        self.assertIn('python -m pip install "tokenfold==0.6.0"', published)
+        self.assertIn('from tokenfold import Data, fit', fitting)
+        self.assertIn('from tokenfold.lowlevel import InputFormat, compress, decode', self.text)
+        self.assertNotIn('Path(', published)
+        self.assertIn('Python >=3.12', published)
+        self.assertIn('representation="folded"', fitting)
+        self.assertLess(self.text.index('### Published Python SDK'), self.text.index('```js'))
+        self.assertLess(self.text.index('## Tokenfold Select'), self.text.index('## Benchmark highlights'))
+        self.assertLess(self.text.index('## Benchmark highlights'), self.text.index('## Other integrations'))
+        self.assertNotIn('google.com/search', self.text)
+        self.assertNotIn('unreleased', self.text.lower())
+        self.assertNotIn('checkout preview', self.text.lower())
+
+    def test_node_sdk_quickstart_uses_the_published_in_process_package(self):
+        self.assertIn('npm install tokenfold@0.6.0', self.text)
+        self.assertIn('Core fitting runs in-process', self.text)
+        self.assertNotIn('native fitting uses the SDK build', self.text)
+
+    def test_lowlevel_python_example_preserves_source_value(self):
+        import tokenfold.lowlevel as tokenfold
+
+        if not hasattr(tokenfold, 'compress'):
+            self.skipTest('installed package does not expose tokenfold.lowlevel')
+        code = next(block for block in re.findall(r'```python\n(.*?)```', self.text, re.S)
+                    if 'from tokenfold.lowlevel import InputFormat, compress, decode' in block)
+        namespace = {}
+        with redirect_stdout(StringIO()) as output:
+            exec(compile(code, 'README.md:lowlevel-python', 'exec'), namespace)
+        result = namespace['result']
+        self.assertIsInstance(result.payload, bytes)
+        self.assertGreater(result.report.saved_tokens, 0)
+        self.assertEqual(json.loads(tokenfold.decode(result.payload)), namespace['records'])
+        self.assertIn(f'{result.report.original_tokens} -> {result.report.compressed_tokens} tokens', output.getvalue())
+
+    def test_python_fit_preview_meets_budget(self):
+        code = next(block for block in re.findall(r'```python\n(.*?)```', self.text, re.S)
+                    if 'from tokenfold import Data, fit' in block)
+        namespace = {}
+        with redirect_stdout(StringIO()):
+            exec(compile(code, 'README.md:fit-preview', 'exec'), namespace)
+        result = namespace['result']
+        self.assertEqual(result.budget_status, 'met')
+        self.assertEqual(result.receipt.accounting.final_basis, 'exact')
+        self.assertLess(result.final_tokens, result.original_tokens)
+        self.assertLessEqual(result.final_tokens, result.target_tokens)
+        from tokenfold.lowlevel import decode
+        self.assertEqual(json.loads(decode(namespace['payload_text'])), namespace['records'])
+
+    def test_select_example_requires_selection_to_fit(self):
+        from tokenfold import fit
+
+        code = next(block for block in re.findall(r'```python\n(.*?)```', self.text, re.S)
+                    if 'from tokenfold import Context, Group, SelectRuntime, Tokenfold' in block)
+        self.assertIn('experimental=True', code)
+        self.assertIn('allow_selection=True', code)
+        self.assertNotIn('from_config', code)
+        namespace = {}
+        exec(compile(code.split('with Tokenfold(', 1)[0], 'README.md:select-input', 'exec'), namespace)
+        baseline = fit(namespace['context'], target_tokens=96)
+        self.assertEqual(baseline.budget_status, 'unmet')
+        self.assertGreater(baseline.final_tokens, baseline.target_tokens)
+        self.assertFalse(baseline.selection_applied)
 
     def test_local_links_resolve(self):
         targets = re.findall(r'\]\(([^)]+)\)|src="([^"]+)"', self.text)
@@ -106,7 +180,9 @@ class ReadmeLayout(unittest.TestCase):
         for row in metrics['latency_rows']:
             change = 100 * (row['v3_ms'] / row['kompress_ms'] - 1)
             self.assertIn(f"| {row['workload']} | {row['v3_ms']:.3f} | {row['kompress_ms']:.3f} | "
-                          f"{change:.1f}% | {row['basis']} |", visible)
+                          f"{change:.1f}% |", visible)
+        self.assertIn('one historical request per model', visible)
+        self.assertIn('median of five', visible)
         old = metrics['historical_multiturn_ms']
         self.assertIn(f"{old['v3']:.3f} ms vs {old['kompress']:.3f} ms", section)
         self.assertEqual((metrics['historical_refusals'], metrics['historical_cells']), (6, 10))
