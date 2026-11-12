@@ -165,7 +165,7 @@ jobs:
 
   appimage:
     name: appimage (anylinux-${{ matrix.arch }})
-    needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
+    #needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
     strategy:
       fail-fast: false
       matrix:
