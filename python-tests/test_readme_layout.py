@@ -15,6 +15,11 @@ class ReadmeLayout(unittest.TestCase):
     def setUp(self):
         self.text = (ROOT / 'README.md').read_text(encoding='utf-8')
 
+    def test_demo_url_is_pinned_to_an_immutable_commit(self):
+        url = re.search(r'!\[Terminal demo:[^\]]+\]\(([^)]+)\)', self.text).group(1)
+        self.assertRegex(url, r'^https://raw\.githubusercontent\.com/snchimata/tokenfold/'
+                              r'[0-9a-f]{40}/docs/assets/tokenfold-demo\.gif$')
+
     def test_common_path_and_visible_limits(self):
         self.assertTrue(self.text.isascii())
         self.assertEqual(self.text.count('Exact decode proves data recovery'), 1)

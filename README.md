@@ -25,7 +25,7 @@
 
 </div>
 
-![Terminal demo: Python fit() code and verified 2,366 to 1,376 token savings from the first frame, followed by Core-first processing and optional Tokenfold Select. Select illustration only.](https://raw.githubusercontent.com/snchimata/tokenfold/main/docs/assets/tokenfold-demo.gif)
+![Terminal demo: Python fit() code and verified 2,366 to 1,376 token savings from the first frame, followed by Core-first processing and optional Tokenfold Select. Select illustration only.](https://raw.githubusercontent.com/snchimata/tokenfold/a5aafaf9fb48047ed03e42e9cc379de49118b25d/docs/assets/tokenfold-demo.gif)
 
 <details>
 <summary><strong>Demo scope and regeneration</strong></summary>
