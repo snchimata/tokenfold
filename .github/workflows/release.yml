@@ -141,7 +141,6 @@ jobs:
 
   sbom:
     name: sbom
-    if: false
     needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
     runs-on: ubuntu-latest
     steps:
