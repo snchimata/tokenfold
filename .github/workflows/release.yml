@@ -16,20 +16,17 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
-  workflow_dispatch: {}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   sdk-artifacts:
-    if: false
     uses: ./.github/workflows/sdk-artifacts.yml
 
   lint:
     name: lint
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -45,7 +42,6 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -54,7 +50,6 @@ jobs:
   security:
     name: security
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -65,7 +60,6 @@ jobs:
 
   golden-cross-platform:
     name: golden-cross-platform
-    if: false
     strategy:
       matrix:
         os: [macos-15, macos-15-intel, ubuntu-latest]
@@ -83,7 +77,6 @@ jobs:
     name: bench-regression
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -92,14 +85,12 @@ jobs:
   fidelity-smoke:
     name: fidelity-smoke
     runs-on: ubuntu-latest
-    if: false
     steps:
       - uses: actions/checkout@v6
       - run: python eval/run_fidelity.py --gate --profile smoke-first-consumer
 
   cross-compile:
     name: cross-compile (${{ matrix.target }})
-    if: false
     needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
     strategy:
       matrix:
@@ -165,7 +156,7 @@ jobs:
 
   appimage:
     name: appimage (anylinux-${{ matrix.arch }})
-    #needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
+    needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
     strategy:
       fail-fast: false
       matrix:
@@ -195,7 +186,7 @@ jobs:
 
   publish-github-release:
     name: publish-github-release
-    needs: [appimage]
+    needs: [cross-compile, sbom, sdk-artifacts, appimage]
     runs-on: ubuntu-latest
     permissions:
       contents: write
