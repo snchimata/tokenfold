@@ -181,7 +181,7 @@ jobs:
       - name: Preparing container
         uses: pkgforge-dev/anylinux-setup-action@b2d1ce4216f71162e00ae58fa11ee9aeb723d0d5 # v5
       - name: Make AppImage
-        run: /bin/sh ./appimage/make-appimage.sh
+        run: /bin/sh ./scripts/make-appimage.sh
       - name: Checksum AppImage
         run: |
           cd dist
