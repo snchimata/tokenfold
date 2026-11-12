@@ -16,6 +16,7 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch: {}
 
 env:
   CARGO_TERM_COLOR: always
@@ -153,9 +154,39 @@ jobs:
           name: sbom
           path: "**/*.cdx.json"
 
+  appimage:
+    name: appimage (anylinux-${{ matrix.arch }})
+    needs: [lint, test, security, golden-cross-platform, bench-regression, fidelity-smoke]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runs-on: ubuntu-latest
+          - arch: aarch64
+            runs-on: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runs-on }}
+    container: ghcr.io/pkgforge-dev/archlinux:latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Preparing container
+        uses: pkgforge-dev/anylinux-setup-action@b2d1ce4216f71162e00ae58fa11ee9aeb723d0d5 # v5
+      - name: Make AppImage
+        run: /bin/sh ./appimage/make-appimage.sh
+      - name: Checksum AppImage
+        run: |
+          cd dist
+          for f in *.AppImage; do
+            sha256sum "$f" > "$f.sha256"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tokenfold-anylinux-${{ matrix.arch }}
+          path: dist/*.AppImage*
+
   publish-github-release:
     name: publish-github-release
-    needs: [cross-compile, sbom, sdk-artifacts]
+    needs: [cross-compile, sbom, sdk-artifacts, appimage]
     runs-on: ubuntu-latest
     permissions:
       contents: write
