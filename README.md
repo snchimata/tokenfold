@@ -346,8 +346,7 @@ tokenfold inspect payload.json --format json
 tokenfold compress payload.json --format json --output payload.compact.json
 ```
 
-For provider-shaped JSON, use the low-level Python API. In the published package
-above, import these names directly from `tokenfold`, as in the first quickstart:
+For provider-shaped JSON, use the low-level Python API from `tokenfold.lowlevel`:
 
 ```python
 from tokenfold.lowlevel import InputFormat, compress
