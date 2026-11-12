@@ -37,7 +37,7 @@
 
 ## Quick start
 
-### Published Python SDK
+### Python SDK
 
 Python >=3.12. Install the current SDK release; the base workflow needs no
 repository checkout, model, GPU, or ML framework:

@@ -56,7 +56,7 @@ class ReadmeLayout(unittest.TestCase):
         self.assertNotIn('Start model-free with Core.', intro)
 
     def test_python_first_release_tracks_are_separate(self):
-        published = self.text.split('### Published Python SDK\n', 1)[1]
+        published = self.text.split('### Python SDK\n', 1)[1]
         published, fitting = published.split('### Python fit workflow\n', 1)
         self.assertIn('python -m pip install "tokenfold==0.6.0"', published)
         self.assertIn('from tokenfold import Data, fit', fitting)
@@ -64,7 +64,7 @@ class ReadmeLayout(unittest.TestCase):
         self.assertNotIn('Path(', published)
         self.assertIn('Python >=3.12', published)
         self.assertIn('representation="folded"', fitting)
-        self.assertLess(self.text.index('### Published Python SDK'), self.text.index('```js'))
+        self.assertLess(self.text.index('### Python SDK'), self.text.index('```js'))
         self.assertLess(self.text.index('## Tokenfold Select'), self.text.index('## Benchmark highlights'))
         self.assertLess(self.text.index('## Benchmark highlights'), self.text.index('## Other integrations'))
         self.assertNotIn('google.com/search', self.text)
