@@ -1,9 +1,12 @@
-﻿"""Minimal Python quickstart for Tokenfold's bytes-first v2 interface."""
+﻿"""Advanced lowlevel compression: Python >=3.12; pip install tokenfold==0.6.0.
+
+For native SDK fitting and fit receipts, start with sdk_fit.py instead.
+"""
 
 import json
 from pathlib import Path
 
-import tokenfold
+from tokenfold import lowlevel as tokenfold
 
 HERE = Path(__file__).parent
 

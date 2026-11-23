@@ -1,0 +1,457 @@
+{
+  "schema_version": "1.0",
+  "kind": "contextdoctor.report",
+  "experiment_id": "synthetic",
+  "manifest_hash": "sha256:24ac14527f7029f781abc4a403b3022949a22c3d871b687607aca549faead3db",
+  "input_hashes": {
+    "manifest": "sha256:96b9d84d41e344a16702dba7edd4fb7d8220d70a90aac3264269b09adf26a42c",
+    "episodes": "sha256:b20dacbf162a8887ba5683f03dd67e491784f2979fd71012a7542a5f1efd41e8",
+    "operations": "sha256:1a307edd8dc4ef9fd659cd759e79ea859e3c4a57bb2a3b5fa7d23b7a5cf8f727",
+    "artifacts": [
+      "sha256:035cc5131abf6c09731af147e10b7b70ea6431cca042741b3806be46ae2c1c0d",
+      "sha256:1491ff51d31c67e08bacbd1ce9a068d64dd6b1cc972f891479073bd096bcb717",
+      "sha256:178752f95c8dc170bf9e2f9542106a337a29b81b7543e02d7d62e39d6805fb1f",
+      "sha256:34673dea73f7b6baf178cec0f70dbe40597339c327d81e78c084317833efd62e",
+      "sha256:7a2d03a4a2d6a09a7f9a1d18d8d5e027ff4f18a951dbc415fcd677cb82e158b5",
+      "sha256:8e62a53c5d24149054c4514bba28080a1c6b510a67695fe075558fc69579addd",
+      "sha256:bde913e0a5c8ef8ddcec508fc2c37f627c1a60f62a22fd835a1b3241ee33afb0",
+      "sha256:dfb8080b70dee92894cb150b00f8834c08d00378e9f3f769da71a5022e094613"
+    ]
+  },
+  "evidence_class": "synthetic_mechanics",
+  "counts": {
+    "tasks": 2,
+    "planned": 4,
+    "recorded": 4,
+    "executed": 4,
+    "verified": 4,
+    "verified_successes": {
+      "baseline": 2,
+      "candidate": 2
+    },
+    "invalid": 0,
+    "unknown": 0,
+    "unexecuted": 0
+  },
+  "paired": {
+    "count": 2,
+    "outcomes": {
+      "both_success": 2,
+      "baseline_only_success": 0,
+      "candidate_only_success": 0,
+      "both_failure": 0
+    },
+    "conditional_failure_rate": "0",
+    "conditional_failure_rate_reason": null,
+    "success_delta": "0",
+    "baseline_success_rate": "1",
+    "candidate_success_rate": "1"
+  },
+  "regressions": [],
+  "gains": [],
+  "exposure": {
+    "baseline": {
+      "applied": 0,
+      "no_op": 2,
+      "fallback": 0,
+      "refused": 0,
+      "failed": 0,
+      "unknown": 0
+    },
+    "candidate": {
+      "applied": 0,
+      "no_op": 2,
+      "fallback": 0,
+      "refused": 0,
+      "failed": 0,
+      "unknown": 0
+    }
+  },
+  "secondary": {
+    "baseline": {
+      "operations": 2,
+      "unfinished_operations": 0,
+      "provider_tokens": {
+        "input": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "output": 0
+      },
+      "local_estimated_tokens": {
+        "input": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "output": 0
+      },
+      "missing_usage_operations": 2,
+      "roles": {
+        "agent": 2,
+        "transform": 0,
+        "tool": 0,
+        "verification": 0,
+        "setup": 0
+      },
+      "wall_seconds_known": "2",
+      "wall_seconds_missing": 0
+    },
+    "candidate": {
+      "operations": 2,
+      "unfinished_operations": 0,
+      "provider_tokens": {
+        "input": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "output": 0
+      },
+      "local_estimated_tokens": {
+        "input": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "output": 0
+      },
+      "missing_usage_operations": 2,
+      "roles": {
+        "agent": 2,
+        "transform": 0,
+        "tool": 0,
+        "verification": 0,
+        "setup": 0
+      },
+      "wall_seconds_known": "2",
+      "wall_seconds_missing": 0
+    }
+  },
+  "accounting": {
+    "baseline": {
+      "provider_billed": {
+        "known_subtotal": "2",
+        "known_operations": 2,
+        "included_subtotal": "2",
+        "known_by_category": {
+          "model": "2",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [
+          "model"
+        ],
+        "subtotal_is_lower_bound": false
+      },
+      "usage_priced": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "modeled": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "unavailable": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      }
+    },
+    "candidate": {
+      "provider_billed": {
+        "known_subtotal": "2",
+        "known_operations": 2,
+        "included_subtotal": "2",
+        "known_by_category": {
+          "model": "2",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [
+          "model"
+        ],
+        "subtotal_is_lower_bound": false
+      },
+      "usage_priced": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "modeled": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "unavailable": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": "0",
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      }
+    },
+    "unallocated": {
+      "provider_billed": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": null,
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [
+          "model"
+        ],
+        "subtotal_is_lower_bound": false
+      },
+      "usage_priced": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": null,
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "modeled": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": null,
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      },
+      "unavailable": {
+        "known_subtotal": "0",
+        "known_operations": 0,
+        "included_subtotal": null,
+        "known_by_category": {
+          "model": "0",
+          "transform": "0",
+          "tool": "0",
+          "verification": "0",
+          "infrastructure": "0"
+        },
+        "missing_operations": 0,
+        "scope_categories": [],
+        "subtotal_is_lower_bound": false
+      }
+    }
+  },
+  "economics": {
+    "provider_billed": {
+      "baseline": {
+        "cost_per_verified_success": "1",
+        "reason": null
+      },
+      "candidate": {
+        "cost_per_verified_success": "1",
+        "reason": null
+      },
+      "relative_reduction": "0",
+      "reason": null
+    },
+    "usage_priced": {
+      "baseline": {
+        "cost_per_verified_success": null,
+        "reason": "incomplete_or_incompatible_cost_scope"
+      },
+      "candidate": {
+        "cost_per_verified_success": null,
+        "reason": "incomplete_or_incompatible_cost_scope"
+      },
+      "relative_reduction": null,
+      "reason": "missing_or_zero_baseline_ratio"
+    },
+    "modeled": {
+      "baseline": {
+        "cost_per_verified_success": null,
+        "reason": "incomplete_or_incompatible_cost_scope"
+      },
+      "candidate": {
+        "cost_per_verified_success": null,
+        "reason": "incomplete_or_incompatible_cost_scope"
+      },
+      "relative_reduction": null,
+      "reason": "missing_or_zero_baseline_ratio"
+    }
+  },
+  "uncertainty": {
+    "method": "task_cluster_percentile",
+    "descriptive_only": true,
+    "seed": 7,
+    "task_clusters": 2,
+    "confidence": "0.95",
+    "success_delta": {
+      "interval": null,
+      "undefined_resamples": 0,
+      "resamples": 100,
+      "reason": "degenerate_resamples"
+    },
+    "conditional_failure_rate": {
+      "interval": null,
+      "undefined_resamples": 0,
+      "resamples": 100,
+      "reason": "degenerate_resamples"
+    },
+    "relative_reduction": {
+      "provider_billed": {
+        "interval": null,
+        "undefined_resamples": 0,
+        "resamples": 100,
+        "reason": "degenerate_resamples"
+      },
+      "usage_priced": {
+        "interval": null,
+        "undefined_resamples": 100,
+        "resamples": 100,
+        "reason": "undefined_resamples"
+      },
+      "modeled": {
+        "interval": null,
+        "undefined_resamples": 100,
+        "resamples": 100,
+        "reason": "undefined_resamples"
+      }
+    }
+  },
+  "quality_bounds": null,
+  "cost_scope": {
+    "currency": "USD",
+    "categories": {
+      "infrastructure": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "model": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "included"
+      },
+      "tool": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "transform": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "verification": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      }
+    },
+    "included": [
+      "model"
+    ],
+    "excluded": [
+      "transform",
+      "tool",
+      "verification",
+      "infrastructure"
+    ],
+    "label": "model-only cost per verified success",
+    "rounding": "ROUND_HALF_EVEN; derived metrics to 12 decimal places; ledger subtotals unrounded"
+  },
+  "missing_costs": [],
+  "unexecuted_cells": [],
+  "diagnostics": [],
+  "quality_gate": false,
+  "economics_gate": false,
+  "evidence_complete": true,
+  "claim_blockers": [
+    "diagnostic_only",
+    "missing_reviewed_inference_policy",
+    "no_applied_treatment",
+    "no_positive_cost_improvement_interval",
+    "not_held_out",
+    "quality_bounds_unavailable"
+  ],
+  "verdict": "no_effect",
+  "limitations": [
+    "Recorded receipts attest verification; hashes do not establish independent authorship.",
+    "Synthetic/development evidence and descriptive intervals are not representative qualification.",
+    "Excluded costs are not zero. No currency conversion or live repricing."
+  ]
+}

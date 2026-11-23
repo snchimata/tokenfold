@@ -1,0 +1,153 @@
+{
+  "analysis": {
+    "confidence": "0.95",
+    "method": "task_cluster_percentile",
+    "min_tasks": 2,
+    "min_trials": 1,
+    "mode": "diagnostic",
+    "multiplicity": "single_contrast",
+    "noninferiority_margin": "0",
+    "regression_ceiling": "0",
+    "resamples": 100,
+    "review_hash": null,
+    "sample_size_rationale": "synthetic mechanics only",
+    "seed": 7
+  },
+  "arms": {
+    "baseline": {
+      "config_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "name": "baseline",
+      "transformation": "identity"
+    },
+    "candidate": {
+      "config_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "name": "candidate",
+      "transformation": "external"
+    }
+  },
+  "bindings": {
+    "artifacts": {
+      "sha256:035cc5131abf6c09731af147e10b7b70ea6431cca042741b3806be46ae2c1c0d": "t1-r0-candidate.charge.json",
+      "sha256:11db3f270c439e2a9074b08607671b4a5108e0feac5f143a3729fa297ed01339": "t0-r0-candidate.verification.json",
+      "sha256:1491ff51d31c67e08bacbd1ce9a068d64dd6b1cc972f891479073bd096bcb717": "t0-r0-candidate.charge.json",
+      "sha256:4f1e72bd6bcd0146401b8857821104e2be043edf76a3b263320bae5d7a329cf2": "t0-r0-baseline.verification.json",
+      "sha256:50443eb8adfddc75dc28d353bf83c16d47a61658e70a5dd773f1995c46dcb475": "t0-r0-baseline.charge.json",
+      "sha256:69073c4007dce50583902648e9cd49340a45d960860be61f28a305a737224802": "t1-r0-candidate.verification.json",
+      "sha256:78c1df343cec482a57a589874af3081446c0696a6a2faf530a01e7e3aad26255": "t1-r0-baseline.verification.json",
+      "sha256:7ed5380f85f036f1839d02324abd2cd19573ab39781dc3abfe78dd49654092b1": "t1-r0-baseline.charge.json"
+    },
+    "operations": "operations.jsonl"
+  },
+  "content_hash": "sha256:2f04825c939e06c862ded7ce5b7ee5534afbdada660b7e6dea4ddf1de0483ea7",
+  "cost_policy": {
+    "categories": {
+      "infrastructure": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "model": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "included"
+      },
+      "tool": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "transform": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      },
+      "verification": {
+        "allocation": "per_episode",
+        "basis": "provider_billed",
+        "coverage": "excluded"
+      }
+    },
+    "currency": "USD",
+    "rates": [],
+    "rounding": "ROUND_HALF_EVEN"
+  },
+  "execution": null,
+  "experiment_id": "synthetic",
+  "kind": "contextdoctor.experiment",
+  "limits": {
+    "max_cost": "0",
+    "max_operations": 1000,
+    "max_output_bytes": 8192,
+    "max_seconds": "120",
+    "max_tokens": 64,
+    "operation_seconds": "10",
+    "retries": 0
+  },
+  "pins": {
+    "cache_policy": "isolated",
+    "device": "cpu",
+    "dtype": "none",
+    "model": "synthetic-model",
+    "revision": "fixed",
+    "runtime": "test",
+    "settings_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+    "tokenizer_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+    "tools_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a"
+  },
+  "rollout": null,
+  "schedule": [
+    {
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "task_id": "t0",
+      "trial_id": "r0"
+    },
+    {
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "task_id": "t1",
+      "trial_id": "r0"
+    }
+  ],
+  "schema_version": "1.0",
+  "tasks": [
+    {
+      "id": "t0",
+      "prompt_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "provenance": {
+        "class": "synthetic_mechanics",
+        "exposure": "public",
+        "family": "arithmetic",
+        "permission": "public fixture",
+        "selection": "hand-authored"
+      },
+      "reference_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "snapshot_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "source_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a"
+    },
+    {
+      "id": "t1",
+      "prompt_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "provenance": {
+        "class": "synthetic_mechanics",
+        "exposure": "public",
+        "family": "arithmetic",
+        "permission": "public fixture",
+        "selection": "hand-authored"
+      },
+      "reference_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "snapshot_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+      "source_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a"
+    }
+  ],
+  "verifier": {
+    "digest": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+    "kind": "recorded",
+    "reference_health": "passed",
+    "spec_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a"
+  }
+}

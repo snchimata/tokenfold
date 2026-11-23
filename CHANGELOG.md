@@ -1,6 +1,56 @@
 # Changelog
 
+
 ## [Unreleased]
+
+## [0.6.0] - 2026-11-10
+
+- Replace primary Python/Node APIs with native, offline `fit`, typed inputs/results,
+  checked exact/best-effort budgets and versioned fit receipts; no automatic sending.
+- Move advanced Python APIs to `tokenfold.lowlevel` and Node CLI utilities to
+  `tokenfold/cli`. Python now requires 3.12; Node requires 22.
+- Add explicit maintained Select v3 runtime provisioning, per-fit consent, bounded
+  resident scoring and cancellation; selection remains unqualified.
+- Package native addons separately from CLI binaries; gate installed artifacts on
+  five targets and Python 3.12/3.13 plus Node 22/24. Remove obsolete active v2 scaffolding.
+- Preserve legacy CLI/compression report and golden contracts. See
+  [migration](docs/sdk-migration.md) and [validation](docs/sdk-validation-0.6.0.md).
+- Refresh Python, Node and notebook examples for registry installation and keep
+  native fitting separate from advanced lowlevel compression.
+
+## [0.5.4] - 2026-11-09
+
+- Add experimental ContextDoctor source-checkout validation, all-attempt accounting,
+  independent verifier receipts, paired regressions, uncertainty reports and explicit
+  claim-readiness blockers. Keep incomplete usage/cost evidence unknown, not zero.
+- Add bounded opt-in Docker and exact free-endpoint execution without paid fallback
+  or automatic retries. Retain safe HTTP failure statuses and reject truncated or
+  filtered text as a final answer without discarding valid usage receipts.
+- Add shared offline ContextDoctor examples to the quickstart notebook; retain the
+  no-effect and cheaper-but-worse controls. Document the partial synthetic live pilot
+  without claiming general token savings, latency improvement or quality preservation.
+- Use the separately provisioned, integrity-pinned Select v3 loader in the notebook's
+  explicit CUDA example, with unchanged payments fixture and all-group retention.
+  Provide private Windows cache identity/temp paths and surface child diagnostics.
+  No weights are bundled; the optional registry SDK/CLI defaults remain Select v2.
+- Test offline contracts on Windows/Linux with Python 3.9/3.12, preserve byte-hashed
+  fixture line endings, and keep core-only notebook CI free of model execution.
+- Align Cargo, both registry Python packages, npm and its five platform packages at
+  0.5.4. ContextDoctor remains a source-checkout harness, not a new installed CLI/API.
+  Held-out qualification, the repeated live pilot and repeat-use value remain unproven.
+
+## [0.5.3] - 2026-11-05
+
+- Update locked `rustls-webpki` to 0.103.16 and `webpki-roots` to 1.0.10,
+  addressing RUSTSEC-2026-0382 and RUSTSEC-2026-0381.
+- Preserve Python 3.9/3.13 ABI3 consumer coverage by running its smoke job on
+  Ubuntu 22.04, where Python 3.9 remains available.
+- Improve README architecture diagrams, proxy setup and benchmark presentation;
+  add layout, link and saved-metric regression checks. Select v3 evidence remains
+  development-only and non-qualifying; this release retains the optional Select
+  v2 ONNX runtime, with no bundled weights or production-default changes.
+- Align Cargo, both Python packages, npm and its five platform packages at
+  0.5.3, and refresh pinned quickstart installation commands.
 
 ## [0.5.2] - 2026-10-17
 

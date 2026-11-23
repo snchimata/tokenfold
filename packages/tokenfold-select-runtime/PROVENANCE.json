@@ -1,0 +1,28 @@
+{
+  "license": "Apache-2.0",
+  "sources": [
+    {
+      "path": "packages/tokenfold-select/loader/src/tokenfold_select_v3/ettin.py",
+      "sha256": "4288fea399a065fa732d2c8120e0e5ddc0979156a80b479b1f56fa718e4e0c42"
+    },
+    {
+      "path": "packages/archive/tokenfold-select-v2/sdk-0.5.3/src/tokenfold_select/protocol.py",
+      "sha256": "11515fe5e968d5e39ea22e9b30a717903aa3faa1f973d4f65d89a4bd292de908"
+    },
+    {
+      "path": "packages/archive/tokenfold-select-v2/sdk-0.5.3/src/tokenfold_select/artifact.py",
+      "sha256": "8cc467853e1b564432b7f9042426195d6b50eab25fe3bb1a615b83893328baa0"
+    }
+  ],
+  "ported": [
+    "Ettin v3 geometry, manifest/file integrity, whole-group query-repeated window packing, exact dependency checks, FP32 model and score response validation",
+    "Schema-1 request/response protocol and streaming SHA helper only; no v2 model or fallback"
+  ],
+  "changes": [
+    "Package-local imports",
+    "Separate admission and score_admitted without changing model math or window packing",
+    "CUDA autocast cache_enabled=False is normative in maintained runtime only",
+    "New protocol 2 resident process/provisioning; protocol 1 snapshot unchanged"
+  ],
+  "evidence_boundary": "Deterministic packing/protocol fixtures and separately invoked small CPU/CUDA local functional probes are not research qualification or fresh-profile installation certification"
+}

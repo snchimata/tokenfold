@@ -1,0 +1,16 @@
+Tokenfold Select runtime
+Apache-2.0; see LICENSE.
+
+Ported source provenance:
+packages/tokenfold-select/loader/src/tokenfold_select_v3/ettin.py
+SHA-256 4288fea399a065fa732d2c8120e0e5ddc0979156a80b479b1f56fa718e4e0c42
+
+packages/archive/tokenfold-select-v2/sdk-0.5.3/src/tokenfold_select/protocol.py
+SHA-256 11515fe5e968d5e39ea22e9b30a717903aa3faa1f973d4f65d89a4bd292de908
+
+packages/archive/tokenfold-select-v2/sdk-0.5.3/src/tokenfold_select/artifact.py
+SHA-256 8cc467853e1b564432b7f9042426195d6b50eab25fe3bb1a615b83893328baa0
+
+Only v3 model/geometry/integrity and schema-1 protocol helpers are ported.
+No v2 model or fallback. Maintained CUDA autocast disables its cache.
+Model weights are not included; quality and redistribution remain unqualified.

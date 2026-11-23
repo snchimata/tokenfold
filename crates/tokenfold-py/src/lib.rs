@@ -17,6 +17,7 @@
 #![allow(clippy::useless_conversion)]
 
 use std::path::PathBuf;
+mod fit;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::create_exception;
@@ -1113,7 +1114,7 @@ fn retrieve(
 // ---------------------------------------------------------------------------------------
 
 #[pymodule]
-fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreset>()?;
     m.add_class::<PyInputFormat>()?;
     m.add_class::<PyEncoding>()?;
@@ -1137,5 +1138,6 @@ fn tokenfold(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_report, m)?)?;
     m.add_function(wrap_pyfunction!(decode, m)?)?;
     m.add_function(wrap_pyfunction!(retrieve, m)?)?;
+    fit::register(py, m)?;
     Ok(())
 }

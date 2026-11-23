@@ -1,0 +1,28 @@
+{
+  "description": "Shared Core-only fixture. Counts are deterministic test-counter replies, not provider billing evidence.",
+  "counter_id": "fixture:whole-request:v1",
+  "target_tokens": 12,
+  "request": {
+    "kind": "json_data",
+    "representation": "folded",
+    "value": [
+      {"long_field_name": 1, "other_name": 2},
+      {"long_field_name": 3, "other_name": 4},
+      {"long_field_name": 5, "other_name": 6},
+      {"long_field_name": 7, "other_name": 8}
+    ]
+  },
+  "original_payload": "[{\"long_field_name\":1,\"other_name\":2},{\"long_field_name\":3,\"other_name\":4},{\"long_field_name\":5,\"other_name\":6},{\"long_field_name\":7,\"other_name\":8}]",
+  "proposal_payload": "{\"__tf_cols__\":[\"long_field_name\",\"other_name\"],\"__tf_rows__\":[[1,2],[3,4],[5,6],[7,8]]}",
+  "original_count": {"tokens": 20, "basis": "exact"},
+  "proposal_count": {"tokens": 12, "basis": "exact"},
+  "context": {
+    "query": "Which record?",
+    "groups": [
+      {"id": "optional", "content": "original text", "required": false},
+      {"id": "required", "content": {"b": 1, "a": 2}, "required": true}
+    ],
+    "scorer_projections": ["original text", "{\"b\":1,\"a\":2}"],
+    "rendered": "Which record?\n\noriginal text\n\n{\"b\":1,\"a\":2}"
+  }
+}

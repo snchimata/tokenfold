@@ -1,0 +1,2 @@
+# Golden reports bind raw artifact bytes, including JSONL line endings.
+* -text whitespace=cr-at-eol

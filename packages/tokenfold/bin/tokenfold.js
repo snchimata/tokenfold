@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { binaryPath } from "../dist/index.js";
+import { binaryPath } from "../dist/cli.js";
 
 let child;
 try {

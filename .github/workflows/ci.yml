@@ -15,6 +15,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  contextdoctor:
+    name: contextdoctor (${{ matrix.os }}, Python ${{ matrix.python }})
+    timeout-minutes: 10
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Keep the oldest supported Python available when latest runner images advance.
+        os: [ubuntu-24.04, windows-2022]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python eval/test_contextdoctor.py
+      - run: python eval/test_contextdoctor_run.py
+
   lint:
     name: lint
     timeout-minutes: 10
@@ -74,64 +91,8 @@ jobs:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo test -p tokenfold-cli -p tokenfold-proxy --locked
 
-  python-wheel:
-    name: python-wheel (Python 3.12)
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - uses: PyO3/maturin-action@v1
-        with:
-          args: --release --locked --out dist -m crates/tokenfold-py/Cargo.toml
-          manylinux: auto
-      - run: python -m pip install pytest dist/*.whl
-      - run: python -m pytest python-tests -q
-      - uses: actions/upload-artifact@v7
-        with:
-          name: python-abi3-wheel
-          path: dist/*.whl
-          if-no-files-found: error
-          retention-days: 1
-
-  select-runtime-contracts:
-    name: select-runtime-contracts (${{ matrix.os }}, Python 3.12)
-    timeout-minutes: 10
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      # Installed CPU/mock contracts only; no weights, PyTorch or inference.
-      - run: python -m pip install setuptools==78.1.0 numpy==2.5.3
-      - run: python -m pip install --no-deps --no-build-isolation ./packages/tokenfold-select
-      - run: python -I -m unittest discover -s "${{ github.workspace }}/packages/tokenfold-select/tests" -v
-        working-directory: ${{ runner.temp }}
-
-  python-abi3-smoke:
-    name: python-abi3-smoke (Python ${{ matrix.python }})
-    timeout-minutes: 10
-    needs: python-wheel
-    strategy:
-      matrix:
-        python: ["3.9", "3.13"]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python }}
-      - uses: actions/download-artifact@v8
-        with:
-          name: python-abi3-wheel
-          path: dist
-      - run: python -m pip install dist/*.whl
-      - run: python -c "import tokenfold; assert tokenfold.Preset.BALANCED"
+  sdk-artifacts:
+    uses: ./.github/workflows/sdk-artifacts.yml
 
   linux-binaries:
     name: linux-binaries
@@ -169,6 +130,7 @@ jobs:
           LINUX_BUILD_RESULT: ${{ needs.linux-binaries.result }}
         run: test "$LINUX_BUILD_RESULT" = success
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
@@ -180,6 +142,8 @@ jobs:
           path: target/release
       - run: chmod +x target/release/tokenfold target/release/tokenfold-proxy
       - run: npm ci
+        working-directory: packages/tokenfold
+      - run: npm run build:native
         working-directory: packages/tokenfold
       - run: npm test
         working-directory: packages/tokenfold

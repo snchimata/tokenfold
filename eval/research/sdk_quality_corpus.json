@@ -1,0 +1,1184 @@
+{
+  "schema_version": 1,
+  "kind": "tokenfold.sdk-quality.frozen-corpus",
+  "date": "2026-11-10",
+  "protocol": {
+    "request_template": {
+      "model": "nvidia/nemotron-3.5-super-vl:free",
+      "stream": false,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "provider": {
+        "only": [
+          "nvidia"
+        ],
+        "allow_fallbacks": false,
+        "require_parameters": true,
+        "max_price": {
+          "prompt": 0,
+          "completion": 0,
+          "request": 0,
+          "image": 0
+        }
+      },
+      "plugins": [],
+      "reasoning": {
+        "enabled": false
+      },
+      "seed": 271
+    },
+    "trials": 2,
+    "ordering": "trial 0 baseline,candidate; trial 1 candidate,baseline; fixed task order",
+    "grading": "one JSON object, exact recursive types/values, no duplicate keys/markdown; only final nonrefused stop responses eligible",
+    "max_quality_calls": 48,
+    "max_probe_calls_per_scope": 1,
+    "per_call_timeout_seconds": 45,
+    "batch_dispatch_deadline_seconds": 900,
+    "retries": false,
+    "fallbacks": false
+  },
+  "tasks": [
+    {
+      "id": "core-api-lookup",
+      "family": "core",
+      "workload": "json",
+      "source": "examples/api_response.json",
+      "source_sha256": "91653e687b399362c766760a69bc260c8ef0a1e805825c71602f968cd1c6ef27",
+      "query": "For record id 1017, return name, active, plan tier and plan seats as JSON fields name (string), active (boolean), tier (string), seats (integer).",
+      "oracle": {
+        "name": "Niklaus Wirth",
+        "active": true,
+        "tier": "free",
+        "seats": 1
+      },
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"status\":\"ok\",\"page\":1,\"per_page\":30,\"total\":30,\"results\":[{\"id\":1001,\"name\":\"Ada Lovelace\",\"role\":\"admin\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-01T09:00:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\",\"billing\",\"admin\"]},{\"id\":1002,\"name\":\"Alan Turing\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-02T09:01:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1003,\"name\":\"Grace Hopper\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-03T09:02:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1004,\"name\":\"Katherine Johnson\",\"role\":\"member\",\"active\":false,\"email_verified\":true,\"last_login\":\"2026-08-04T09:03:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1005,\"name\":\"Edsger Dijkstra\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-05T09:04:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1006,\"name\":\"Barbara Liskov\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-06T09:05:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1007,\"name\":\"Donald Knuth\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-07T09:06:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1008,\"name\":\"Radia Perlman\",\"role\":\"admin\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-08T09:07:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\",\"billing\",\"admin\"]},{\"id\":1009,\"name\":\"John Backus\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-09T09:08:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1010,\"name\":\"Frances Allen\",\"role\":\"member\",\"active\":false,\"email_verified\":true,\"last_login\":\"2026-08-10T09:09:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1011,\"name\":\"Ken Thompson\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-11T09:10:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1012,\"name\":\"Adele Goldberg\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-12T09:11:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1013,\"name\":\"Dennis Ritchie\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-13T09:12:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1014,\"name\":\"Margaret Hamilton\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-14T09:13:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1015,\"name\":\"Tony Hoare\",\"role\":\"admin\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-15T09:14:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\",\"billing\",\"admin\"]},{\"id\":1016,\"name\":\"Lynn Conway\",\"role\":\"member\",\"active\":false,\"email_verified\":true,\"last_login\":\"2026-08-16T09:15:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1017,\"name\":\"Niklaus Wirth\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-17T09:16:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1018,\"name\":\"Shafi Goldwasser\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-18T09:17:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1019,\"name\":\"Leslie Lamport\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-19T09:18:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1020,\"name\":\"Anita Borg\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-20T09:19:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1021,\"name\":\"John McCarthy\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-21T09:20:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1022,\"name\":\"Karen Sparck Jones\",\"role\":\"admin\",\"active\":false,\"email_verified\":true,\"last_login\":\"2026-08-22T09:21:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\",\"billing\",\"admin\"]},{\"id\":1023,\"name\":\"Claude Shannon\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-23T09:22:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1024,\"name\":\"Jean Bartik\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-24T09:23:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1025,\"name\":\"Vint Cerf\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-25T09:24:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1026,\"name\":\"Sophie Wilson\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-26T09:25:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1027,\"name\":\"Bjarne Stroustrup\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-27T09:26:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1028,\"name\":\"Gladys West\",\"role\":\"member\",\"active\":false,\"email_verified\":true,\"last_login\":\"2026-08-28T09:27:00Z\",\"plan\":{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]},{\"id\":1029,\"name\":\"Guido van Rossum\",\"role\":\"admin\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-01T09:28:00Z\",\"plan\":{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},\"permissions\":[\"read\",\"write\",\"billing\",\"admin\"]},{\"id\":1030,\"name\":\"Hedy Lamarr\",\"role\":\"member\",\"active\":true,\"email_verified\":true,\"last_login\":\"2026-08-02T09:29:00Z\",\"plan\":{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},\"permissions\":[\"read\",\"write\"]}]}"
+            },
+            {
+              "role": "user",
+              "content": "For record id 1017, return name, active, plan tier and plan seats as JSON fields name (string), active (boolean), tier (string), seats (integer).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 2366,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"__tf_dict__\":[{\"tier\":\"pro\",\"seats\":5,\"region\":\"us-east-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"},[\"read\",\"write\",\"billing\",\"admin\"],{\"tier\":\"free\",\"seats\":1,\"region\":\"us-east-1\",\"billing_cycle\":\"monthly\",\"support_level\":\"community\"},{\"tier\":\"team\",\"seats\":25,\"region\":\"eu-west-1\",\"billing_cycle\":\"annual\",\"support_level\":\"priority\"}],\"__tf_data__\":{\"status\":\"ok\",\"page\":1,\"per_page\":30,\"total\":30,\"results\":{\"__tf_cols__\":[\"id\",\"name\",\"role\",\"active\",\"email_verified\",\"last_login\",\"plan\",\"permissions\"],\"__tf_rows__\":[[1001,\"Ada Lovelace\",\"admin\",true,true,\"2026-08-01T09:00:00Z\",{\"__tf_ref__\":0},{\"__tf_ref__\":1}],[1002,\"Alan Turing\",\"member\",true,true,\"2026-08-02T09:01:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1003,\"Grace Hopper\",\"member\",true,true,\"2026-08-03T09:02:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1004,\"Katherine Johnson\",\"member\",false,true,\"2026-08-04T09:03:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1005,\"Edsger Dijkstra\",\"member\",true,true,\"2026-08-05T09:04:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1006,\"Barbara Liskov\",\"member\",true,true,\"2026-08-06T09:05:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1007,\"Donald Knuth\",\"member\",true,true,\"2026-08-07T09:06:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1008,\"Radia Perlman\",\"admin\",true,true,\"2026-08-08T09:07:00Z\",{\"__tf_ref__\":2},{\"__tf_ref__\":1}],[1009,\"John Backus\",\"member\",true,true,\"2026-08-09T09:08:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1010,\"Frances Allen\",\"member\",false,true,\"2026-08-10T09:09:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1011,\"Ken Thompson\",\"member\",true,true,\"2026-08-11T09:10:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1012,\"Adele Goldberg\",\"member\",true,true,\"2026-08-12T09:11:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1013,\"Dennis Ritchie\",\"member\",true,true,\"2026-08-13T09:12:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1014,\"Margaret Hamilton\",\"member\",true,true,\"2026-08-14T09:13:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1015,\"Tony Hoare\",\"admin\",true,true,\"2026-08-15T09:14:00Z\",{\"__tf_ref__\":3},{\"__tf_ref__\":1}],[1016,\"Lynn Conway\",\"member\",false,true,\"2026-08-16T09:15:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1017,\"Niklaus Wirth\",\"member\",true,true,\"2026-08-17T09:16:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1018,\"Shafi Goldwasser\",\"member\",true,true,\"2026-08-18T09:17:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1019,\"Leslie Lamport\",\"member\",true,true,\"2026-08-19T09:18:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1020,\"Anita Borg\",\"member\",true,true,\"2026-08-20T09:19:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1021,\"John McCarthy\",\"member\",true,true,\"2026-08-21T09:20:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1022,\"Karen Sparck Jones\",\"admin\",false,true,\"2026-08-22T09:21:00Z\",{\"__tf_ref__\":0},{\"__tf_ref__\":1}],[1023,\"Claude Shannon\",\"member\",true,true,\"2026-08-23T09:22:00Z\",{\"__tf_ref__\":2},[\"read\",\"write\"]],[1024,\"Jean Bartik\",\"member\",true,true,\"2026-08-24T09:23:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1025,\"Vint Cerf\",\"member\",true,true,\"2026-08-25T09:24:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1026,\"Sophie Wilson\",\"member\",true,true,\"2026-08-26T09:25:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1027,\"Bjarne Stroustrup\",\"member\",true,true,\"2026-08-27T09:26:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]],[1028,\"Gladys West\",\"member\",false,true,\"2026-08-28T09:27:00Z\",{\"__tf_ref__\":0},[\"read\",\"write\"]],[1029,\"Guido van Rossum\",\"admin\",true,true,\"2026-08-01T09:28:00Z\",{\"__tf_ref__\":2},{\"__tf_ref__\":1}],[1030,\"Hedy Lamarr\",\"member\",true,true,\"2026-08-02T09:29:00Z\",{\"__tf_ref__\":3},[\"read\",\"write\"]]]}}}"
+            },
+            {
+              "role": "user",
+              "content": "For record id 1017, return name, active, plan tier and plan seats as JSON fields name (string), active (boolean), tier (string), seats (integer).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 1376,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [
+            "json_field_fold",
+            "json_value_dict"
+          ],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        }
+      }
+    },
+    {
+      "id": "core-users-lookup",
+      "family": "core",
+      "workload": "json",
+      "source": "eval/research/toon_corpus/flat_users.json",
+      "source_sha256": "2ae2b2f59a851c6b79efc8a1d27102b113dc1424007c64f80ae0909bc37f578c",
+      "query": "For user id 1009, return JSON fields name (string), role (string), active (boolean).",
+      "oracle": {
+        "name": "John Backus",
+        "role": "member",
+        "active": true
+      },
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "[{\"id\":1001,\"name\":\"Ada Lovelace\",\"role\":\"admin\",\"active\":true},{\"id\":1002,\"name\":\"Alan Turing\",\"role\":\"member\",\"active\":true},{\"id\":1003,\"name\":\"Grace Hopper\",\"role\":\"member\",\"active\":true},{\"id\":1004,\"name\":\"Katherine Johnson\",\"role\":\"member\",\"active\":false},{\"id\":1005,\"name\":\"Edsger Dijkstra\",\"role\":\"member\",\"active\":true},{\"id\":1006,\"name\":\"Barbara Liskov\",\"role\":\"member\",\"active\":true},{\"id\":1007,\"name\":\"Donald Knuth\",\"role\":\"member\",\"active\":true},{\"id\":1008,\"name\":\"Radia Perlman\",\"role\":\"admin\",\"active\":true},{\"id\":1009,\"name\":\"John Backus\",\"role\":\"member\",\"active\":true},{\"id\":1010,\"name\":\"Frances Allen\",\"role\":\"member\",\"active\":false},{\"id\":1011,\"name\":\"Ken Thompson\",\"role\":\"member\",\"active\":true},{\"id\":1012,\"name\":\"Adele Goldberg\",\"role\":\"member\",\"active\":true},{\"id\":1013,\"name\":\"Dennis Ritchie\",\"role\":\"member\",\"active\":true},{\"id\":1014,\"name\":\"Margaret Hamilton\",\"role\":\"member\",\"active\":true},{\"id\":1015,\"name\":\"Tony Hoare\",\"role\":\"admin\",\"active\":true},{\"id\":1016,\"name\":\"Lynn Conway\",\"role\":\"member\",\"active\":false},{\"id\":1017,\"name\":\"Niklaus Wirth\",\"role\":\"member\",\"active\":true},{\"id\":1018,\"name\":\"Shafi Goldwasser\",\"role\":\"member\",\"active\":true},{\"id\":1019,\"name\":\"Leslie Lamport\",\"role\":\"member\",\"active\":true},{\"id\":1020,\"name\":\"Anita Borg\",\"role\":\"member\",\"active\":true},{\"id\":1021,\"name\":\"John McCarthy\",\"role\":\"member\",\"active\":true},{\"id\":1022,\"name\":\"Karen Sparck Jones\",\"role\":\"admin\",\"active\":false},{\"id\":1023,\"name\":\"Claude Shannon\",\"role\":\"member\",\"active\":true},{\"id\":1024,\"name\":\"Jean Bartik\",\"role\":\"member\",\"active\":true},{\"id\":1025,\"name\":\"Vint Cerf\",\"role\":\"member\",\"active\":true},{\"id\":1026,\"name\":\"Sophie Wilson\",\"role\":\"member\",\"active\":true},{\"id\":1027,\"name\":\"Bjarne Stroustrup\",\"role\":\"member\",\"active\":true},{\"id\":1028,\"name\":\"Gladys West\",\"role\":\"member\",\"active\":false},{\"id\":1029,\"name\":\"Guido van Rossum\",\"role\":\"admin\",\"active\":true},{\"id\":1030,\"name\":\"Hedy Lamarr\",\"role\":\"member\",\"active\":true}]"
+            },
+            {
+              "role": "user",
+              "content": "For user id 1009, return JSON fields name (string), role (string), active (boolean).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 586,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"__tf_cols__\":[\"id\",\"name\",\"role\",\"active\"],\"__tf_rows__\":[[1001,\"Ada Lovelace\",\"admin\",true],[1002,\"Alan Turing\",\"member\",true],[1003,\"Grace Hopper\",\"member\",true],[1004,\"Katherine Johnson\",\"member\",false],[1005,\"Edsger Dijkstra\",\"member\",true],[1006,\"Barbara Liskov\",\"member\",true],[1007,\"Donald Knuth\",\"member\",true],[1008,\"Radia Perlman\",\"admin\",true],[1009,\"John Backus\",\"member\",true],[1010,\"Frances Allen\",\"member\",false],[1011,\"Ken Thompson\",\"member\",true],[1012,\"Adele Goldberg\",\"member\",true],[1013,\"Dennis Ritchie\",\"member\",true],[1014,\"Margaret Hamilton\",\"member\",true],[1015,\"Tony Hoare\",\"admin\",true],[1016,\"Lynn Conway\",\"member\",false],[1017,\"Niklaus Wirth\",\"member\",true],[1018,\"Shafi Goldwasser\",\"member\",true],[1019,\"Leslie Lamport\",\"member\",true],[1020,\"Anita Borg\",\"member\",true],[1021,\"John McCarthy\",\"member\",true],[1022,\"Karen Sparck Jones\",\"admin\",false],[1023,\"Claude Shannon\",\"member\",true],[1024,\"Jean Bartik\",\"member\",true],[1025,\"Vint Cerf\",\"member\",true],[1026,\"Sophie Wilson\",\"member\",true],[1027,\"Bjarne Stroustrup\",\"member\",true],[1028,\"Gladys West\",\"member\",false],[1029,\"Guido van Rossum\",\"admin\",true],[1030,\"Hedy Lamarr\",\"member\",true]]}"
+            },
+            {
+              "role": "user",
+              "content": "For user id 1009, return JSON fields name (string), role (string), active (boolean).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 366,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [
+            "json_field_fold"
+          ],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        }
+      }
+    },
+    {
+      "id": "core-wide-lookup",
+      "family": "core",
+      "workload": "json",
+      "source": "examples/toon_metrics.json",
+      "source_sha256": "a5057abc36a7cc8e63f48101a3649f0578f82c1415a14dd33cf0ec8d4d8472de",
+      "query": "For timestamp 2026-09-02T12:00:13Z, return JSON fields service (string), request_count (integer), error_count (integer), p95_ms (integer).",
+      "oracle": {
+        "service": "billing",
+        "request_count": 1369,
+        "error_count": 2,
+        "p95_ms": 158
+      },
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "[{\"timestamp\":\"2026-09-02T12:00:00Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"degraded\",\"request_count\":1200,\"error_count\":0,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:00:01Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1213,\"error_count\":1,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:00:02Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1226,\"error_count\":2,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:00:03Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1239,\"error_count\":3,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:00:04Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1252,\"error_count\":4,\"p95_ms\":149},{\"timestamp\":\"2026-09-02T12:00:05Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1265,\"error_count\":5,\"p95_ms\":150},{\"timestamp\":\"2026-09-02T12:00:06Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1278,\"error_count\":6,\"p95_ms\":151},{\"timestamp\":\"2026-09-02T12:00:07Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1291,\"error_count\":7,\"p95_ms\":152},{\"timestamp\":\"2026-09-02T12:00:08Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1304,\"error_count\":8,\"p95_ms\":153},{\"timestamp\":\"2026-09-02T12:00:09Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1317,\"error_count\":9,\"p95_ms\":154},{\"timestamp\":\"2026-09-02T12:00:10Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1330,\"error_count\":10,\"p95_ms\":155},{\"timestamp\":\"2026-09-02T12:00:11Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1343,\"error_count\":0,\"p95_ms\":156},{\"timestamp\":\"2026-09-02T12:00:12Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1356,\"error_count\":1,\"p95_ms\":157},{\"timestamp\":\"2026-09-02T12:00:13Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1369,\"error_count\":2,\"p95_ms\":158},{\"timestamp\":\"2026-09-02T12:00:14Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1382,\"error_count\":3,\"p95_ms\":159},{\"timestamp\":\"2026-09-02T12:00:15Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1395,\"error_count\":4,\"p95_ms\":160},{\"timestamp\":\"2026-09-02T12:00:16Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1408,\"error_count\":5,\"p95_ms\":161},{\"timestamp\":\"2026-09-02T12:00:17Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"degraded\",\"request_count\":1421,\"error_count\":6,\"p95_ms\":162},{\"timestamp\":\"2026-09-02T12:00:18Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1434,\"error_count\":7,\"p95_ms\":163},{\"timestamp\":\"2026-09-02T12:00:19Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1447,\"error_count\":8,\"p95_ms\":164},{\"timestamp\":\"2026-09-02T12:00:20Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1460,\"error_count\":9,\"p95_ms\":165},{\"timestamp\":\"2026-09-02T12:00:21Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1473,\"error_count\":10,\"p95_ms\":166},{\"timestamp\":\"2026-09-02T12:00:22Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1486,\"error_count\":0,\"p95_ms\":167},{\"timestamp\":\"2026-09-02T12:00:23Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1499,\"error_count\":1,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:00:24Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1512,\"error_count\":2,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:00:25Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1525,\"error_count\":3,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:00:26Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1538,\"error_count\":4,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:00:27Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1551,\"error_count\":5,\"p95_ms\":149},{\"timestamp\":\"2026-09-02T12:00:28Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1564,\"error_count\":6,\"p95_ms\":150},{\"timestamp\":\"2026-09-02T12:00:29Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1577,\"error_count\":7,\"p95_ms\":151},{\"timestamp\":\"2026-09-02T12:00:30Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1590,\"error_count\":8,\"p95_ms\":152},{\"timestamp\":\"2026-09-02T12:00:31Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1603,\"error_count\":9,\"p95_ms\":153},{\"timestamp\":\"2026-09-02T12:00:32Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1616,\"error_count\":10,\"p95_ms\":154},{\"timestamp\":\"2026-09-02T12:00:33Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1629,\"error_count\":0,\"p95_ms\":155},{\"timestamp\":\"2026-09-02T12:00:34Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"degraded\",\"request_count\":1642,\"error_count\":1,\"p95_ms\":156},{\"timestamp\":\"2026-09-02T12:00:35Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1655,\"error_count\":2,\"p95_ms\":157},{\"timestamp\":\"2026-09-02T12:00:36Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1668,\"error_count\":3,\"p95_ms\":158},{\"timestamp\":\"2026-09-02T12:00:37Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1681,\"error_count\":4,\"p95_ms\":159},{\"timestamp\":\"2026-09-02T12:00:38Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1694,\"error_count\":5,\"p95_ms\":160},{\"timestamp\":\"2026-09-02T12:00:39Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1707,\"error_count\":6,\"p95_ms\":161},{\"timestamp\":\"2026-09-02T12:00:40Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1720,\"error_count\":7,\"p95_ms\":162},{\"timestamp\":\"2026-09-02T12:00:41Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1733,\"error_count\":8,\"p95_ms\":163},{\"timestamp\":\"2026-09-02T12:00:42Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1746,\"error_count\":9,\"p95_ms\":164},{\"timestamp\":\"2026-09-02T12:00:43Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1759,\"error_count\":10,\"p95_ms\":165},{\"timestamp\":\"2026-09-02T12:00:44Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1772,\"error_count\":0,\"p95_ms\":166},{\"timestamp\":\"2026-09-02T12:00:45Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1785,\"error_count\":1,\"p95_ms\":167},{\"timestamp\":\"2026-09-02T12:00:46Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1798,\"error_count\":2,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:00:47Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1811,\"error_count\":3,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:00:48Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1824,\"error_count\":4,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:00:49Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1837,\"error_count\":5,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:00:50Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1850,\"error_count\":6,\"p95_ms\":149},{\"timestamp\":\"2026-09-02T12:00:51Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"degraded\",\"request_count\":1863,\"error_count\":7,\"p95_ms\":150},{\"timestamp\":\"2026-09-02T12:00:52Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1876,\"error_count\":8,\"p95_ms\":151},{\"timestamp\":\"2026-09-02T12:00:53Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1889,\"error_count\":9,\"p95_ms\":152},{\"timestamp\":\"2026-09-02T12:00:54Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1902,\"error_count\":10,\"p95_ms\":153},{\"timestamp\":\"2026-09-02T12:00:55Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1915,\"error_count\":0,\"p95_ms\":154},{\"timestamp\":\"2026-09-02T12:00:56Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1928,\"error_count\":1,\"p95_ms\":155},{\"timestamp\":\"2026-09-02T12:00:57Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1941,\"error_count\":2,\"p95_ms\":156},{\"timestamp\":\"2026-09-02T12:00:58Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1954,\"error_count\":3,\"p95_ms\":157},{\"timestamp\":\"2026-09-02T12:00:59Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":1967,\"error_count\":4,\"p95_ms\":158},{\"timestamp\":\"2026-09-02T12:01:00Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":1980,\"error_count\":5,\"p95_ms\":159},{\"timestamp\":\"2026-09-02T12:01:01Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":1993,\"error_count\":6,\"p95_ms\":160},{\"timestamp\":\"2026-09-02T12:01:02Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2006,\"error_count\":7,\"p95_ms\":161},{\"timestamp\":\"2026-09-02T12:01:03Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2019,\"error_count\":8,\"p95_ms\":162},{\"timestamp\":\"2026-09-02T12:01:04Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2032,\"error_count\":9,\"p95_ms\":163},{\"timestamp\":\"2026-09-02T12:01:05Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2045,\"error_count\":10,\"p95_ms\":164},{\"timestamp\":\"2026-09-02T12:01:06Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2058,\"error_count\":0,\"p95_ms\":165},{\"timestamp\":\"2026-09-02T12:01:07Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2071,\"error_count\":1,\"p95_ms\":166},{\"timestamp\":\"2026-09-02T12:01:08Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"degraded\",\"request_count\":2084,\"error_count\":2,\"p95_ms\":167},{\"timestamp\":\"2026-09-02T12:01:09Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2097,\"error_count\":3,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:01:10Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2110,\"error_count\":4,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:01:11Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2123,\"error_count\":5,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:01:12Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2136,\"error_count\":6,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:01:13Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2149,\"error_count\":7,\"p95_ms\":149},{\"timestamp\":\"2026-09-02T12:01:14Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2162,\"error_count\":8,\"p95_ms\":150},{\"timestamp\":\"2026-09-02T12:01:15Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2175,\"error_count\":9,\"p95_ms\":151},{\"timestamp\":\"2026-09-02T12:01:16Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2188,\"error_count\":10,\"p95_ms\":152},{\"timestamp\":\"2026-09-02T12:01:17Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2201,\"error_count\":0,\"p95_ms\":153},{\"timestamp\":\"2026-09-02T12:01:18Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2214,\"error_count\":1,\"p95_ms\":154},{\"timestamp\":\"2026-09-02T12:01:19Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2227,\"error_count\":2,\"p95_ms\":155},{\"timestamp\":\"2026-09-02T12:01:20Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2240,\"error_count\":3,\"p95_ms\":156},{\"timestamp\":\"2026-09-02T12:01:21Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2253,\"error_count\":4,\"p95_ms\":157},{\"timestamp\":\"2026-09-02T12:01:22Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2266,\"error_count\":5,\"p95_ms\":158},{\"timestamp\":\"2026-09-02T12:01:23Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2279,\"error_count\":6,\"p95_ms\":159},{\"timestamp\":\"2026-09-02T12:01:24Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2292,\"error_count\":7,\"p95_ms\":160},{\"timestamp\":\"2026-09-02T12:01:25Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"degraded\",\"request_count\":2305,\"error_count\":8,\"p95_ms\":161},{\"timestamp\":\"2026-09-02T12:01:26Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2318,\"error_count\":9,\"p95_ms\":162},{\"timestamp\":\"2026-09-02T12:01:27Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2331,\"error_count\":10,\"p95_ms\":163},{\"timestamp\":\"2026-09-02T12:01:28Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2344,\"error_count\":0,\"p95_ms\":164},{\"timestamp\":\"2026-09-02T12:01:29Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2357,\"error_count\":1,\"p95_ms\":165},{\"timestamp\":\"2026-09-02T12:01:30Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2370,\"error_count\":2,\"p95_ms\":166},{\"timestamp\":\"2026-09-02T12:01:31Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2383,\"error_count\":3,\"p95_ms\":167},{\"timestamp\":\"2026-09-02T12:01:32Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2396,\"error_count\":4,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:01:33Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2409,\"error_count\":5,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:01:34Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2422,\"error_count\":6,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:01:35Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2435,\"error_count\":7,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:01:36Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2448,\"error_count\":8,\"p95_ms\":149},{\"timestamp\":\"2026-09-02T12:01:37Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2461,\"error_count\":9,\"p95_ms\":150},{\"timestamp\":\"2026-09-02T12:01:38Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2474,\"error_count\":10,\"p95_ms\":151},{\"timestamp\":\"2026-09-02T12:01:39Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2487,\"error_count\":0,\"p95_ms\":152},{\"timestamp\":\"2026-09-02T12:01:40Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2500,\"error_count\":1,\"p95_ms\":153},{\"timestamp\":\"2026-09-02T12:01:41Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2513,\"error_count\":2,\"p95_ms\":154},{\"timestamp\":\"2026-09-02T12:01:42Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"degraded\",\"request_count\":2526,\"error_count\":3,\"p95_ms\":155},{\"timestamp\":\"2026-09-02T12:01:43Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2539,\"error_count\":4,\"p95_ms\":156},{\"timestamp\":\"2026-09-02T12:01:44Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2552,\"error_count\":5,\"p95_ms\":157},{\"timestamp\":\"2026-09-02T12:01:45Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2565,\"error_count\":6,\"p95_ms\":158},{\"timestamp\":\"2026-09-02T12:01:46Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2578,\"error_count\":7,\"p95_ms\":159},{\"timestamp\":\"2026-09-02T12:01:47Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2591,\"error_count\":8,\"p95_ms\":160},{\"timestamp\":\"2026-09-02T12:01:48Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2604,\"error_count\":9,\"p95_ms\":161},{\"timestamp\":\"2026-09-02T12:01:49Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2617,\"error_count\":10,\"p95_ms\":162},{\"timestamp\":\"2026-09-02T12:01:50Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2630,\"error_count\":0,\"p95_ms\":163},{\"timestamp\":\"2026-09-02T12:01:51Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2643,\"error_count\":1,\"p95_ms\":164},{\"timestamp\":\"2026-09-02T12:01:52Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2656,\"error_count\":2,\"p95_ms\":165},{\"timestamp\":\"2026-09-02T12:01:53Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2669,\"error_count\":3,\"p95_ms\":166},{\"timestamp\":\"2026-09-02T12:01:54Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2682,\"error_count\":4,\"p95_ms\":167},{\"timestamp\":\"2026-09-02T12:01:55Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2695,\"error_count\":5,\"p95_ms\":145},{\"timestamp\":\"2026-09-02T12:01:56Z\",\"service\":\"api-gateway\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"ok\",\"request_count\":2708,\"error_count\":6,\"p95_ms\":146},{\"timestamp\":\"2026-09-02T12:01:57Z\",\"service\":\"billing\",\"environment\":\"production\",\"region\":\"us-east-1\",\"status\":\"ok\",\"request_count\":2721,\"error_count\":7,\"p95_ms\":147},{\"timestamp\":\"2026-09-02T12:01:58Z\",\"service\":\"catalog\",\"environment\":\"production\",\"region\":\"us-west-2\",\"status\":\"ok\",\"request_count\":2734,\"error_count\":8,\"p95_ms\":148},{\"timestamp\":\"2026-09-02T12:01:59Z\",\"service\":\"search\",\"environment\":\"production\",\"region\":\"eu-west-1\",\"status\":\"degraded\",\"request_count\":2747,\"error_count\":9,\"p95_ms\":149}]"
+            },
+            {
+              "role": "user",
+              "content": "For timestamp 2026-09-02T12:00:13Z, return JSON fields service (string), request_count (integer), error_count (integer), p95_ms (integer).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 6310,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"__tf_cols__\":[\"timestamp\",\"service\",\"environment\",\"region\",\"status\",\"request_count\",\"error_count\",\"p95_ms\"],\"__tf_rows__\":[[\"2026-09-02T12:00:00Z\",\"api-gateway\",\"production\",\"us-east-1\",\"degraded\",1200,0,145],[\"2026-09-02T12:00:01Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1213,1,146],[\"2026-09-02T12:00:02Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",1226,2,147],[\"2026-09-02T12:00:03Z\",\"search\",\"production\",\"us-east-1\",\"ok\",1239,3,148],[\"2026-09-02T12:00:04Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",1252,4,149],[\"2026-09-02T12:00:05Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",1265,5,150],[\"2026-09-02T12:00:06Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",1278,6,151],[\"2026-09-02T12:00:07Z\",\"search\",\"production\",\"us-west-2\",\"ok\",1291,7,152],[\"2026-09-02T12:00:08Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",1304,8,153],[\"2026-09-02T12:00:09Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",1317,9,154],[\"2026-09-02T12:00:10Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",1330,10,155],[\"2026-09-02T12:00:11Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",1343,0,156],[\"2026-09-02T12:00:12Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",1356,1,157],[\"2026-09-02T12:00:13Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1369,2,158],[\"2026-09-02T12:00:14Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",1382,3,159],[\"2026-09-02T12:00:15Z\",\"search\",\"production\",\"us-east-1\",\"ok\",1395,4,160],[\"2026-09-02T12:00:16Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",1408,5,161],[\"2026-09-02T12:00:17Z\",\"billing\",\"production\",\"eu-west-1\",\"degraded\",1421,6,162],[\"2026-09-02T12:00:18Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",1434,7,163],[\"2026-09-02T12:00:19Z\",\"search\",\"production\",\"us-west-2\",\"ok\",1447,8,164],[\"2026-09-02T12:00:20Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",1460,9,165],[\"2026-09-02T12:00:21Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",1473,10,166],[\"2026-09-02T12:00:22Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",1486,0,167],[\"2026-09-02T12:00:23Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",1499,1,145],[\"2026-09-02T12:00:24Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",1512,2,146],[\"2026-09-02T12:00:25Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1525,3,147],[\"2026-09-02T12:00:26Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",1538,4,148],[\"2026-09-02T12:00:27Z\",\"search\",\"production\",\"us-east-1\",\"ok\",1551,5,149],[\"2026-09-02T12:00:28Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",1564,6,150],[\"2026-09-02T12:00:29Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",1577,7,151],[\"2026-09-02T12:00:30Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",1590,8,152],[\"2026-09-02T12:00:31Z\",\"search\",\"production\",\"us-west-2\",\"ok\",1603,9,153],[\"2026-09-02T12:00:32Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",1616,10,154],[\"2026-09-02T12:00:33Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",1629,0,155],[\"2026-09-02T12:00:34Z\",\"catalog\",\"production\",\"us-west-2\",\"degraded\",1642,1,156],[\"2026-09-02T12:00:35Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",1655,2,157],[\"2026-09-02T12:00:36Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",1668,3,158],[\"2026-09-02T12:00:37Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1681,4,159],[\"2026-09-02T12:00:38Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",1694,5,160],[\"2026-09-02T12:00:39Z\",\"search\",\"production\",\"us-east-1\",\"ok\",1707,6,161],[\"2026-09-02T12:00:40Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",1720,7,162],[\"2026-09-02T12:00:41Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",1733,8,163],[\"2026-09-02T12:00:42Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",1746,9,164],[\"2026-09-02T12:00:43Z\",\"search\",\"production\",\"us-west-2\",\"ok\",1759,10,165],[\"2026-09-02T12:00:44Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",1772,0,166],[\"2026-09-02T12:00:45Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",1785,1,167],[\"2026-09-02T12:00:46Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",1798,2,145],[\"2026-09-02T12:00:47Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",1811,3,146],[\"2026-09-02T12:00:48Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",1824,4,147],[\"2026-09-02T12:00:49Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1837,5,148],[\"2026-09-02T12:00:50Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",1850,6,149],[\"2026-09-02T12:00:51Z\",\"search\",\"production\",\"us-east-1\",\"degraded\",1863,7,150],[\"2026-09-02T12:00:52Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",1876,8,151],[\"2026-09-02T12:00:53Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",1889,9,152],[\"2026-09-02T12:00:54Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",1902,10,153],[\"2026-09-02T12:00:55Z\",\"search\",\"production\",\"us-west-2\",\"ok\",1915,0,154],[\"2026-09-02T12:00:56Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",1928,1,155],[\"2026-09-02T12:00:57Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",1941,2,156],[\"2026-09-02T12:00:58Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",1954,3,157],[\"2026-09-02T12:00:59Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",1967,4,158],[\"2026-09-02T12:01:00Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",1980,5,159],[\"2026-09-02T12:01:01Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",1993,6,160],[\"2026-09-02T12:01:02Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",2006,7,161],[\"2026-09-02T12:01:03Z\",\"search\",\"production\",\"us-east-1\",\"ok\",2019,8,162],[\"2026-09-02T12:01:04Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",2032,9,163],[\"2026-09-02T12:01:05Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",2045,10,164],[\"2026-09-02T12:01:06Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",2058,0,165],[\"2026-09-02T12:01:07Z\",\"search\",\"production\",\"us-west-2\",\"ok\",2071,1,166],[\"2026-09-02T12:01:08Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"degraded\",2084,2,167],[\"2026-09-02T12:01:09Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",2097,3,145],[\"2026-09-02T12:01:10Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",2110,4,146],[\"2026-09-02T12:01:11Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",2123,5,147],[\"2026-09-02T12:01:12Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",2136,6,148],[\"2026-09-02T12:01:13Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",2149,7,149],[\"2026-09-02T12:01:14Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",2162,8,150],[\"2026-09-02T12:01:15Z\",\"search\",\"production\",\"us-east-1\",\"ok\",2175,9,151],[\"2026-09-02T12:01:16Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",2188,10,152],[\"2026-09-02T12:01:17Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",2201,0,153],[\"2026-09-02T12:01:18Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",2214,1,154],[\"2026-09-02T12:01:19Z\",\"search\",\"production\",\"us-west-2\",\"ok\",2227,2,155],[\"2026-09-02T12:01:20Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",2240,3,156],[\"2026-09-02T12:01:21Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",2253,4,157],[\"2026-09-02T12:01:22Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",2266,5,158],[\"2026-09-02T12:01:23Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",2279,6,159],[\"2026-09-02T12:01:24Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",2292,7,160],[\"2026-09-02T12:01:25Z\",\"billing\",\"production\",\"us-west-2\",\"degraded\",2305,8,161],[\"2026-09-02T12:01:26Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",2318,9,162],[\"2026-09-02T12:01:27Z\",\"search\",\"production\",\"us-east-1\",\"ok\",2331,10,163],[\"2026-09-02T12:01:28Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",2344,0,164],[\"2026-09-02T12:01:29Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",2357,1,165],[\"2026-09-02T12:01:30Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",2370,2,166],[\"2026-09-02T12:01:31Z\",\"search\",\"production\",\"us-west-2\",\"ok\",2383,3,167],[\"2026-09-02T12:01:32Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",2396,4,145],[\"2026-09-02T12:01:33Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",2409,5,146],[\"2026-09-02T12:01:34Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",2422,6,147],[\"2026-09-02T12:01:35Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",2435,7,148],[\"2026-09-02T12:01:36Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",2448,8,149],[\"2026-09-02T12:01:37Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",2461,9,150],[\"2026-09-02T12:01:38Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",2474,10,151],[\"2026-09-02T12:01:39Z\",\"search\",\"production\",\"us-east-1\",\"ok\",2487,0,152],[\"2026-09-02T12:01:40Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",2500,1,153],[\"2026-09-02T12:01:41Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",2513,2,154],[\"2026-09-02T12:01:42Z\",\"catalog\",\"production\",\"us-east-1\",\"degraded\",2526,3,155],[\"2026-09-02T12:01:43Z\",\"search\",\"production\",\"us-west-2\",\"ok\",2539,4,156],[\"2026-09-02T12:01:44Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",2552,5,157],[\"2026-09-02T12:01:45Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",2565,6,158],[\"2026-09-02T12:01:46Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",2578,7,159],[\"2026-09-02T12:01:47Z\",\"search\",\"production\",\"eu-west-1\",\"ok\",2591,8,160],[\"2026-09-02T12:01:48Z\",\"api-gateway\",\"production\",\"us-east-1\",\"ok\",2604,9,161],[\"2026-09-02T12:01:49Z\",\"billing\",\"production\",\"us-west-2\",\"ok\",2617,10,162],[\"2026-09-02T12:01:50Z\",\"catalog\",\"production\",\"eu-west-1\",\"ok\",2630,0,163],[\"2026-09-02T12:01:51Z\",\"search\",\"production\",\"us-east-1\",\"ok\",2643,1,164],[\"2026-09-02T12:01:52Z\",\"api-gateway\",\"production\",\"us-west-2\",\"ok\",2656,2,165],[\"2026-09-02T12:01:53Z\",\"billing\",\"production\",\"eu-west-1\",\"ok\",2669,3,166],[\"2026-09-02T12:01:54Z\",\"catalog\",\"production\",\"us-east-1\",\"ok\",2682,4,167],[\"2026-09-02T12:01:55Z\",\"search\",\"production\",\"us-west-2\",\"ok\",2695,5,145],[\"2026-09-02T12:01:56Z\",\"api-gateway\",\"production\",\"eu-west-1\",\"ok\",2708,6,146],[\"2026-09-02T12:01:57Z\",\"billing\",\"production\",\"us-east-1\",\"ok\",2721,7,147],[\"2026-09-02T12:01:58Z\",\"catalog\",\"production\",\"us-west-2\",\"ok\",2734,8,148],[\"2026-09-02T12:01:59Z\",\"search\",\"production\",\"eu-west-1\",\"degraded\",2747,9,149]]}"
+            },
+            {
+              "role": "user",
+              "content": "For timestamp 2026-09-02T12:00:13Z, return JSON fields service (string), request_count (integer), error_count (integer), p95_ms (integer).\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 4061,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [
+            "json_field_fold"
+          ],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        }
+      }
+    },
+    {
+      "id": "core-schema-lookup",
+      "family": "core",
+      "workload": "json",
+      "source": "tests/golden/schema_compaction/openai_tool_schema.in.json",
+      "source_sha256": "056e766b6c7a099cb71e00477fe52f04331b90df81976e1432078f9ad877b081",
+      "query": "Return the schema name as name, the origin and destination of the fourth parameters.examples entry as origin and destination, and the top-level required array as required. Use strings and an array of strings.",
+      "oracle": {
+        "name": "search_flights",
+        "origin": "NRT",
+        "destination": "SIN",
+        "required": [
+          "origin",
+          "destination",
+          "departure_date"
+        ]
+      },
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"name\":\"search_flights\",\"description\":\"Searches available commercial flights between two airports on a given travel date.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"origin\":{\"type\":\"string\",\"description\":\"IATA airport code for the departure airport.\"},\"destination\":{\"type\":\"string\",\"description\":\"IATA airport code for the arrival airport.\"},\"cabin_class\":{\"type\":\"string\",\"enum\":[\"economy\",\"premium_economy\",\"business\",\"first\"],\"description\":\"Desired cabin class for the itinerary.\"},\"departure_date\":{\"type\":\"string\",\"description\":\"Departure date in YYYY-MM-DD format.\"}},\"examples\":[{\"origin\":\"JFK\",\"destination\":\"LAX\",\"departure_date\":\"2026-08-01\"},{\"origin\":\"SFO\",\"destination\":\"ORD\",\"departure_date\":\"2026-09-15\"},{\"origin\":\"LHR\",\"destination\":\"CDG\",\"departure_date\":\"2026-10-03\"},{\"origin\":\"NRT\",\"destination\":\"SIN\",\"departure_date\":\"2026-11-20\"},{\"origin\":\"SYD\",\"destination\":\"AKL\",\"departure_date\":\"2026-12-05\"}]},\"required\":[\"origin\",\"destination\",\"departure_date\"]}"
+            },
+            {
+              "role": "user",
+              "content": "Return the schema name as name, the origin and destination of the fourth parameters.examples entry as origin and destination, and the top-level required array as required. Use strings and an array of strings.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 232,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "{\"name\":\"search_flights\",\"description\":\"Searches available commercial flights between two airports on a given travel date.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"origin\":{\"type\":\"string\",\"description\":\"IATA airport code for the departure airport.\"},\"destination\":{\"type\":\"string\",\"description\":\"IATA airport code for the arrival airport.\"},\"cabin_class\":{\"type\":\"string\",\"enum\":[\"economy\",\"premium_economy\",\"business\",\"first\"],\"description\":\"Desired cabin class for the itinerary.\"},\"departure_date\":{\"type\":\"string\",\"description\":\"Departure date in YYYY-MM-DD format.\"}},\"examples\":{\"__tf_cols__\":[\"origin\",\"destination\",\"departure_date\"],\"__tf_rows__\":[[\"JFK\",\"LAX\",\"2026-08-01\"],[\"SFO\",\"ORD\",\"2026-09-15\"],[\"LHR\",\"CDG\",\"2026-10-03\"],[\"NRT\",\"SIN\",\"2026-11-20\"],[\"SYD\",\"AKL\",\"2026-12-05\"]]}},\"required\":[\"origin\",\"destination\",\"departure_date\"]}"
+            },
+            {
+              "role": "user",
+              "content": "Return the schema name as name, the origin and destination of the fourth parameters.examples entry as origin and destination, and the top-level required array as required. Use strings and an array of strings.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 219,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [
+            "json_field_fold"
+          ],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [],
+          "groups_dropped": []
+        }
+      }
+    },
+    {
+      "id": "code-branch",
+      "family": "select",
+      "workload": "code",
+      "query": "Using checkout.py, what does shipping_fee(105) return? Return JSON with integer shipping_usd.",
+      "oracle": {
+        "shipping_usd": 9
+      },
+      "supporting_group_position": 0,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Current checkout.py, production implementation:\ndef shipping_fee(subtotal):\n    if subtotal >= 120:\n        return 0\n    return 9\nThe function accepts whole USD and returns whole USD. No other shipping modifier applies.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Historical checkout_v1.py, not imported in production:\ndef shipping_fee(subtotal):\n    return 4\nThis archived function predates the new threshold. Its fixed fee must not be used for checkout.py.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Warehouse notes: order picking begins after payment capture. The warehouse prints one label per parcel. Oversized products use a separate freight workflow. Nothing here overrides checkout.py's ordinary shipping calculation.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Discount reference: coupon SPRING takes ten dollars off eligible baskets. The shipping_fee function is passed a subtotal directly, not a coupon name. There is no coupon in this question.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Returns reference: return labels may be subsidized by the merchant. A return is not an outbound purchase. The returns subsystem has its own accounting and is not called by shipping_fee.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Using checkout.py, what does shipping_fee(105) return? Return JSON with integer shipping_usd.\n\nCurrent checkout.py, production implementation:\ndef shipping_fee(subtotal):\n    if subtotal >= 120:\n        return 0\n    return 9\nThe function accepts whole USD and returns whole USD. No other shipping modifier applies.\n\nHistorical checkout_v1.py, not imported in production:\ndef shipping_fee(subtotal):\n    return 4\nThis archived function predates the new threshold. Its fixed fee must not be used for checkout.py.\n\nWarehouse notes: order picking begins after payment capture. The warehouse prints one label per parcel. Oversized products use a separate freight workflow. Nothing here overrides checkout.py's ordinary shipping calculation.\n\nDiscount reference: coupon SPRING takes ten dollars off eligible baskets. The shipping_fee function is passed a subtotal directly, not a coupon name. There is no coupon in this question.\n\nReturns reference: return labels may be subsidized by the merchant. A return is not an outbound purchase. The returns subsystem has its own accounting and is not called by shipping_fee."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 218,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Using checkout.py, what does shipping_fee(105) return? Return JSON with integer shipping_usd.\n\nCurrent checkout.py, production implementation:\ndef shipping_fee(subtotal):\n    if subtotal >= 120:\n        return 0\n    return 9\nThe function accepts whole USD and returns whole USD. No other shipping modifier applies.\n\nHistorical checkout_v1.py, not imported in production:\ndef shipping_fee(subtotal):\n    return 4\nThis archived function predates the new threshold. Its fixed fee must not be used for checkout.py."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 109,
+          "target_tokens": 109,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0",
+            "g1"
+          ],
+          "groups_dropped": [
+            "g2",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "code-dependency",
+      "family": "select",
+      "workload": "code",
+      "query": "Using current pricing.py, what is total(17)? Return JSON with integer total_usd.",
+      "oracle": {
+        "total_usd": 37
+      },
+      "supporting_group_position": 1,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Shipping notes: a separate shipping function may return a fee for physical deliveries. The total function shown in current pricing.py contains no shipping call. Do not invent an additional shipping charge.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Atomic current pricing.py dependency group (helper and caller belong together):\ndef service_fee():\n    return 3\ndef total(subtotal):\n    return 2 * subtotal + service_fee()\nBoth functions use whole USD. No rounding, tax or other fees apply.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Archived pricing_old.py:\ndef service_fee():\n    return 8\ndef total(subtotal):\n    return subtotal + service_fee()\nThis file is not imported by current pricing.py and is retained only for migration history.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Invoice renderer notes: totals are displayed as whole USD. The receipt footer contains the merchant name and customer support address. Rendering does not recalculate totals or invoke a different fee implementation.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Payment settlement notes: the settlement batch runs nightly after order capture. Settlement may split transactions by region. The batch does not change the amount returned by pricing.py during checkout.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Using current pricing.py, what is total(17)? Return JSON with integer total_usd.\n\nShipping notes: a separate shipping function may return a fee for physical deliveries. The total function shown in current pricing.py contains no shipping call. Do not invent an additional shipping charge.\n\nAtomic current pricing.py dependency group (helper and caller belong together):\ndef service_fee():\n    return 3\ndef total(subtotal):\n    return 2 * subtotal + service_fee()\nBoth functions use whole USD. No rounding, tax or other fees apply.\n\nArchived pricing_old.py:\ndef service_fee():\n    return 8\ndef total(subtotal):\n    return subtotal + service_fee()\nThis file is not imported by current pricing.py and is retained only for migration history.\n\nInvoice renderer notes: totals are displayed as whole USD. The receipt footer contains the merchant name and customer support address. Rendering does not recalculate totals or invoke a different fee implementation.\n\nPayment settlement notes: the settlement batch runs nightly after order capture. Settlement may split transactions by region. The batch does not change the amount returned by pricing.py during checkout."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 220,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Using current pricing.py, what is total(17)? Return JSON with integer total_usd.\n\nShipping notes: a separate shipping function may return a fee for physical deliveries. The total function shown in current pricing.py contains no shipping call. Do not invent an additional shipping charge.\n\nAtomic current pricing.py dependency group (helper and caller belong together):\ndef service_fee():\n    return 3\ndef total(subtotal):\n    return 2 * subtotal + service_fee()\nBoth functions use whole USD. No rounding, tax or other fees apply."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 107,
+          "target_tokens": 110,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0",
+            "g1"
+          ],
+          "groups_dropped": [
+            "g2",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "logs-causal",
+      "family": "select",
+      "workload": "logs",
+      "query": "For request r-731, identify the failing dependency and its HTTP status. Return JSON with dependency (string) and status_code (integer).",
+      "oracle": {
+        "dependency": "inventory",
+        "status_code": 503
+      },
+      "supporting_group_position": 2,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Service telemetry: routine liveness probes returned status 200 during this interval. Probe identifiers start with health-. Probe results are not transaction dependency results and do not identify the failing upstream for a customer request.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Operator reference: gateway_status is the externally returned gateway response. status_code on a dependency event is the upstream response. Always retain the request identifier when correlating events from multiple services.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Atomic trace r-731:\n10:21:00 request=r-731 dependency=inventory attempt=1 status_code=503 message=backend_unavailable\n10:21:01 request=r-731 gateway_status=502 cause=inventory_upstream_failure\nThe gateway status is not the dependency's HTTP status.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Trace r-730:\n10:20:00 request=r-730 dependency=payments attempt=1 status_code=200\n10:20:01 request=r-730 gateway_status=200 message=completed\nThis trace belongs to another request and is unrelated to r-731.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Trace r-732:\n10:22:00 request=r-732 dependency=inventory attempt=1 status_code=200\n10:22:01 request=r-732 gateway_status=200 message=completed\nA later successful request does not rewrite the earlier r-731 failure.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For request r-731, identify the failing dependency and its HTTP status. Return JSON with dependency (string) and status_code (integer).\n\nService telemetry: routine liveness probes returned status 200 during this interval. Probe identifiers start with health-. Probe results are not transaction dependency results and do not identify the failing upstream for a customer request.\n\nOperator reference: gateway_status is the externally returned gateway response. status_code on a dependency event is the upstream response. Always retain the request identifier when correlating events from multiple services.\n\nAtomic trace r-731:\n10:21:00 request=r-731 dependency=inventory attempt=1 status_code=503 message=backend_unavailable\n10:21:01 request=r-731 gateway_status=502 cause=inventory_upstream_failure\nThe gateway status is not the dependency's HTTP status.\n\nTrace r-730:\n10:20:00 request=r-730 dependency=payments attempt=1 status_code=200\n10:20:01 request=r-730 gateway_status=200 message=completed\nThis trace belongs to another request and is unrelated to r-731.\n\nTrace r-732:\n10:22:00 request=r-732 dependency=inventory attempt=1 status_code=200\n10:22:01 request=r-732 gateway_status=200 message=completed\nA later successful request does not rewrite the earlier r-731 failure."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 278,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For request r-731, identify the failing dependency and its HTTP status. Return JSON with dependency (string) and status_code (integer).\n\nOperator reference: gateway_status is the externally returned gateway response. status_code on a dependency event is the upstream response. Always retain the request identifier when correlating events from multiple services.\n\nAtomic trace r-731:\n10:21:00 request=r-731 dependency=inventory attempt=1 status_code=503 message=backend_unavailable\n10:21:01 request=r-731 gateway_status=502 cause=inventory_upstream_failure\nThe gateway status is not the dependency's HTTP status."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 126,
+          "target_tokens": 139,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g1",
+            "g2"
+          ],
+          "groups_dropped": [
+            "g0",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "logs-state",
+      "family": "select",
+      "workload": "logs",
+      "query": "What listener port was last successfully activated for search? Return JSON with integer port.",
+      "oracle": {
+        "port": 9443
+      },
+      "supporting_group_position": 3,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Archived search staging configuration: the staging listener used port 8080 in an old environment. This is not a successful activation event for the search service in the supplied live reload history.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Health-check notes: probes use whichever listener is currently active. A requested configuration is not proof that the listener changed. The system logs requested_port separately from active_port to make failed activations visible.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Operations notes: reload requests are serialized per service. Each success replaces the previous configuration; each failure retains it. There are no later search events beyond the ones in the atomic search history.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Atomic search reload history:\n11:00 service=search requested_port=8443 reload=success active_port=8443\n11:05 service=search requested_port=9443 reload=success active_port=9443\n11:09 service=search requested_port=10443 reload=failed active_port=9443\nFailed reloads leave the previous listener active.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Billing reload history:\n11:02 service=billing requested_port=7443 reload=success active_port=7443\n11:10 service=billing requested_port=7543 reload=success active_port=7543\nBilling is a separate service with its own listener.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What listener port was last successfully activated for search? Return JSON with integer port.\n\nArchived search staging configuration: the staging listener used port 8080 in an old environment. This is not a successful activation event for the search service in the supplied live reload history.\n\nHealth-check notes: probes use whichever listener is currently active. A requested configuration is not proof that the listener changed. The system logs requested_port separately from active_port to make failed activations visible.\n\nOperations notes: reload requests are serialized per service. Each success replaces the previous configuration; each failure retains it. There are no later search events beyond the ones in the atomic search history.\n\nAtomic search reload history:\n11:00 service=search requested_port=8443 reload=success active_port=8443\n11:05 service=search requested_port=9443 reload=success active_port=9443\n11:09 service=search requested_port=10443 reload=failed active_port=9443\nFailed reloads leave the previous listener active.\n\nBilling reload history:\n11:02 service=billing requested_port=7443 reload=success active_port=7443\n11:10 service=billing requested_port=7543 reload=success active_port=7543\nBilling is a separate service with its own listener."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 256,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What listener port was last successfully activated for search? Return JSON with integer port.\n\nArchived search staging configuration: the staging listener used port 8080 in an old environment. This is not a successful activation event for the search service in the supplied live reload history.\n\nAtomic search reload history:\n11:00 service=search requested_port=8443 reload=success active_port=8443\n11:05 service=search requested_port=9443 reload=success active_port=9443\n11:09 service=search requested_port=10443 reload=failed active_port=9443\nFailed reloads leave the previous listener active."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 126,
+          "target_tokens": 128,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0",
+            "g3"
+          ],
+          "groups_dropped": [
+            "g1",
+            "g2",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "rag-service",
+      "family": "select",
+      "workload": "retrieval",
+      "query": "For production ledger in eu-west-2, return JSON fields port (integer) and health_path (string).",
+      "oracle": {
+        "port": 8717,
+        "health_path": "/ready-ledger"
+      },
+      "supporting_group_position": 4,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Deployment ledger/staging/eu-west-2: listener port 8081 and readiness endpoint /health-stage. Staging is used for integration tests. Its listener settings must not be copied to the production deployment.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Deployment ledger/prod/us-east-1: TLS listener port 9727 and readiness endpoint /ready-us. The US deployment is managed independently from eu-west-2 and has different network settings.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Deployment journal/prod/eu-west-2: listener port 8818 and readiness endpoint /ready-journal. Journal and ledger are different services despite sharing a region and an infrastructure team.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Operations guide: the deployment identifier combines service, environment and region. Match all three fields before selecting a listener or readiness path. Load balancers route to the deployment-specific listener.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Deployment ledger/prod/eu-west-2, current approved configuration: TLS listener port 8717. Readiness endpoint /ready-ledger. This configuration is the authoritative production deployment record for this service and region.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For production ledger in eu-west-2, return JSON fields port (integer) and health_path (string).\n\nDeployment ledger/staging/eu-west-2: listener port 8081 and readiness endpoint /health-stage. Staging is used for integration tests. Its listener settings must not be copied to the production deployment.\n\nDeployment ledger/prod/us-east-1: TLS listener port 9727 and readiness endpoint /ready-us. The US deployment is managed independently from eu-west-2 and has different network settings.\n\nDeployment journal/prod/eu-west-2: listener port 8818 and readiness endpoint /ready-journal. Journal and ledger are different services despite sharing a region and an infrastructure team.\n\nOperations guide: the deployment identifier combines service, environment and region. Match all three fields before selecting a listener or readiness path. Load balancers route to the deployment-specific listener.\n\nDeployment ledger/prod/eu-west-2, current approved configuration: TLS listener port 8717. Readiness endpoint /ready-ledger. This configuration is the authoritative production deployment record for this service and region."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 219,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For production ledger in eu-west-2, return JSON fields port (integer) and health_path (string).\n\nDeployment ledger/staging/eu-west-2: listener port 8081 and readiness endpoint /health-stage. Staging is used for integration tests. Its listener settings must not be copied to the production deployment.\n\nDeployment ledger/prod/eu-west-2, current approved configuration: TLS listener port 8717. Readiness endpoint /ready-ledger. This configuration is the authoritative production deployment record for this service and region."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 107,
+          "target_tokens": 109,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0",
+            "g4"
+          ],
+          "groups_dropped": [
+            "g1",
+            "g2",
+            "g3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "rag-invoice",
+      "family": "select",
+      "workload": "retrieval",
+      "query": "For invoice INV-274, compute subtotal minus discount plus shipping. Return JSON with integer total_usd. No tax or other fees apply.",
+      "oracle": {
+        "total_usd": 87
+      },
+      "supporting_group_position": 0,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Atomic INV-274 invoice and adjustments: subtotal 100 USD; discount 20 USD; shipping 7 USD. These values belong to the same invoice and must be used together. There is no tax or additional fee. The discount is subtracted once, then shipping is added once.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Invoice INV-273: subtotal 120 USD; discount 10 USD; shipping 4 USD. This is a separate paid invoice. It supplies no amounts for INV-274 and must not be included in its final total.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "General shipping guide: some customers qualify for free shipping, while other orders have a default shipping estimate of 12 USD. The actual shipping amount recorded on an invoice overrides these general estimates.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Refund policy: approved refunds are paid to the original payment method. A refund is distinct from an invoice discount. No refund has been recorded for INV-274 in the supplied material.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Billing support guide: quote the invoice identifier when asking about totals. Support agents may explain charges but do not silently modify posted invoice amounts. Only the stated adjustments apply here.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For invoice INV-274, compute subtotal minus discount plus shipping. Return JSON with integer total_usd. No tax or other fees apply.\n\nAtomic INV-274 invoice and adjustments: subtotal 100 USD; discount 20 USD; shipping 7 USD. These values belong to the same invoice and must be used together. There is no tax or additional fee. The discount is subtracted once, then shipping is added once.\n\nInvoice INV-273: subtotal 120 USD; discount 10 USD; shipping 4 USD. This is a separate paid invoice. It supplies no amounts for INV-274 and must not be included in its final total.\n\nGeneral shipping guide: some customers qualify for free shipping, while other orders have a default shipping estimate of 12 USD. The actual shipping amount recorded on an invoice overrides these general estimates.\n\nRefund policy: approved refunds are paid to the original payment method. A refund is distinct from an invoice discount. No refund has been recorded for INV-274 in the supplied material.\n\nBilling support guide: quote the invoice identifier when asking about totals. Support agents may explain charges but do not silently modify posted invoice amounts. Only the stated adjustments apply here."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 237,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "For invoice INV-274, compute subtotal minus discount plus shipping. Return JSON with integer total_usd. No tax or other fees apply.\n\nAtomic INV-274 invoice and adjustments: subtotal 100 USD; discount 20 USD; shipping 7 USD. These values belong to the same invoice and must be used together. There is no tax or additional fee. The discount is subtracted once, then shipping is added once."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 85,
+          "target_tokens": 118,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0"
+          ],
+          "groups_dropped": [
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "conversation-override",
+      "family": "select",
+      "workload": "multi-turn",
+      "query": "What deployment region did the user finally approve for canary c-52? Return JSON with string region.",
+      "oracle": {
+        "region": "eu-west-2"
+      },
+      "supporting_group_position": 1,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Intermediate exchange: user: Change the proposed region for c-52 to eu-central-1. assistant: I have updated the proposal to eu-central-1. This proposal had not yet received final approval.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Final approval exchange, latest c-52 decision: user: The final approved region for canary c-52 is eu-west-2, not either earlier region. assistant: Confirmed, the final approved c-52 region is eu-west-2.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Unrelated exchange: user: Keep canary c-51 in ap-south-1. assistant: Confirmed, canary c-51 remains in ap-south-1. This is a different canary and must not override the c-52 decision.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Runbook: a later explicit final approval supersedes earlier proposals for the same canary. Keep the canary identifier attached to each decision. An unrelated canary's configuration is not an update to c-52.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Earlier exchange: user: Start canary c-52 in us-east-1. assistant: I have recorded the initial region as us-east-1. This was an early proposal, before the later corrections.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What deployment region did the user finally approve for canary c-52? Return JSON with string region.\n\nIntermediate exchange: user: Change the proposed region for c-52 to eu-central-1. assistant: I have updated the proposal to eu-central-1. This proposal had not yet received final approval.\n\nFinal approval exchange, latest c-52 decision: user: The final approved region for canary c-52 is eu-west-2, not either earlier region. assistant: Confirmed, the final approved c-52 region is eu-west-2.\n\nUnrelated exchange: user: Keep canary c-51 in ap-south-1. assistant: Confirmed, canary c-51 remains in ap-south-1. This is a different canary and must not override the c-52 decision.\n\nRunbook: a later explicit final approval supersedes earlier proposals for the same canary. Keep the canary identifier attached to each decision. An unrelated canary's configuration is not an update to c-52.\n\nEarlier exchange: user: Start canary c-52 in us-east-1. assistant: I have recorded the initial region as us-east-1. This was an early proposal, before the later corrections."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 251,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What deployment region did the user finally approve for canary c-52? Return JSON with string region.\n\nIntermediate exchange: user: Change the proposed region for c-52 to eu-central-1. assistant: I have updated the proposal to eu-central-1. This proposal had not yet received final approval.\n\nFinal approval exchange, latest c-52 decision: user: The final approved region for canary c-52 is eu-west-2, not either earlier region. assistant: Confirmed, the final approved c-52 region is eu-west-2."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 113,
+          "target_tokens": 125,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g0",
+            "g1"
+          ],
+          "groups_dropped": [
+            "g2",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "json-abstention",
+      "family": "select",
+      "workload": "json",
+      "query": "What retention_days is configured for dataset cobalt? If it is not stated, return JSON with retention_days set to null. Never substitute another dataset's value.",
+      "oracle": {
+        "retention_days": null
+      },
+      "supporting_group_position": 2,
+      "groups": [
+        {
+          "id": "g0",
+          "content": "Catalog documentation: absence of a retention field means the value is unknown in this snapshot. Do not invent a default. Operational policies may exist elsewhere but are not supplied here.",
+          "required": false
+        },
+        {
+          "id": "g1",
+          "content": "Storage documentation: encryption, region and owner fields do not determine retention duration. A dataset's retention setting must be explicitly provided for that dataset, not inferred from another record.",
+          "required": false
+        },
+        {
+          "id": "g2",
+          "content": "Current cobalt record: {\"dataset\":\"cobalt\",\"region\":\"eu-west-2\",\"owner\":\"analytics\",\"encryption\":\"enabled\"}. This record contains no retention_days field and no other cobalt retention setting is provided.",
+          "required": false
+        },
+        {
+          "id": "g3",
+          "content": "Separate amber record: {\"dataset\":\"amber\",\"retention_days\":30,\"region\":\"us-east-1\"}. Amber is not cobalt; its retention period applies only to amber.",
+          "required": false
+        },
+        {
+          "id": "g4",
+          "content": "Separate jade record: {\"dataset\":\"jade\",\"retention_days\":90,\"region\":\"eu-west-2\"}. Sharing a region with cobalt does not imply sharing its retention policy.",
+          "required": false
+        }
+      ],
+      "arms": {
+        "baseline": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What retention_days is configured for dataset cobalt? If it is not stated, return JSON with retention_days set to null. Never substitute another dataset's value.\n\nCatalog documentation: absence of a retention field means the value is unknown in this snapshot. Do not invent a default. Operational policies may exist elsewhere but are not supplied here.\n\nStorage documentation: encryption, region and owner fields do not determine retention duration. A dataset's retention setting must be explicitly provided for that dataset, not inferred from another record.\n\nCurrent cobalt record: {\"dataset\":\"cobalt\",\"region\":\"eu-west-2\",\"owner\":\"analytics\",\"encryption\":\"enabled\"}. This record contains no retention_days field and no other cobalt retention setting is provided.\n\nSeparate amber record: {\"dataset\":\"amber\",\"retention_days\":30,\"region\":\"us-east-1\"}. Amber is not cobalt; its retention period applies only to amber.\n\nSeparate jade record: {\"dataset\":\"jade\",\"retention_days\":90,\"region\":\"eu-west-2\"}. Sharing a region with cobalt does not imply sharing its retention policy."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 214,
+          "target_tokens": 100000,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": false,
+          "selection_applied": false,
+          "groups_kept": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "groups_dropped": []
+        },
+        "candidate": {
+          "messages": [
+            {
+              "role": "user",
+              "content": "What retention_days is configured for dataset cobalt? If it is not stated, return JSON with retention_days set to null. Never substitute another dataset's value.\n\nCurrent cobalt record: {\"dataset\":\"cobalt\",\"region\":\"eu-west-2\",\"owner\":\"analytics\",\"encryption\":\"enabled\"}. This record contains no retention_days field and no other cobalt retention setting is provided."
+            },
+            {
+              "role": "user",
+              "content": "Answer the question stated in the supplied context.\nReturn only one JSON object, with exactly the requested fields and types; no markdown. Use only the supplied evidence. Folded JSON uses __tf_cols__ as column names and __tf_rows__ as row values. A __tf_dict__ array stores values referenced by {\"__tf_ref__\":i} inside __tf_data__."
+            }
+          ],
+          "rendered_tokens": 74,
+          "target_tokens": 107,
+          "budget_status": "met",
+          "accounting": {
+            "counter_id": "encoding:o200k_base:v1",
+            "scope": "rendered_text",
+            "original_basis": "exact",
+            "baseline_basis": "exact",
+            "final_basis": "exact"
+          },
+          "core_transforms": [],
+          "scorer_succeeded": true,
+          "selection_applied": true,
+          "groups_kept": [
+            "g2"
+          ],
+          "groups_dropped": [
+            "g0",
+            "g1",
+            "g3",
+            "g4"
+          ]
+        }
+      }
+    }
+  ]
+}

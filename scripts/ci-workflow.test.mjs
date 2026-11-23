@@ -27,8 +27,11 @@ test("one Linux release build feeds both Node versions and evaluation", () => {
     assert.match(consumer, /actions\/download-artifact@v8/);
     assert.match(consumer, /name: linux-binaries\n\s+path: target\/release/);
     assert.match(consumer, /chmod \+x target\/release\/tokenfold target\/release\/tokenfold-proxy/);
-    assert.doesNotMatch(consumer, /cargo build|rust-toolchain/);
+    assert.doesNotMatch(consumer, /cargo build --release --locked -p tokenfold-cli/);
   }
+  assert.match(job("node-api"), /rust-toolchain@stable/);
+  assert.match(job("node-api"), /run: npm run build:native/);
+  assert.doesNotMatch(job("eval-harness"), /rust-toolchain/);
   assert.match(job("node-api"), /node: \[22, 24\]/);
   assert.match(job("node-api"), /TOKENFOLD_TEST_BINARY: \$\{\{ github.workspace \}\}\/target\/release\/tokenfold/);
   assert.match(job("eval-harness"), /TOKENFOLD_PROXY_BIN: \$\{\{ github.workspace \}\}\/target\/release\/tokenfold-proxy/);
@@ -69,16 +72,15 @@ test("Rust caches follow toolchain setup and only trusted main pushes save them"
 });
 
 test("required test, platform, binding, safety and fidelity lanes remain", () => {
-  for (const id of ["lint", "test", "windows-smoke", "python-wheel", "select-runtime-contracts", "python-abi3-smoke", "node-api", "coverage", "golden-cross-platform", "security", "bench-smoke", "fidelity-smoke", "eval-harness"]) job(id);
+  for (const id of ["contextdoctor", "lint", "test", "windows-smoke", "sdk-artifacts", "node-api", "coverage", "golden-cross-platform", "security", "bench-smoke", "fidelity-smoke", "eval-harness"]) job(id);
   assert.match(job("lint"), /cargo fmt --all --check/);
   assert.match(job("lint"), /python3 scripts\/check-release-versions\.py/);
   assert.match(job("lint"), /cargo clippy --workspace --all-targets -- -D warnings/);
   assert.match(job("test"), /cargo test --workspace --locked/);
   assert.match(job("windows-smoke"), /runs-on: windows-latest/);
-  assert.match(job("python-wheel"), /manylinux: auto/);
-  assert.match(job("python-wheel"), /python -m pytest python-tests -q/);
-  assert.match(job("python-abi3-smoke"), /python: \["3.9", "3.13"\]/);
-  assert.match(job("select-runtime-contracts"), /os: \[ubuntu-latest, windows-latest\]/);
+  assert.match(job("sdk-artifacts"), /uses: \.\/\.github\/workflows\/sdk-artifacts\.yml/);
+  assert.match(job("contextdoctor"), /python: \["3.9", "3.12"\]/);
+  assert.match(job("contextdoctor"), /python eval\/test_contextdoctor_run\.py/);
   assert.match(job("golden-cross-platform"), /os: \[macos-15, macos-15-intel, ubuntu-latest\]/);
   assert.match(job("security"), /cargo deny check advisories bans licenses sources/);
   assert.match(job("security"), /gitleaks\/gitleaks-action@v2/);
@@ -89,8 +91,8 @@ test("required test, platform, binding, safety and fidelity lanes remain", () =>
 });
 
 test("bounded hosted validation caps jobs and artifact retention without skipping checks", () => {
-  for (const id of ["lint", "test", "windows-smoke", "python-wheel", "select-runtime-contracts", "python-abi3-smoke", "linux-binaries", "node-api", "coverage", "golden-cross-platform", "security", "bench-smoke", "fidelity-smoke", "eval-harness"]) assert.match(job(id), /^    timeout-minutes: 10$/m);
-  assert.equal((workflow.match(/^          retention-days: 1$/gm) ?? []).length, 3);
+  for (const id of ["contextdoctor", "lint", "test", "windows-smoke", "linux-binaries", "node-api", "coverage", "golden-cross-platform", "security", "bench-smoke", "fidelity-smoke", "eval-harness"]) assert.match(job(id), /^    timeout-minutes: 10$/m);
+  assert.equal((workflow.match(/^          retention-days: 1$/gm) ?? []).length, 2);
   const security = readFileSync(new URL("../.github/workflows/security-analysis.yml", import.meta.url), "utf8");
   const codeql = security.slice(security.indexOf("  codeql:"), security.indexOf("  parser-property-stress:"));
   assert.match(codeql, /^    timeout-minutes: 10$/m);

@@ -1,0 +1,54 @@
+{
+  "payload": {
+    "model": "caller-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "first"
+      },
+      {
+        "role": "user",
+        "content": "earlier"
+      },
+      {
+        "role": "assistant",
+        "content": "answer"
+      },
+      {
+        "role": "user",
+        "content": "now"
+      }
+    ],
+    "temperature": 0.2,
+    "_tf_group": "preserve unknown fields",
+    "system": "top rules"
+  },
+  "source_ids": [
+    "__tf_system",
+    "__tf_message_0",
+    "history",
+    "__tf_message_3"
+  ],
+  "scoring_texts": [
+    "{\"system\":\"top rules\"}",
+    "[{\"role\":\"user\",\"content\":\"first\"}]",
+    "[{\"role\":\"user\",\"content\":\"earlier\"},{\"role\":\"assistant\",\"content\":\"answer\"}]",
+    "[{\"role\":\"user\",\"content\":\"now\"}]"
+  ],
+  "required_payload": {
+    "model": "caller-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "first"
+      },
+      {
+        "role": "user",
+        "content": "now"
+      }
+    ],
+    "temperature": 0.2,
+    "_tf_group": "preserve unknown fields",
+    "system": "top rules"
+  }
+}

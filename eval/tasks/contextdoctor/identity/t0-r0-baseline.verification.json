@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "id": "answer",
+      "result": "passed"
+    }
+  ],
+  "episode_id": "t0-r0-baseline",
+  "evidence_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+  "independence": "external",
+  "kind": "contextdoctor.verification",
+  "manifest_hash": "sha256:24ac14527f7029f781abc4a403b3022949a22c3d871b687607aca549faead3db",
+  "output_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a",
+  "reference_health": "passed",
+  "schema_version": "1.0",
+  "status": "passed",
+  "verifier_hash": "sha256:d114ac4d524de63a7c3a3ef6e9ca70c8bf8b54a5bd22abcb63a8c1c6be5a0f6a"
+}

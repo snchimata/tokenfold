@@ -1,0 +1,50 @@
+{
+  "payload": {
+    "model": "gpt-4o-2024-08-06",
+    "messages": [
+      {
+        "role": "system",
+        "content": "rules"
+      },
+      {
+        "role": "user",
+        "content": "earlier"
+      },
+      {
+        "role": "assistant",
+        "content": "answer"
+      },
+      {
+        "role": "user",
+        "content": "now"
+      }
+    ],
+    "temperature": 0.2,
+    "_tf_group": "preserve unknown fields"
+  },
+  "source_ids": [
+    "__tf_message_0",
+    "history",
+    "__tf_message_3"
+  ],
+  "scoring_texts": [
+    "[{\"role\":\"system\",\"content\":\"rules\"}]",
+    "[{\"role\":\"user\",\"content\":\"earlier\"},{\"role\":\"assistant\",\"content\":\"answer\"}]",
+    "[{\"role\":\"user\",\"content\":\"now\"}]"
+  ],
+  "required_payload": {
+    "model": "gpt-4o-2024-08-06",
+    "messages": [
+      {
+        "role": "system",
+        "content": "rules"
+      },
+      {
+        "role": "user",
+        "content": "now"
+      }
+    ],
+    "temperature": 0.2,
+    "_tf_group": "preserve unknown fields"
+  }
+}

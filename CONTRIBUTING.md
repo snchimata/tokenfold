@@ -51,10 +51,17 @@ same ones.
 
 Release commits go through a PR like everything else.
 
-Also align `packages/tokenfold-select/pyproject.toml` and its package version;
-`python scripts/check-release-versions.py` checks the registry version set. The
-optional Select wheel/sdist is published alongside the `tokenfold` binding.
-Model weights remain a separate, explicitly approved Hugging Face release.
+Align all active Cargo versions/path pins/lockfile, npm root/CLI/native platform
+packages and lockfile, maintained runtime version, and exact Python select extra.
+`python scripts/check-release-versions.py` checks this active set dynamically.
+Historical archives/model snapshots are not version-synchronized release packages.
+The optional lightweight `tokenfold-select-runtime` wheel/sdist is published with
+`tokenfold`; model weights remain a separate explicitly approved acquisition.
+
+Before release, require the five-platform installed-artifact matrix (Python 3.12/3.13,
+Node 22/24), wheel/sdist and packed addon execution, shared fixtures and lifecycle
+checks. GNU native addons and musl CLI binaries are distinct assets. A local Windows
+pass is not evidence for other targets. See [SDK migration](docs/sdk-migration.md).
 
 ```sh
 git switch main && git pull
@@ -90,6 +97,26 @@ body to a bare `curl`, which can look like a missing release.
 Release tags are protected against deletion and force-moves: a published tag is
 immutable, because `publish-packages.yml` builds registry artifacts from the
 release it produced.
+
+### One-time npm native 0.6.0 bootstrap
+
+Trusted publishers are per package; the root `tokenfold` configuration does not
+authorize creation of `@tokenfold/native-*`. Keep the stricter 2FA policy. The
+manual `bootstrap-npm-native.yml` workflow checks the five original native tarballs
+from publication run `42955400102` against pinned SHA-256 hashes, then repairs only
+their missing repository metadata required for provenance. It verifies unchanged
+compiled addon/license bytes and records new tarball hashes in the
+`native-bootstrap-tarballs` artifact before staging with provenance. It creates
+package placeholders, not a public 0.6.0 SDK. No binaries are rebuilt, package scripts
+executed, original assets overwritten, tags moved or 2FA bypassed.
+
+Approve the staged native packages on npm with maintainer 2FA, then configure each
+package's GitHub trusted publisher as `snchimata/tokenfold`, workflow
+`publish-packages.yml`, with publishing allowed. Do not approve a different tarball.
+If a rerun stops at an already-staged version, approve that pending stage before
+rerunning; never overwrite it. Once all five native versions are public, rerun only
+the failed npm publication job in the original run, then verify all public versions,
+artifact digests and a fresh install. Existing tested artifacts remain the source.
 
 ## Repository rulesets
 

@@ -24,9 +24,11 @@
 //! they emit a shape of their own.
 
 pub mod dedup;
+pub mod fit_request;
 pub mod manifest;
 pub mod observation;
 pub mod select;
+pub mod select_runtime;
 pub mod semantic;
 pub mod session;
 pub mod tools;

@@ -1,0 +1,22 @@
+[package]
+name = "tokenfold-node"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "In-process Node-API bindings for Tokenfold fitting."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tokenfold-core = { version = "0.6.0", path = "../tokenfold-core" }
+tokenfold-adapters = { version = "0.6.0", path = "../tokenfold-adapters" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+napi = { version = "3", default-features = false, features = ["napi8", "dyn-symbols"] }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"
