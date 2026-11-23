@@ -146,7 +146,7 @@ fn raw_request(addr: &str, raw: &str) -> String {
     // clients close concurrently. The behavior under test is server framing, not client load.
     static RAW_REQUEST_LOCK: Mutex<()> = Mutex::new(());
     let _guard = RAW_REQUEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    for _ in 0..3 {
+    for attempt in 0..3 {
         let mut stream = TcpStream::connect(addr).unwrap();
         stream.write_all(raw.as_bytes()).unwrap();
         stream
@@ -155,7 +155,12 @@ fn raw_request(addr: &str, raw: &str) -> String {
         let mut response = String::new();
         // A reset after a partial read still yields the status line, so keep whatever arrived
         // instead of discarding it along with the error.
-        let _ = stream.read_to_string(&mut response);
+        let read_result = stream.read_to_string(&mut response);
+        eprintln!(
+            "raw_request addr={addr} attempt={} read={read_result:?} response_bytes={}",
+            attempt + 1,
+            response.len()
+        );
         if !response.is_empty() {
             return response;
         }
@@ -695,7 +700,8 @@ fn duplicate_conflicting_content_length_headers_are_rejected() {
     let response = raw_request(&proxy.addr, raw);
     assert!(
         response.starts_with("HTTP/1.1 400"),
-        "response was: {response}"
+        "response was: {response}; proxy stderr: {}",
+        proxy.stderr_snapshot()
     );
 }
 
