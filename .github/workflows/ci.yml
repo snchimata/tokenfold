@@ -189,6 +189,17 @@ jobs:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --locked -- golden
 
+  # Exercises the release SBOM step on every PR without publishing anything.
+  sbom-smoke:
+    name: sbom-smoke
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-cyclonedx --locked
+      - run: bash scripts/sbom-per-target.sh
+
   # CI gate policy: blocking on pull requests and on push to main.
   security:
     name: security

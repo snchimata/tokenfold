@@ -98,3 +98,16 @@ test("bounded hosted validation caps jobs and artifact retention without skippin
   assert.match(codeql, /^    timeout-minutes: 10$/m);
   assert.match(codeql, /language: \[rust, javascript-typescript, python\]/);
 });
+
+test("the release SBOM step runs on PRs and covers every released target", () => {
+  const script = readFileSync(new URL("./sbom-per-target.sh", import.meta.url), "utf8");
+  const release = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+  const releaseTargets = [...release.matchAll(/^\s+- target: (\S+)$/gm)].map(m => m[1]).sort();
+  const scriptTargets = script.match(/TARGETS=\(([^)]*)\)/)[1].split(/\s+/).filter(Boolean).sort();
+  assert.ok(releaseTargets.length > 0);
+  assert.deepEqual(scriptTargets, releaseTargets);
+  assert.match(release, /run: bash scripts\/sbom-per-target\.sh/);
+  const smoke = job("sbom-smoke");
+  assert.match(smoke, /^    timeout-minutes: 10$/m);
+  assert.match(smoke, /run: bash scripts\/sbom-per-target\.sh/);
+});
