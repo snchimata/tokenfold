@@ -147,7 +147,8 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-cyclonedx --locked
-      - run: cargo cyclonedx --format json
+      - name: one SBOM per released binary target
+        run: bash scripts/sbom-per-target.sh
       - uses: actions/upload-artifact@v7
         with:
           name: sbom
